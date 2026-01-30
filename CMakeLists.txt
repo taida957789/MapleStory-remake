@@ -154,7 +154,7 @@ if(BUILD_TESTS)
 endif()
 
 # Debug canvas overlay
-option(MS_DEBUG_CANVAS "Enable debug canvas overlay for development" OFF)
+option(MS_DEBUG_CANVAS "Enable debug canvas overlay for development" ON)
 if(MS_DEBUG_CANVAS)
     target_compile_definitions(${PROJECT_NAME} PRIVATE MS_DEBUG_CANVAS)
 endif()
