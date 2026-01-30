@@ -75,6 +75,7 @@ set(SOURCES
     src/util/Singleton.cpp
     src/util/ZXString.cpp
     src/util/Logger.cpp
+    src/debug/DebugOverlay.cpp
 )
 
 # Header files
@@ -108,6 +109,7 @@ set(HEADERS
     src/util/ZXString.h
     src/util/Point.h
     src/util/Logger.h
+    src/debug/DebugOverlay.h
 )
 
 add_executable(${PROJECT_NAME} ${SOURCES} ${HEADERS})
