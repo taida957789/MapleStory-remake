@@ -163,6 +163,15 @@ private:
         bool bSameIDCtrl
     );
 
+    void ProcessLayer(
+        const std::wstring& wFullName,
+        const std::wstring& sCtrlName,
+        std::shared_ptr<WzProperty> pProp,
+        const std::wstring& sRootUOL,
+        int nOffsetX,
+        int nOffsetY
+    );
+
     /**
      * @brief 添加按鈕到管理系統
      * @param sButtonUOL 按鈕 WZ 資源完整路徑

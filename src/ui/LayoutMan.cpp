@@ -2,6 +2,7 @@
 #include "UIButton.h"
 #include "UIElement.h"
 #include "graphics/WzGr2DLayer.h"
+#include "wz/WzCanvas.h"
 #include "wz/WzProperty.h"
 #include "wz/WzResMan.h"
 
@@ -99,7 +100,7 @@ void LayoutMan::ProcessChildProperty(
     }
     else if (sType == L"layer")
     {
-        // TODO: Task 6
+        ProcessLayer(wName, sCtrlName, pProp, sRootUOL, nOffsetX, nOffsetY);
     }
     // 其他類型...
 }
@@ -177,6 +178,47 @@ void LayoutMan::ProcessButton(
 
     // 8. 註冊到映射表
     m_mButtons[sCtrlName] = pButton;
+}
+
+void LayoutMan::ProcessLayer(
+    const std::wstring& wFullName,
+    const std::wstring& sCtrlName,
+    std::shared_ptr<WzProperty> pProp,
+    const std::wstring& sRootUOL,
+    int nOffsetX,
+    int nOffsetY)
+{
+    // 1. 獲取 canvas
+    auto pCanvas = pProp->GetCanvas();
+    if (!pCanvas)
+    {
+        return;
+    }
+
+    // 2. 獲取 origin
+    auto origin = pCanvas->GetOrigin();
+
+    // 3. 創建圖層
+    if (!m_pParent)
+    {
+        return;
+    }
+
+    // TODO: 需要從 m_pParent 獲取 WzGr2D 實例
+    // auto& gr = m_pParent->GetGraphics();
+    // auto pLayer = gr.CreateLayer(
+    //     nOffsetX + m_nOffsetX + origin.x,
+    //     nOffsetY + m_nOffsetY + origin.y,
+    //     pCanvas->GetWidth(),
+    //     pCanvas->GetHeight(),
+    //     100  // z-order
+    // );
+
+    // 4. 插入 canvas
+    // pLayer->InsertCanvas(pCanvas, 0, 255, 255);
+
+    // 5. 註冊圖層
+    // RegisterLayer(pLayer, sCtrlName);
 }
 
 auto LayoutMan::ABGetButton(const std::wstring& sName) -> std::shared_ptr<UIButton>
