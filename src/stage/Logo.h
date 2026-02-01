@@ -130,6 +130,48 @@ private:
     auto LoadLogoFrames(const std::shared_ptr<WzProperty>& prop)
         -> std::vector<std::shared_ptr<WzCanvas>>;
 
+    /**
+     * @brief Initialize loading screen resources
+     *
+     * Loads from UI/Logo.img/Loading:
+     * - randomBackgrd: Random background selection
+     * - repeat: Animated elements
+     * - step: Progress indicators
+     */
+    void InitLoading();
+
+    /**
+     * @brief Start loading mode
+     *
+     * Switches from Logo/Video mode to loading mode.
+     * Hides logo layers, shows loading layers.
+     */
+    void StartLoadingMode();
+
+    /**
+     * @brief Update loading screen
+     *
+     * Handles repeat animation cycling and fade out effect.
+     */
+    void UpdateLoading();
+
+    /**
+     * @brief Set loading progress
+     * @param step Current loading step (0-based)
+     *
+     * Updates step indicator display.
+     * Triggers fade out when final step reached.
+     */
+    void SetLoadingProgress(std::int32_t step);
+
+    /**
+     * @brief Start fade out effect
+     *
+     * Begins gradual alpha reduction of loading screen.
+     * Transitions to Login when complete.
+     */
+    void FadeOutLoading();
+
 private:
     // Logo properties (from UI/Logo.img)
     std::shared_ptr<WzProperty> m_pLogoProp;      // UI/Logo.img/Logo
