@@ -380,6 +380,47 @@ void Logo::StartLoadingMode()
     }
 }
 
+void Logo::SetLoadingProgress(std::int32_t step)
+{
+    if (step == m_nLoadingStep)
+    {
+        return;  // No change
+    }
+
+    m_nLoadingStep = step;
+    LOG_DEBUG("Loading progress: step {}/{}", step, m_nLoadingStepCount - 1);
+
+    if (!m_pLayerLoadingStep || step >= m_nLoadingStepCount)
+    {
+        return;
+    }
+
+    // Update step indicator
+    m_pLayerLoadingStep->RemoveAllCanvases();
+
+    if (step < static_cast<std::int32_t>(m_stepFrames.size()))
+    {
+        auto& stepCanvas = m_stepFrames[static_cast<std::size_t>(step)];
+        m_pLayerLoadingStep->InsertCanvas(stepCanvas);
+
+        // Center with origin offset
+        auto origin = stepCanvas->GetOrigin();
+        auto& gr = get_gr();
+        auto screenWidth = static_cast<std::int32_t>(gr.GetWidth());
+        auto screenHeight = static_cast<std::int32_t>(gr.GetHeight());
+        auto layerX = (screenWidth - stepCanvas->GetWidth()) / 2 + origin.x;
+        auto layerY = (screenHeight - stepCanvas->GetHeight()) / 2 + origin.y;
+        m_pLayerLoadingStep->SetPosition(layerX, layerY);
+    }
+
+    // If final step reached, start fade out
+    if (step >= m_nLoadingStepCount - 1)
+    {
+        LOG_INFO("Loading complete - starting fade out");
+        FadeOutLoading();
+    }
+}
+
 void Logo::Update()
 {
     // Based on CLogo::Update @ 0xbc7a90
