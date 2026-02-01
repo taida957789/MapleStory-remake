@@ -12,6 +12,7 @@ namespace ms
 class UIElement;
 class UIButton;
 class WzGr2DLayer;
+class WzProperty;
 
 /**
  * @brief UI 自動化構建和管理系統
@@ -135,6 +136,33 @@ public:
     void ABSetLayerVisibleAll(bool bVisible);
 
 private:
+    /**
+     * @brief 處理單個子屬性
+     */
+    void ProcessChildProperty(
+        const std::wstring& wName,
+        std::shared_ptr<WzProperty> pProp,
+        const std::wstring& sRootUOL,
+        int nIdBase,
+        int& currentId,
+        int nOffsetX,
+        int nOffsetY,
+        bool bSetTooltip,
+        bool bSameIDCtrl
+    );
+
+    void ProcessButton(
+        const std::wstring& wFullName,
+        const std::wstring& sCtrlName,
+        std::shared_ptr<WzProperty> pProp,
+        const std::wstring& sRootUOL,
+        int nIdBase,
+        int& currentId,
+        int nOffsetX,
+        int nOffsetY,
+        bool bSameIDCtrl
+    );
+
     /**
      * @brief 添加按鈕到管理系統
      * @param sButtonUOL 按鈕 WZ 資源完整路徑

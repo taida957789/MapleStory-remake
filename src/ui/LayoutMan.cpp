@@ -27,7 +27,156 @@ void LayoutMan::AutoBuild(
     bool bSetTooltip,
     bool bSameIDCtrl)
 {
-    // TODO: Task 4
+    // IDA: 從 WzResMan 獲取根屬性 (0xb362a7-0xb36330)
+    auto& resMan = WzResMan::GetInstance();
+
+    // 轉換 wstring 到 string
+    std::string sRootPath;
+    sRootPath.reserve(sRootUOL.size());
+    for (wchar_t wc : sRootUOL)
+    {
+        if (wc > 127)
+        {
+            // 非 ASCII 字符
+            return;
+        }
+        sRootPath.push_back(static_cast<char>(wc));
+    }
+
+    auto pRoot = resMan.GetProperty(sRootPath);
+    if (!pRoot)
+    {
+        return;
+    }
+
+    // IDA: 枚舉所有子屬性 (0xb36435-0xb364d3)
+    int currentId = 0;  // Start offset at 0
+
+    for (auto& [name, pProp] : pRoot->GetChildren())
+    {
+        // 轉換 string 到 wstring
+        std::wstring wName;
+        wName.reserve(name.size());
+        for (char c : name)
+        {
+            wName.push_back(static_cast<wchar_t>(c));
+        }
+
+        // TODO: 下一步處理
+        ProcessChildProperty(wName, pProp, sRootUOL, nIdBase, currentId,
+                           nOffsetX, nOffsetY, bSetTooltip, bSameIDCtrl);
+    }
+}
+
+void LayoutMan::ProcessChildProperty(
+    const std::wstring& wName,
+    std::shared_ptr<WzProperty> pProp,
+    const std::wstring& sRootUOL,
+    int nIdBase,
+    int& currentId,
+    int nOffsetX,
+    int nOffsetY,
+    bool bSetTooltip,
+    bool bSameIDCtrl)
+{
+    // IDA: 查找冒號 (0xb36553-0xb3655f)
+    auto colonPos = wName.find(L':');
+    if (colonPos == std::wstring::npos)
+    {
+        // 沒有冒號，跳過
+        return;
+    }
+
+    // IDA: 分割 type 和 name (0xb365a8-0xb365b2)
+    std::wstring sType = wName.substr(0, colonPos);       // "button"
+    std::wstring sCtrlName = wName.substr(colonPos + 1);  // "GoWorld"
+
+    // IDA: 比較類型字符串 (0xb365ed)
+    if (sType == L"button")
+    {
+        ProcessButton(wName, sCtrlName, pProp, sRootUOL, nIdBase, currentId,
+                     nOffsetX, nOffsetY, bSameIDCtrl);
+    }
+    else if (sType == L"layer")
+    {
+        // TODO: Task 6
+    }
+    // 其他類型...
+}
+
+void LayoutMan::ProcessButton(
+    const std::wstring& wFullName,
+    const std::wstring& sCtrlName,
+    std::shared_ptr<WzProperty> pProp,
+    const std::wstring& sRootUOL,
+    int nIdBase,
+    int& currentId,
+    int nOffsetX,
+    int nOffsetY,
+    bool bSameIDCtrl)
+{
+    // IDA: 讀取配置參數
+
+    // 1. 讀取 "id" (0xb36707-0xb36755)
+    // 讀取可選的 ID 偏移量（默認使用自動遞增）
+    int nIDOffset = currentId;
+    auto pIdProp = pProp->GetChild("id");
+    if (pIdProp)
+    {
+        nIDOffset = pIdProp->GetInt(0);  // 如果指定了 id，使用指定值
+    }
+
+    // 最終 ID = 基礎 ID + 偏移量
+    int nID = nIdBase + nIDOffset;
+    currentId++;  // 自動遞增
+
+    // 2. 讀取 "drawBack" (0xb3679f-0xb367e6)
+    // TODO: drawBack 參數的具體用途待確認（可能控制繪製順序）
+    // bool bDrawBack = false;
+    // auto pDrawBackProp = pProp->GetChild("drawBack");
+    // if (pDrawBackProp)
+    // {
+    //     bDrawBack = pDrawBackProp->GetInt(0) != 0;
+    // }
+
+    // 3. 讀取 "toggle" (0xb3687c-0xb368de)
+    bool bToggle = false;
+    auto pToggleProp = pProp->GetChild("toggle");
+    if (pToggleProp)
+    {
+        bToggle = pToggleProp->GetInt(0) != 0;
+    }
+
+    // 4. 構建完整 UOL 路徑 (0xb368b0-0xb368ce)
+    std::wstring sButtonUOL = sRootUOL + L"/" + sCtrlName;
+
+    // 5. 調用 AddButton (0xb36908)
+    auto pButton = AddButton(sButtonUOL, nID, nOffsetX, nOffsetY, bToggle, bSameIDCtrl);
+    if (!pButton)
+    {
+        return;
+    }
+
+    // 6. 讀取並設置 "enable" (0xb369c4-0xb36a18)
+    bool bEnable = true;
+    auto pEnableProp = pProp->GetChild("enable");
+    if (pEnableProp)
+    {
+        bEnable = pEnableProp->GetInt(1) != 0;
+    }
+    pButton->SetEnabled(bEnable);
+
+    // 7. 讀取並設置 "visible" (0xb36a63-0xb36ab0)
+    bool bVisible = true;
+    auto pVisibleProp = pProp->GetChild("visible");
+    if (pVisibleProp)
+    {
+        bVisible = pVisibleProp->GetInt(1) != 0;
+    }
+    pButton->SetVisible(bVisible);
+
+    // 8. 註冊到映射表
+    m_mButtons[sCtrlName] = pButton;
 }
 
 auto LayoutMan::ABGetButton(const std::wstring& sName) -> std::shared_ptr<UIButton>
