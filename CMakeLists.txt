@@ -68,6 +68,7 @@ set(SOURCES
     src/ui/UIButton.cpp
     src/ui/UIChannelSelect.cpp
     src/ui/UIEdit.cpp
+    src/ui/LayoutMan.cpp
     src/ui/UIManager.cpp
     src/ui/UINewCharRaceSelect.cpp
     src/ui/UISelectChar.cpp
