@@ -264,6 +264,9 @@ void UIChannelSelect::ResetInfo(std::int32_t worldIndex, bool bRedraw)
         auto btn = CreateChannelButton(static_cast<std::int32_t>(i), load, btnX, btnY);
         if (btn)
         {
+            // Set parent-child relationship (matches original CLayoutMan behavior)
+            btn->SetParent(this);
+
             const size_t channelIndex = i;
             btn->SetClickCallback([this, channelIndex]() {
                 OnButtonClicked(static_cast<std::uint32_t>(channelIndex));
@@ -310,6 +313,7 @@ void UIChannelSelect::ResetInfo(std::int32_t worldIndex, bool bRedraw)
                 m_pBtnGoWorld = std::make_shared<UIButton>();
                 if (m_pBtnGoWorld->LoadFromProperty(btGoworldProp))
                 {
+                    m_pBtnGoWorld->SetParent(this);  // Set parent-child relationship
                     m_pBtnGoWorld->SetPosition(goBtnX, goWorldY);
                     m_pBtnGoWorld->CreateLayer(*m_pGr, 160);
                     btGoworldLoaded = true;
@@ -350,6 +354,7 @@ void UIChannelSelect::ResetInfo(std::int32_t worldIndex, bool bRedraw)
         canvas->SetPixelData(std::move(pixels));
         m_pBtnGoWorld->SetStateCanvas(UIState::Normal, canvas);
         m_pBtnGoWorld->SetSize(goBtnWidth, goBtnHeight);
+        m_pBtnGoWorld->SetParent(this);  // Set parent-child relationship
         m_pBtnGoWorld->SetPosition(goBtnX, goWorldY);
         m_pBtnGoWorld->CreateLayer(*m_pGr, 160);
         LOG_DEBUG("UIChannelSelect: Placeholder BtGoworld at ({}, {})", goBtnX, goWorldY);
@@ -811,6 +816,7 @@ void UIChannelSelect::CreatePlaceholderUI()
         canvas->SetPixelData(std::move(pixels));
         m_pBtnGoWorld->SetStateCanvas(UIState::Normal, canvas);
         m_pBtnGoWorld->SetSize(goBtnWidth, goBtnHeight);
+        m_pBtnGoWorld->SetParent(this);  // Set parent-child relationship
         m_pBtnGoWorld->SetPosition(goBtnX, goWorldY);
         m_pBtnGoWorld->CreateLayer(*m_pGr, 160);
         m_pBtnGoWorld->SetClickCallback([this]() {
