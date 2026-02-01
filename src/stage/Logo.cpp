@@ -131,6 +131,9 @@ void Logo::InitWZLogo()
         m_pLayerMain->SetScreenSpace(true);
     }
 
+    // Initialize loading screen
+    InitLoading();
+
     // Flush cached objects after loading
     resMan.FlushCachedObjects(0);
 }
@@ -204,6 +207,108 @@ auto Logo::LoadLogoFrames(const std::shared_ptr<WzProperty>& prop)
     }
 
     return frames;
+}
+
+void Logo::InitLoading()
+{
+    auto& resMan = WzResMan::GetInstance();
+    auto loadingProp = resMan.GetProperty("UI/Logo.img/Loading");
+
+    if (!loadingProp)
+    {
+        LOG_WARN("UI/Logo.img/Loading not found - loading screen disabled");
+        return;
+    }
+
+    LOG_DEBUG("Initializing loading screen resources");
+
+    // 1. Load random background
+    auto randomBgProp = loadingProp->GetChild("randomBackgrd");
+    if (randomBgProp && randomBgProp->HasChildren())
+    {
+        auto bgCount = static_cast<std::int32_t>(randomBgProp->GetChildCount());
+        auto randomIndex = rand() % bgCount;
+        auto bgChild = randomBgProp->GetChild(std::to_string(randomIndex));
+        if (bgChild)
+        {
+            m_pLoadingBgCanvas = bgChild->GetCanvas();
+            LOG_DEBUG("Selected random background: {}/{}", randomIndex, bgCount);
+        }
+    }
+    else
+    {
+        LOG_DEBUG("No random backgrounds found in Loading/randomBackgrd");
+    }
+
+    // 2. Load repeat animations
+    auto repeatProp = loadingProp->GetChild("repeat");
+    if (repeatProp && repeatProp->HasChildren())
+    {
+        for (int n = 0; n < 100; ++n)  // Max 100 repeat animations
+        {
+            auto repeatN = repeatProp->GetChild(std::to_string(n));
+            if (!repeatN) break;
+
+            auto frames = LoadLogoFrames(repeatN);
+            if (!frames.empty())
+            {
+                m_repeatAnims.push_back(frames);
+            }
+        }
+        LOG_DEBUG("Loaded {} repeat animations", m_repeatAnims.size());
+    }
+    else
+    {
+        LOG_DEBUG("No repeat animations found in Loading/repeat");
+    }
+
+    // 3. Load step progress indicators
+    auto stepProp = loadingProp->GetChild("step");
+    if (stepProp && stepProp->HasChildren())
+    {
+        m_stepFrames = LoadLogoFrames(stepProp);
+        m_nLoadingStepCount = static_cast<std::int32_t>(m_stepFrames.size());
+        LOG_DEBUG("Loaded {} loading steps", m_nLoadingStepCount);
+    }
+    else
+    {
+        LOG_DEBUG("No step indicators found in Loading/step");
+    }
+
+    // 4. Create loading layers (initially hidden)
+    auto& gr = get_gr();
+
+    // Background layer (z=10, above logo layers)
+    m_pLayerLoadingBg = gr.CreateLayer(0, 0, gr.GetWidth(), gr.GetHeight(), 10);
+    if (m_pLayerLoadingBg)
+    {
+        m_pLayerLoadingBg->SetVisible(false);
+        m_pLayerLoadingBg->SetScreenSpace(true);
+        LOG_DEBUG("Created loading background layer");
+    }
+
+    // Animation layer (z=11)
+    m_pLayerLoadingAnim = gr.CreateLayer(0, 0, gr.GetWidth(), gr.GetHeight(), 11);
+    if (m_pLayerLoadingAnim)
+    {
+        m_pLayerLoadingAnim->SetVisible(false);
+        m_pLayerLoadingAnim->SetScreenSpace(true);
+        LOG_DEBUG("Created loading animation layer");
+    }
+
+    // Progress step layer (z=12)
+    m_pLayerLoadingStep = gr.CreateLayer(0, 0, gr.GetWidth(), gr.GetHeight(), 12);
+    if (m_pLayerLoadingStep)
+    {
+        m_pLayerLoadingStep->SetVisible(false);
+        m_pLayerLoadingStep->SetScreenSpace(true);
+        LOG_DEBUG("Created loading progress layer");
+    }
+
+    LOG_INFO("Loading screen initialized (bg={}, anims={}, steps={})",
+             m_pLoadingBgCanvas ? "yes" : "no",
+             m_repeatAnims.size(),
+             m_nLoadingStepCount);
 }
 
 void Logo::Update()
