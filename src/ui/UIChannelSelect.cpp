@@ -38,6 +38,7 @@ void UIChannelSelect::OnCreate(Login* pLogin, WzGr2D& gr, UIManager& uiManager,
     SetPosition(kDialogX, kDialogY);
 
     // Load WorldSelect WZ properties
+    // Based on docs: Base UOL is UI/Login.img/WorldSelect/BtChannel/test
     auto& resMan = WzResMan::GetInstance();
     auto loginImgProp = resMan.GetProperty("UI/Login.img");
     if (loginImgProp)
@@ -45,18 +46,26 @@ void UIChannelSelect::OnCreate(Login* pLogin, WzGr2D& gr, UIManager& uiManager,
         auto worldSelectProp = loginImgProp->GetChild("WorldSelect");
         if (worldSelectProp)
         {
-            // Load channel property for channel buttons
-            // string.csv idx 2375: UI/Login.img/WorldSelect/channel/%d/normal
-            // string.csv idx 2376: UI/Login.img/WorldSelect/channel/%d/disabled
-            m_pChannelSelectProp = worldSelectProp->GetChild("channel");
-            if (m_pChannelSelectProp)
+            // Load base channel select property (CLayoutMan AutoBuild path)
+            // Original: UI/Login.img/WorldSelect/BtChannel/test
+            auto btChannelProp = worldSelectProp->GetChild("BtChannel");
+            if (btChannelProp)
             {
-                LOG_DEBUG("UIChannelSelect: channel property loaded");
+                m_pChannelSelectProp = btChannelProp->GetChild("test");
+                if (m_pChannelSelectProp)
+                {
+                    LOG_DEBUG("UIChannelSelect: BtChannel/test property loaded");
+                }
             }
 
             // Load chBackgrn (channel background)
-            // string.csv idx 2367: UI/Login.img/WorldSelect/chBackgrn
-            auto chBackgrnProp = worldSelectProp->GetChild("chBackgrn");
+            // From docs: UI/Login.img/WorldSelect/BtChannel/test/layer:bg
+            auto chBackgrnProp = m_pChannelSelectProp ? m_pChannelSelectProp->GetChild("layer:bg") : nullptr;
+            if (!chBackgrnProp)
+            {
+                // Fallback: try old path
+                chBackgrnProp = worldSelectProp->GetChild("chBackgrn");
+            }
             if (chBackgrnProp)
             {
                 auto canvas = chBackgrnProp->GetCanvas();
@@ -190,11 +199,11 @@ void UIChannelSelect::ResetInfo(std::int32_t worldIndex, bool bRedraw)
     const int startX = 10;      // Relative to dialog
     int channelY = 55;          // Relative to dialog
 
-    // Load chgauge for channel load indicator
-    // string.csv idx 2368: UI/Login.img/WorldSelect/channel/chgauge
+    // Load gauge canvas for channel load indicator
+    // From docs: UI/Login.img/WorldSelect/BtChannel/test/gauge
     if (m_pChannelSelectProp && !m_pCanvasGauge)
     {
-        auto chgaugeProp = m_pChannelSelectProp->GetChild("chgauge");
+        auto chgaugeProp = m_pChannelSelectProp->GetChild("gauge");
         if (chgaugeProp)
         {
             m_pCanvasGauge = chgaugeProp->GetCanvas();
@@ -219,12 +228,21 @@ void UIChannelSelect::ResetInfo(std::int32_t worldIndex, bool bRedraw)
         }
     }
 
-    // Load chSelect for selection indicator
-    // string.csv idx 2382: UI/Login.img/WorldSelect/channel/chSelect
+    // Load selection indicator (if exists in WZ)
+    // Note: Original uses CLayoutMan AutoBuild, may not have separate chSelect
     std::shared_ptr<WzCanvas> chSelectCanvas;
     if (m_pChannelSelectProp)
     {
         auto chSelectProp = m_pChannelSelectProp->GetChild("chSelect");
+        if (!chSelectProp)
+        {
+            // Try test sub-path
+            auto testProp = m_pChannelSelectProp->GetChild("test");
+            if (testProp)
+            {
+                chSelectProp = testProp->GetChild("chSelect");
+            }
+        }
         if (chSelectProp)
         {
             chSelectCanvas = chSelectProp->GetCanvas();
@@ -302,32 +320,55 @@ void UIChannelSelect::ResetInfo(std::int32_t worldIndex, bool bRedraw)
     const int goBtnX = 50;  // Relative to dialog
 
     // Create GoWorld button
-    // string.csv idx 2369: UI/Login.img/WorldSelect/BtGoworld
+    // From docs: Loaded by CLayoutMan::AutoBuild as "GoWorld" button
+    // Try loading from base UOL path first
     bool btGoworldLoaded = false;
-    auto& resMan = WzResMan::GetInstance();
-    auto loginImgProp = resMan.GetProperty("UI/Login.img");
-    if (loginImgProp)
+
+    // Try from BtChannel/test/GoWorld (CLayoutMan path)
+    std::shared_ptr<WzProperty> btGoworldProp;
+    if (m_pChannelSelectProp)
     {
-        auto worldSelectProp = loginImgProp->GetChild("WorldSelect");
-        if (worldSelectProp)
+        btGoworldProp = m_pChannelSelectProp->GetChild("GoWorld");
+        if (!btGoworldProp)
         {
-            auto btGoworldProp = worldSelectProp->GetChild("BtGoworld");
-            if (btGoworldProp)
+            // Try test sub-path
+            auto testProp = m_pChannelSelectProp->GetChild("test");
+            if (testProp)
             {
-                m_pBtnGoWorld = std::make_shared<UIButton>();
-                if (m_pBtnGoWorld->LoadFromProperty(btGoworldProp))
-                {
-                    m_pBtnGoWorld->SetParent(this);  // Set parent-child relationship
-                    m_pBtnGoWorld->SetPosition(goBtnX, goWorldY);
-                    m_pBtnGoWorld->CreateLayer(*m_pGr, 160);
-                    btGoworldLoaded = true;
-                    LOG_DEBUG("UIChannelSelect: BtGoworld loaded from WZ at ({}, {})", goBtnX, goWorldY);
-                }
-                else
-                {
-                    m_pBtnGoWorld.reset();
-                }
+                btGoworldProp = testProp->GetChild("GoWorld");
             }
+        }
+    }
+
+    // Fallback: try old path UI/Login.img/WorldSelect/BtGoworld
+    if (!btGoworldProp)
+    {
+        auto& resMan = WzResMan::GetInstance();
+        auto loginImgProp = resMan.GetProperty("UI/Login.img");
+        if (loginImgProp)
+        {
+            auto worldSelectProp = loginImgProp->GetChild("WorldSelect");
+            if (worldSelectProp)
+            {
+                btGoworldProp = worldSelectProp->GetChild("BtGoworld");
+            }
+        }
+    }
+
+    if (btGoworldProp)
+    {
+        m_pBtnGoWorld = std::make_shared<UIButton>();
+        if (m_pBtnGoWorld->LoadFromProperty(btGoworldProp))
+        {
+            m_pBtnGoWorld->SetParent(this);  // Set parent-child relationship
+            m_pBtnGoWorld->SetPosition(goBtnX, goWorldY);
+            m_pBtnGoWorld->CreateLayer(*m_pGr, 160);
+            btGoworldLoaded = true;
+            LOG_DEBUG("UIChannelSelect: GoWorld button loaded from WZ at ({}, {})", goBtnX, goWorldY);
+        }
+        else
+        {
+            m_pBtnGoWorld.reset();
         }
     }
 
@@ -851,36 +892,32 @@ auto UIChannelSelect::CreateChannelButton(std::int32_t channelIndex, std::int32_
     bool wzLoaded = false;
 
     // Try to load from WZ
-    // string.csv idx 2375: UI/Login.img/WorldSelect/channel/%d/normal
-    // string.csv idx 2376: UI/Login.img/WorldSelect/channel/%d/disabled
+    // From docs: CLayoutMan::ABGetButton accesses buttons by index string ("0", "1", etc.)
+    // Path: UI/Login.img/WorldSelect/BtChannel/test/{index}
     if (m_pChannelSelectProp)
     {
-        // Get channel property: channel/{channelIndex}
-        auto channelProp = m_pChannelSelectProp->GetChild(std::to_string(channelIndex));
-        if (channelProp)
+        // Get button by index string (matches CLayoutMan behavior)
+        auto buttonProp = m_pChannelSelectProp->GetChild(std::to_string(channelIndex));
+        if (!buttonProp)
         {
-            // Use "disabled" state if load >= 100 (full), otherwise "normal"
-            std::string stateName = (load >= 100) ? "disabled" : "normal";
-            auto stateProp = channelProp->GetChild(stateName);
-            if (stateProp)
+            // Try test sub-path
+            auto testProp = m_pChannelSelectProp->GetChild("test");
+            if (testProp)
             {
-                if (btn->LoadFromProperty(stateProp))
-                {
-                    btn->SetPosition(x, y);
-                    btn->CreateLayer(*m_pGr, 160);
-                    wzLoaded = true;
-                    LOG_DEBUG("UIChannelSelect: Channel {} button loaded from WZ ({}) at ({}, {})",
-                              channelIndex + 1, stateName, x, y);
-                }
+                buttonProp = testProp->GetChild(std::to_string(channelIndex));
             }
-            // Fallback: try loading channelProp directly as a button
-            if (!wzLoaded && btn->LoadFromProperty(channelProp))
+        }
+
+        if (buttonProp)
+        {
+            // Try loading button directly
+            if (btn->LoadFromProperty(buttonProp))
             {
                 btn->SetPosition(x, y);
                 btn->CreateLayer(*m_pGr, 160);
                 wzLoaded = true;
                 LOG_DEBUG("UIChannelSelect: Channel {} button loaded from WZ at ({}, {})",
-                          channelIndex + 1, x, y);
+                          channelIndex, x, y);
             }
         }
     }
