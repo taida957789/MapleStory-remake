@@ -39,6 +39,17 @@ void UIWorldSelect::OnCreate(Login* pLogin, WzGr2D& gr, UIManager& uiManager)
     }
     m_apLayerBalloon.clear();
 
+    // 基於 IDA 分析 (CUIWorldSelect::OnCreate @ 0xbc54f0)
+    // 創建並初始化 LayoutMan (0xbc5558-0xbc5566)
+    m_pLayoutMan = std::make_unique<LayoutMan>();
+    m_pLayoutMan->Init(this, 0, 0);
+
+    // 呼叫 AutoBuild 載入 UI 元素 (0xbc55af)
+    // Base UOL: "UI/Login.img/WorldSelect/BtWorld/test"
+    std::wstring sRootUOL = L"UI/Login.img/WorldSelect/BtWorld/test";
+    m_pLayoutMan->AutoBuild(sRootUOL, 0, 0, 0, true, false);
+    LOG_DEBUG("UIWorldSelect: AutoBuild completed");
+
     // Load WorldSelect WZ property for future use
     auto& resMan = WzResMan::GetInstance();
     auto loginImgProp = resMan.GetProperty("UI/Login.img");
@@ -65,15 +76,37 @@ void UIWorldSelect::SetRet(std::int32_t ret)
 void UIWorldSelect::InitWorldButtons()
 {
     // Based on CUIWorldSelect::InitWorldButtons (0xbbcb80)
-    // Hide all buttons initially, show bg layer
 
-    if (m_pLayerBg)
+    // 1. 隱藏所有 LayoutMan 管理的元素
+    if (m_pLayoutMan)
     {
-        m_pLayerBg->SetVisible(true);
+        // CLayoutMan::SetShow(this->m_pLm.p, 0);
+        m_pLayoutMan->ABSetButtonShowAll(false);
+        m_pLayoutMan->ABSetLayerVisibleAll(false);
+        LOG_DEBUG("UIWorldSelect::InitWorldButtons - hidden all LayoutMan elements");
     }
 
-    // Clear button names
+    // 2. 獲取並顯示 bg 圖層
+    // m_pInterface = CLayoutMan::ABGetLayer(this->m_pLm.p, &result, L"bg")->m_pInterface;
+    // m_pInterface->put_visible(m_pInterface, 1);
+    if (m_pLayoutMan)
+    {
+        auto pLayerBg = m_pLayoutMan->ABGetLayer(L"bg");
+        if (pLayerBg)
+        {
+            pLayerBg->SetVisible(true);
+            LOG_DEBUG("UIWorldSelect::InitWorldButtons - bg layer set visible");
+        }
+        else
+        {
+            LOG_WARN("UIWorldSelect::InitWorldButtons - bg layer not found in LayoutMan");
+        }
+    }
+
+    // 3. 清空按鈕名稱陣列
+    // ZArray<ZXString<char>>::_Destroy(...)
     m_aButtonName.clear();
+    LOG_DEBUG("UIWorldSelect::InitWorldButtons - cleared button names");
 }
 
 void UIWorldSelect::DrawWorldItems()
