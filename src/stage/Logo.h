@@ -218,8 +218,9 @@ private:
     std::shared_ptr<WzCanvas> m_pLoadingBgCanvas;                      // Selected random background
     std::vector<std::vector<std::shared_ptr<WzCanvas>>> m_repeatAnims; // repeat animations [n][frame]
     std::vector<std::shared_ptr<WzCanvas>> m_stepFrames;               // step progress images
-    std::int32_t m_nCurrentRepeat{0};       // Current repeat animation index
-    std::int32_t m_nCurrentRepeatFrame{0};  // Current frame within repeat animation
+    std::int32_t m_nCurrentRepeat{0};       // Reserved: future repeat animation switching
+    std::int32_t m_nCurrentRepeatFrame{0};  // Reserved: future frame tracking
+    std::uint64_t m_demoFrameCount{0};      // For simulated progress demo
 };
 
 } // namespace ms

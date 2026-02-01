@@ -8,6 +8,9 @@
 #include "wz/WzProperty.h"
 #include "wz/WzResMan.h"
 
+#include <cstdlib>
+#include <ctime>
+
 namespace ms
 {
 
@@ -222,17 +225,28 @@ void Logo::InitLoading()
 
     LOG_DEBUG("Initializing loading screen resources");
 
+    // Seed random number generator for background selection
+    static bool randomSeeded = false;
+    if (!randomSeeded)
+    {
+        std::srand(static_cast<unsigned int>(std::time(nullptr)));
+        randomSeeded = true;
+    }
+
     // 1. Load random background
     auto randomBgProp = loadingProp->GetChild("randomBackgrd");
     if (randomBgProp && randomBgProp->HasChildren())
     {
         auto bgCount = static_cast<std::int32_t>(randomBgProp->GetChildCount());
-        auto randomIndex = rand() % bgCount;
-        auto bgChild = randomBgProp->GetChild(std::to_string(randomIndex));
-        if (bgChild)
+        if (bgCount > 0)  // Add division by zero check
         {
-            m_pLoadingBgCanvas = bgChild->GetCanvas();
-            LOG_DEBUG("Selected random background: {}/{}", randomIndex, bgCount);
+            auto randomIndex = rand() % bgCount;
+            auto bgChild = randomBgProp->GetChild(std::to_string(randomIndex));
+            if (bgChild)
+            {
+                m_pLoadingBgCanvas = bgChild->GetCanvas();
+                LOG_DEBUG("Selected random background: {}/{}", randomIndex, bgCount);
+            }
         }
     }
     else
@@ -320,6 +334,7 @@ void Logo::StartLoadingMode()
     m_loadingAlpha = 255;
     m_nCurrentRepeat = 0;
     m_nCurrentRepeatFrame = 0;
+    m_demoFrameCount = 0;  // Reset demo counter
 
     // Hide logo layers
     if (m_pLayerBackground) m_pLayerBackground->SetVisible(false);
@@ -454,14 +469,13 @@ void Logo::UpdateLoading()
 {
     // TODO: TEMPORARY - Simulated progress for demo/testing
     // Remove this block when real resource loading tracking is implemented
-    static std::uint64_t demoFrameCount = 0;
-    demoFrameCount++;
+    m_demoFrameCount++;
 
     // Simulate progress updates at intervals (60 fps assumed)
     if (m_nLoadingStepCount > 0)
     {
         // Update step every 120 frames (~2 seconds at 60fps)
-        std::int32_t simulatedStep = static_cast<std::int32_t>(demoFrameCount / 120);
+        std::int32_t simulatedStep = static_cast<std::int32_t>(m_demoFrameCount / 120);
         if (simulatedStep < m_nLoadingStepCount && simulatedStep != m_nLoadingStep)
         {
             SetLoadingProgress(simulatedStep);
