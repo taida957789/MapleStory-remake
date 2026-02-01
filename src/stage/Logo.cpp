@@ -348,12 +348,31 @@ void Logo::StartLoadingMode()
     {
         m_pLayerLoadingAnim->RemoveAllCanvases();
 
-        // Load first repeat animation frames
+        // Load first repeat animation frames with delay from WZ
+        auto& resMan = WzResMan::GetInstance();
         auto& firstRepeat = m_repeatAnims[0];
-        for (auto& frameCanvas : firstRepeat)
+        auto repeatProp = resMan.GetProperty("UI/Logo.img/Loading/repeat/0");
+
+        for (std::size_t i = 0; i < firstRepeat.size(); ++i)
         {
-            // Use default delay of 100ms (will be read from WZ in future refinement)
-            m_pLayerLoadingAnim->InsertCanvas(frameCanvas, 100, 255, 255);
+            auto& frameCanvas = firstRepeat[i];
+
+            // Read delay from WZ (similar to UINewCharRaceSelect pattern)
+            int delay = 100;  // Default
+            if (repeatProp)
+            {
+                auto frameProp = repeatProp->GetChild(std::to_string(i));
+                if (frameProp)
+                {
+                    auto delayProp = frameProp->GetChild("delay");
+                    if (delayProp)
+                    {
+                        delay = delayProp->GetInt(100);
+                    }
+                }
+            }
+
+            m_pLayerLoadingAnim->InsertCanvas(frameCanvas, delay, 255, 255);
         }
 
         // Center first frame for positioning
