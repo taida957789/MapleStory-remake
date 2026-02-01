@@ -34,6 +34,9 @@ void UIChannelSelect::OnCreate(Login* pLogin, WzGr2D& gr, UIManager& uiManager,
     constexpr int kDialogX = 203;
     constexpr int kDialogY = 194;
 
+    // Set UIChannelSelect position (parent container position)
+    SetPosition(kDialogX, kDialogY);
+
     // Load WorldSelect WZ properties
     auto& resMan = WzResMan::GetInstance();
     auto loginImgProp = resMan.GetProperty("UI/Login.img");
@@ -181,11 +184,11 @@ void UIChannelSelect::ResetInfo(std::int32_t worldIndex, bool bRedraw)
     constexpr int kDialogX = 203;
     constexpr int kDialogY = 194;
 
-    // Channel buttons start at approximately (10, 55) relative to dialog
+    // Channel buttons start at approximately (10, 55) RELATIVE to dialog
     // Original uses WZ layout manager; we use hardcoded offsets
-    // Increased Y offset to account for dialog header/title area
-    const int startX = kDialogX + 10;
-    int channelY = kDialogY + 55;
+    // Now using relative coordinates since buttons are children of UIChannelSelect
+    const int startX = 10;      // Relative to dialog
+    int channelY = 55;          // Relative to dialog
 
     // Load chgauge for channel load indicator
     // string.csv idx 2368: UI/Login.img/WorldSelect/channel/chgauge
@@ -293,9 +296,10 @@ void UIChannelSelect::ResetInfo(std::int32_t worldIndex, bool bRedraw)
     }
 
     // Calculate GoWorld button position (below channel buttons)
+    // Using relative coordinates since it's a child of UIChannelSelect
     const int numRows = (static_cast<int>(world.aChannelLoad.size()) + channelsPerRow - 1) / channelsPerRow;
     const int goWorldY = channelY + numRows * btnSpacingY + 10;
-    const int goBtnX = kDialogX + 50;
+    const int goBtnX = 50;  // Relative to dialog
 
     // Create GoWorld button
     // string.csv idx 2369: UI/Login.img/WorldSelect/BtGoworld
@@ -752,8 +756,12 @@ void UIChannelSelect::CreatePlaceholderUI()
     constexpr int kDialogX = 203;
     constexpr int kDialogY = 194;
 
-    const int startX = kDialogX + 10;
-    int channelY = kDialogY + 55;
+    // Set UIChannelSelect position
+    SetPosition(kDialogX, kDialogY);
+
+    // Use relative coordinates for children
+    const int startX = 10;   // Relative to dialog
+    int channelY = 55;       // Relative to dialog
 
     // Create placeholder channel buttons (20 channels)
     const int channelsPerRow = 5;
@@ -787,7 +795,7 @@ void UIChannelSelect::CreatePlaceholderUI()
     // Select first channel
     m_nSelect = 0;
 
-    // Calculate GoWorld button position
+    // Calculate GoWorld button position (relative coordinates)
     const int numRows = 4;  // 20 channels / 5 per row
     const int goWorldY = channelY + numRows * btnSpacingY + 10;
 
@@ -795,7 +803,7 @@ void UIChannelSelect::CreatePlaceholderUI()
     {
         const int goBtnWidth = 100;
         const int goBtnHeight = 35;
-        const int goBtnX = kDialogX + 50;
+        const int goBtnX = 50;  // Relative to dialog
 
         m_pBtnGoWorld = std::make_shared<UIButton>();
 
