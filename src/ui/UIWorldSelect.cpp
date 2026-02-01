@@ -118,18 +118,28 @@ void UIWorldSelect::DrawWorldItems()
         return;
     }
 
+    // 1. 初始化世界按鈕 (隱藏所有，顯示 bg)
     InitWorldButtons();
 
-    // Get balloon count from Login
+    // 2. 處理 Balloon (氣球消息)
     m_nBalloonCount = m_pLogin->GetBalloonCount();
+    if (m_nBalloonCount > 0)
+    {
+        // TODO: 實作 balloon 創建
+        // for (int i = 0; i < m_nBalloonCount; ++i)
+        // {
+        //     auto& balloon = balloons[i];
+        //     MakeWSBalloon(balloon.sMessage, balloon.nX, balloon.nY);
+        // }
+        LOG_DEBUG("UIWorldSelect::DrawWorldItems - {} balloons (not yet implemented)", m_nBalloonCount);
+    }
 
-    // Get world items from Login
+    // 3. 獲取世界數量
     const auto& worldItems = m_pLogin->GetWorldItemFinal();
     m_nWorld = static_cast<std::int32_t>(worldItems.size());
-
     LOG_DEBUG("UIWorldSelect::DrawWorldItems - {} worlds", m_nWorld);
 
-    // Clear existing world state layers
+    // 4. 清空並重建 m_apLayerWorldState
     for (auto& layer : m_apLayerWorldState)
     {
         if (layer)
@@ -139,229 +149,74 @@ void UIWorldSelect::DrawWorldItems()
     }
     m_apLayerWorldState.clear();
 
-    // Clear existing world buttons
-    for (size_t i = 0; i < m_vBtWorld.size(); ++i)
+    // 5. 加載 worldState 屬性 (StringPool 0x12F9 = "UI/Login.img/WorldSelect/worldState")
+    auto& resMan = WzResMan::GetInstance();
+    auto worldStateProp = resMan.GetProperty("UI/Login.img/WorldSelect/worldState");
+
+    // 6. Reset StarPlanet world ID
+    // TSingleton<CWvsContext>::ms_pInstance->m_nStarPlanetWorldID = -1;
+
+    // 7. 遍歷每個世界，通過 LayoutMan 獲取按鈕
+    for (size_t i = 0; i < worldItems.size(); ++i)
     {
-        if (m_vBtWorld[i])
+        const auto& world = worldItems[i];
+        const int worldID = world.nWorldID;
+
+        // 如果是 StarPlanet 世界 (通常 world ID >= 100)
+        // 原始代碼檢查 bStarPlanet 字段
+        if (worldID >= 100)
         {
-            if (i < m_aButtonName.size())
-            {
-                m_pUIManager->RemoveElement("world" + m_aButtonName[i]);
-            }
-            if (m_vBtWorld[i]->GetLayer())
-            {
-                m_pGr->RemoveLayer(m_vBtWorld[i]->GetLayer());
-            }
-        }
-    }
-    m_vBtWorld.clear();
-
-    // If no worlds from server, create placeholder UI
-    if (worldItems.empty())
-    {
-        CreatePlaceholderUI();
-        return;
-    }
-
-    // CUIWorldSelect dialog position from IDA: (652, 37) with Origin_LT
-    // World buttons are positioned relative to this dialog
-    constexpr int kDialogX = 652;
-    constexpr int kDialogY = 37;
-
-    // World buttons start at approximately (10, 50) relative to dialog
-    const int startX = kDialogX + 10;
-    int worldY = kDialogY + 50;
-
-    // Try to load BtWorld from WZ
-    // string.csv idx 2364: UI/Login.img/WorldSelect/BtWorld/%d where %d is the world ID
-    // string.csv idx 2365: UI/Login.img/WorldSelect/BtWorld/t%d for button text
-    std::shared_ptr<WzProperty> btWorldProp;
-    if (m_pWorldSelectProp)
-    {
-        btWorldProp = m_pWorldSelectProp->GetChild("BtWorld");
-        if (btWorldProp)
-        {
-            LOG_DEBUG("UIWorldSelect: BtWorld property found");
-        }
-        else
-        {
-            LOG_DEBUG("UIWorldSelect: BtWorld property not found");
-        }
-    }
-
-    // Create button for each world
-    for (std::int32_t i = 0; i < static_cast<std::int32_t>(worldItems.size()); ++i)
-    {
-        const auto& world = worldItems[static_cast<size_t>(i)];
-
-        // Skip Star Planet worlds (handled separately)
-        if (world.nWorldID >= 100)
-        {
+            // TSingleton<CWvsContext>::ms_pInstance->m_nStarPlanetWorldID = worldID;
+            LOG_DEBUG("UIWorldSelect: StarPlanet world detected (ID: {})", worldID);
             continue;
         }
 
-        std::string worldIdStr = std::to_string(world.nWorldID);
-
-        // Try to load button from WZ: UI/Login.img/WorldSelect/BtWorld/{worldId}
-        std::shared_ptr<UIButton> btn;
-        if (btWorldProp)
+        // 從 LayoutMan 獲取世界按鈕 (按鈕名稱是世界 ID 的字符串)
+        // CLayoutMan::ABGetButton(this->m_pLm.p, &pBtn, _itow(worldID, buffer, 10));
+        if (!m_pLayoutMan)
         {
-            auto worldBtnProp = btWorldProp->GetChild(worldIdStr);
-            if (worldBtnProp)
+            LOG_WARN("UIWorldSelect: LayoutMan not initialized");
+            continue;
+        }
+
+        auto pBtn = m_pLayoutMan->ABGetButton(std::to_wstring(worldID));
+        if (!pBtn)
+        {
+            LOG_WARN("UIWorldSelect: World button {} not found in LayoutMan", worldID);
+            continue;
+        }
+
+        // 設置按鈕顯示
+        // pBtn->SetShow(1, 0);
+        pBtn->SetVisible(true);
+        LOG_DEBUG("UIWorldSelect: World {} button set visible", worldID);
+
+        // 將按鈕名稱添加到 m_aButtonName 陣列
+        m_aButtonName.push_back(std::to_string(worldID));
+
+        // 添加到按鈕陣列 (用於事件處理)
+        m_vBtWorld.push_back(pBtn);
+
+        // 如果有世界狀態圖標 (nWorldState: 0=normal, 1=event, 2=new, 3=hot)
+        // 原始代碼中是 nEventDescriptionTag，但我們的實作中是 nWorldState
+        if (world.nWorldState != 0 && worldStateProp)
+        {
+            // 加載對應的圖標圖層
+            auto iconProp = worldStateProp->GetChild(std::to_string(world.nWorldState));
+            if (iconProp)
             {
-                LOG_DEBUG("UIWorldSelect: Found BtWorld/{} property", worldIdStr);
-                btn = std::make_shared<UIButton>();
-                if (!btn->LoadFromProperty(worldBtnProp))
-                {
-                    LOG_DEBUG("UIWorldSelect: Failed to load button from BtWorld/{}", worldIdStr);
-                    btn.reset();
-                }
-                else
-                {
-                    LOG_DEBUG("UIWorldSelect: Successfully loaded button from BtWorld/{}", worldIdStr);
-                }
+                // TODO: 創建圖層並定位在按鈕右上角
+                // CAnimationDisplayer::LoadLayer(&pLayerIcon, iconProp, ...)
+                // 調整位置: pBtn->GetX() + pBtn->m_width - icon_width, pBtn->GetY() + 6
+                // 設置 z-order: 110
+                // 設置動畫: Animate(GA_REPEAT, ...)
+                // 添加到 m_apLayerWorldState
+                LOG_DEBUG("UIWorldSelect: World {} has state icon {}", worldID, world.nWorldState);
             }
-            else
-            {
-                LOG_DEBUG("UIWorldSelect: BtWorld/{} property not found", worldIdStr);
-            }
-        }
-
-        // Create placeholder button if WZ not found
-        if (!btn)
-        {
-            btn = CreateWorldButton(world.sName, startX, worldY);
-        }
-        else
-        {
-            btn->SetPosition(startX, worldY);
-            btn->CreateLayer(*m_pGr, 150);
-        }
-
-        if (btn)
-        {
-            // Set click callback with world index
-            const std::int32_t worldIndex = i;
-            btn->SetClickCallback([this, worldIndex]() {
-                OnButtonClicked(static_cast<std::uint32_t>(worldIndex));
-            });
-
-            m_pUIManager->AddElement("world" + worldIdStr, btn);
-            m_vBtWorld.push_back(btn);
-            m_aButtonName.push_back(worldIdStr);
-
-            LOG_DEBUG("Created world button: {} at ({}, {})", world.sName, startX, worldY);
-        }
-
-        // Load world state icon if nWorldState != 0 (Hot/New/Event)
-        // string.csv idx 2380: UI/Login.img/WorldSelect/world/%d
-        // string.csv idx 2381: UI/Login.img/WorldSelect/world/t%d (xref: 0xbbe36c)
-        if (world.nWorldState != 0 && m_pWorldSelectProp)
-        {
-            auto worldStateProp = m_pWorldSelectProp->GetChild("world");
-            if (worldStateProp)
-            {
-                auto stateProp = worldStateProp->GetChild(std::to_string(world.nWorldState));
-                if (stateProp)
-                {
-                    auto canvas = stateProp->GetCanvas();
-                    if (canvas)
-                    {
-                        // Position icon next to button
-                        int iconX = startX + (btn ? btn->GetWidth() : 200) + 5;
-                        auto stateLayer = m_pGr->CreateLayer(
-                            iconX, worldY,
-                            static_cast<std::uint32_t>(canvas->GetWidth()),
-                            static_cast<std::uint32_t>(canvas->GetHeight()),
-                            151
-                        );
-                        if (stateLayer)
-                        {
-                            stateLayer->SetScreenSpace(true);
-                            stateLayer->InsertCanvas(canvas, 0, 255, 255);
-                            m_apLayerWorldState.push_back(stateLayer);
-                        }
-                    }
-                }
-            }
-        }
-
-        worldY += 35;
-    }
-
-    // Load BtGoworld from WZ - string.csv idx 2369: UI/Login.img/WorldSelect/BtGoworld
-    const int goBtnX = kDialogX + 50;
-    const int goBtnY = worldY + 20;
-
-    bool btGoworldLoaded = false;
-    if (m_pWorldSelectProp)
-    {
-        auto btGoworldProp = m_pWorldSelectProp->GetChild("BtGoworld");
-        if (btGoworldProp)
-        {
-            m_pBtnGoWorld = std::make_shared<UIButton>();
-            if (m_pBtnGoWorld->LoadFromProperty(btGoworldProp))
-            {
-                m_pBtnGoWorld->SetPosition(goBtnX, goBtnY);
-                m_pBtnGoWorld->CreateLayer(*m_pGr, 150);
-                btGoworldLoaded = true;
-                LOG_DEBUG("UIWorldSelect: BtGoworld loaded from WZ at ({}, {})", goBtnX, goBtnY);
-            }
-            else
-            {
-                LOG_DEBUG("UIWorldSelect: Failed to load BtGoworld from WZ");
-                m_pBtnGoWorld.reset();
-            }
-        }
-        else
-        {
-            LOG_DEBUG("UIWorldSelect: BtGoworld property not found");
         }
     }
 
-    // Create placeholder if WZ not loaded
-    if (!btGoworldLoaded)
-    {
-        const int btnWidth = 100;
-        const int btnHeight = 35;
-
-        m_pBtnGoWorld = std::make_shared<UIButton>();
-
-        // Create orange gradient button
-        auto canvas = std::make_shared<WzCanvas>(btnWidth, btnHeight);
-        std::vector<std::uint8_t> pixels(static_cast<size_t>(btnWidth * btnHeight * 4));
-        for (int y = 0; y < btnHeight; ++y)
-        {
-            for (int x = 0; x < btnWidth; ++x)
-            {
-                auto idx = static_cast<size_t>((y * btnWidth + x) * 4);
-                float t = static_cast<float>(y) / static_cast<float>(btnHeight);
-                pixels[idx + 0] = static_cast<std::uint8_t>(255 - 80 * t);
-                pixels[idx + 1] = static_cast<std::uint8_t>(180 - 60 * t);
-                pixels[idx + 2] = static_cast<std::uint8_t>(80 - 30 * t);
-                pixels[idx + 3] = 255;
-            }
-        }
-        canvas->SetPixelData(std::move(pixels));
-        m_pBtnGoWorld->SetStateCanvas(UIState::Normal, canvas);
-        m_pBtnGoWorld->SetSize(btnWidth, btnHeight);
-        m_pBtnGoWorld->SetPosition(goBtnX, goBtnY);
-        m_pBtnGoWorld->CreateLayer(*m_pGr, 150);
-        LOG_DEBUG("UIWorldSelect: Placeholder BtGoworld created at ({}, {})", goBtnX, goBtnY);
-    }
-
-    m_pBtnGoWorld->SetClickCallback([this]() {
-        if (m_pLogin && m_nKeyFocus >= 0)
-        {
-            LOG_DEBUG("Entering world, changing to step 2");
-            m_pLogin->ChangeStep(2);
-        }
-        else
-        {
-            LOG_DEBUG("No world selected");
-        }
-    });
-    m_pUIManager->AddElement("btnGoWorld", m_pBtnGoWorld);
+    LOG_DEBUG("UIWorldSelect::DrawWorldItems - completed, {} world buttons created", m_vBtWorld.size());
 }
 
 void UIWorldSelect::OnButtonClicked(std::uint32_t nId)
