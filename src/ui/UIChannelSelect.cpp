@@ -164,6 +164,28 @@ void UIChannelSelect::ResetInfo(std::int32_t worldIndex, bool bRedraw)
     LOG_DEBUG("UIChannelSelect::ResetInfo - world {} ({}) with {} channels",
               world.sName, world.nWorldID, world.aChannelLoad.size());
 
+    // 創建 LayoutMan
+    if (!m_pLayoutMan)
+    {
+        m_pLayoutMan = std::make_unique<LayoutMan>();
+        m_pLayoutMan->Init(this, 0, 0);
+
+        // 使用 AutoBuild 替代手動創建按鈕
+        std::wstring sRootUOL = L"UI/Login.img/WorldSelect/BtChannel/test";
+        m_pLayoutMan->AutoBuild(sRootUOL, 0, 0, 0, true, false);
+
+        // 測試查找按鈕
+        auto pGoWorldBtn = m_pLayoutMan->ABGetButton(L"GoWorld");
+        if (pGoWorldBtn)
+        {
+            LOG_INFO("Found GoWorld button via LayoutMan");
+        }
+        else
+        {
+            LOG_INFO("GoWorld button not found via LayoutMan (may need to be created manually)");
+        }
+    }
+
     // Clear existing channel buttons
     for (size_t i = 0; i < m_vBtChannel.size(); ++i)
     {

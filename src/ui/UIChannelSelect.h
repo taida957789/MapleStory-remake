@@ -2,6 +2,7 @@
 
 #include "UIElement.h"
 #include "util/Singleton.h"
+#include "LayoutMan.h"
 
 #include <cstdint>
 #include <memory>
@@ -204,6 +205,9 @@ private:
 
     // Cached WZ property
     std::shared_ptr<WzProperty> m_pChannelSelectProp;
+
+    // LayoutMan for automated UI building
+    std::unique_ptr<LayoutMan> m_pLayoutMan;
 };
 
 } // namespace ms
