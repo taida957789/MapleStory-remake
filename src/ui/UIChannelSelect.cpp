@@ -170,9 +170,19 @@ void UIChannelSelect::ResetInfo(std::int32_t worldIndex, bool bRedraw)
         m_pLayoutMan = std::make_unique<LayoutMan>();
         m_pLayoutMan->Init(this, 0, 0);
 
-        // 使用 AutoBuild 替代手動創建按鈕
-        std::wstring sRootUOL = L"UI/Login.img/WorldSelect/BtChannel/test";
-        m_pLayoutMan->AutoBuild(sRootUOL, 0, 0, 0, true, false);
+        // 基於 IDA 分析 (CUIChannelSelect::OnCreate @ 0xbc4780)
+        // 原始實作呼叫 AutoBuild 兩次:
+
+        // 第一次 AutoBuild: 使用 base UOL (0xbc4823)
+        std::wstring sBaseUOL = L"UI/Login.img/WorldSelect/BtChannel/test";
+        m_pLayoutMan->AutoBuild(sBaseUOL, 0, 0, 0, true, false);
+        LOG_DEBUG("UIChannelSelect: First AutoBuild completed (base UOL)");
+
+        // 第二次 AutoBuild: 使用 base UOL + "/test" (0xbc48dc)
+        // 原始碼: ZXString<char>::operator+(&this->m_sBaseUOL, &sWorldUOL, "/test");
+        std::wstring sWorldUOL = L"UI/Login.img/WorldSelect/BtChannel/test/test";
+        m_pLayoutMan->AutoBuild(sWorldUOL, 0, 0, 0, true, false);
+        LOG_DEBUG("UIChannelSelect: Second AutoBuild completed (base UOL + /test)");
 
         // 測試查找按鈕
         auto pGoWorldBtn = m_pLayoutMan->ABGetButton(L"GoWorld");
@@ -210,10 +220,6 @@ void UIChannelSelect::ResetInfo(std::int32_t worldIndex, bool bRedraw)
         }
         m_pBtnGoWorld.reset();
     }
-
-    // CUIChannelSelect dialog position from IDA: (203, 194) with Origin_LT
-    constexpr int kDialogX = 203;
-    constexpr int kDialogY = 194;
 
     // Channel buttons are now created by LayoutMan::AutoBuild
 
