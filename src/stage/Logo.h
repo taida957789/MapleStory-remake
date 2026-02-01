@@ -76,6 +76,15 @@ public:
      */
     void ForcedEnd();
 
+    /**
+     * @brief Update loading progress
+     * @param step Current loading step (0-based)
+     *
+     * External systems can call this to update loading progress.
+     * Automatically triggers fade out when final step reached.
+     */
+    void SetLoadingProgress(std::int32_t step);
+
 private:
     /**
      * @brief Initialize WZ logo resources
@@ -154,15 +163,6 @@ private:
      * Handles repeat animation cycling and fade out effect.
      */
     void UpdateLoading();
-
-    /**
-     * @brief Set loading progress
-     * @param step Current loading step (0-based)
-     *
-     * Updates step indicator display.
-     * Triggers fade out when final step reached.
-     */
-    void SetLoadingProgress(std::int32_t step);
 
     /**
      * @brief Start fade out effect
