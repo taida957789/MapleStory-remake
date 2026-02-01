@@ -321,20 +321,23 @@ void UIButton::CreateLayer(WzGr2D& gr, std::int32_t z, bool screenSpace)
     std::int32_t layerY = absPos.y + canvasOrigin.y;
 
     // Create a layer for this button
-    m_pLayer = gr.CreateLayer(layerX, layerY,
-                               static_cast<std::uint32_t>(m_nWidth),
-                               static_cast<std::uint32_t>(m_nHeight), z);
+    auto layer = gr.CreateLayer(layerX, layerY,
+                                 static_cast<std::uint32_t>(m_nWidth),
+                                 static_cast<std::uint32_t>(m_nHeight), z);
 
-    if (m_pLayer)
+    if (layer)
     {
         // UI buttons are typically in screen space (not affected by camera)
-        m_pLayer->SetScreenSpace(screenSpace);
+        layer->SetScreenSpace(screenSpace);
 
         // Add the normal state canvas initially
         if (canvas)
         {
-            m_pLayer->InsertCanvas(canvas, 0, 255, 255);
+            layer->InsertCanvas(canvas, 0, 255, 255);
         }
+
+        // Set layer (this triggers auto-registration with DebugOverlay)
+        SetLayer(layer);
     }
 }
 

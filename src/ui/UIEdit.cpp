@@ -331,19 +331,22 @@ void UIEdit::CreateLayer(WzGr2D& gr, std::int32_t z, bool screenSpace)
     std::int32_t layerY = absPos.y + canvasOrigin.y;
 
     // Create main layer for the edit box
-    m_pLayer = gr.CreateLayer(layerX, layerY,
-                               static_cast<std::uint32_t>(m_nWidth),
-                               static_cast<std::uint32_t>(m_nHeight), z);
+    auto layer = gr.CreateLayer(layerX, layerY,
+                                 static_cast<std::uint32_t>(m_nWidth),
+                                 static_cast<std::uint32_t>(m_nHeight), z);
 
-    if (m_pLayer)
+    if (layer)
     {
-        m_pLayer->SetScreenSpace(screenSpace);
+        layer->SetScreenSpace(screenSpace);
 
         // Add background canvas if available
         if (m_pBackgroundCanvas)
         {
-            m_pLayer->InsertCanvas(m_pBackgroundCanvas, 0, 255, 255);
+            layer->InsertCanvas(m_pBackgroundCanvas, 0, 255, 255);
         }
+
+        // Set layer (this triggers auto-registration with DebugOverlay)
+        SetLayer(layer);
     }
 
     // Create caret layer (slightly higher z)
@@ -381,11 +384,7 @@ void UIEdit::CreateLayer(WzGr2D& gr, std::int32_t z, bool screenSpace)
     }
 
 #ifdef MS_DEBUG_CANVAS
-    // Register all layers for debug
-    if (m_pLayer)
-    {
-        DebugOverlay::GetInstance().RegisterUIElement(this, m_pLayer, "UIEdit Background");
-    }
+    // Register additional layers for debug (main layer is auto-registered via SetLayer())
     if (m_pTextLayer)
     {
         DebugOverlay::GetInstance().RegisterUIElement(this, m_pTextLayer, "UIEdit Text");
