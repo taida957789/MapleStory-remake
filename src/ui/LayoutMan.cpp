@@ -2,6 +2,7 @@
 #include "UIButton.h"
 #include "UIElement.h"
 #include "graphics/WzGr2DLayer.h"
+#include "util/Logger.h"
 #include "wz/WzCanvas.h"
 #include "wz/WzProperty.h"
 #include "wz/WzResMan.h"
@@ -39,16 +40,22 @@ void LayoutMan::AutoBuild(
         if (wc > 127)
         {
             // 非 ASCII 字符
+            LOG_WARN("LayoutMan::AutoBuild - non-ASCII character in UOL");
             return;
         }
         sRootPath.push_back(static_cast<char>(wc));
     }
 
+    LOG_DEBUG("LayoutMan::AutoBuild - trying to load: {}", sRootPath);
+
     auto pRoot = resMan.GetProperty(sRootPath);
     if (!pRoot)
     {
+        LOG_WARN("LayoutMan::AutoBuild - property not found: {}", sRootPath);
         return;
     }
+
+    LOG_DEBUG("LayoutMan::AutoBuild - found root property with {} children", pRoot->GetChildren().size());
 
     // IDA: 枚舉所有子屬性 (0xb36435-0xb364d3)
     int currentId = 0;  // Start offset at 0
@@ -62,6 +69,8 @@ void LayoutMan::AutoBuild(
         {
             wName.push_back(static_cast<wchar_t>(c));
         }
+
+        LOG_DEBUG("LayoutMan::AutoBuild - processing child: {}", name);
 
         // TODO: 下一步處理
         ProcessChildProperty(wName, pProp, sRootUOL, nIdBase, currentId,
@@ -328,14 +337,28 @@ auto LayoutMan::AddButton(
     bool bToggle,
     bool bSkipIDCheck) -> std::shared_ptr<UIButton>
 {
+    // 轉換 wstring 到 string for logging
+    std::string sPath;
+    for (wchar_t wc : sButtonUOL)
+    {
+        if (wc <= 127)
+        {
+            sPath.push_back(static_cast<char>(wc));
+        }
+    }
+    LOG_DEBUG("LayoutMan::AddButton - trying to load button from: {}", sPath);
+
     // IDA: 創建按鈕對象 (0xb30424)
     auto pButton = std::make_shared<UIButton>();
 
     // IDA: 從 UOL 路徑加載資源
     if (!pButton->LoadFromUOL(sButtonUOL))
     {
+        LOG_WARN("LayoutMan::AddButton - failed to load button from: {}", sPath);
         return nullptr;
     }
+
+    LOG_DEBUG("LayoutMan::AddButton - successfully loaded button from: {}", sPath);
 
     // IDA: 設置 toggle 模式
     if (bToggle)

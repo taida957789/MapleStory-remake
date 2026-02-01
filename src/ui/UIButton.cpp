@@ -2,6 +2,7 @@
 #include "audio/SoundSystem.h"
 #include "graphics/WzGr2D.h"
 #include "graphics/WzGr2DLayer.h"
+#include "util/Logger.h"
 #include "wz/WzCanvas.h"
 #include "wz/WzProperty.h"
 #include "wz/WzResMan.h"
@@ -24,8 +25,11 @@ auto UIButton::LoadFromProperty(const std::shared_ptr<WzProperty>& prop) -> bool
 {
     if (!prop)
     {
+        LOG_DEBUG("UIButton::LoadFromProperty - prop is null");
         return false;
     }
+
+    LOG_DEBUG("UIButton::LoadFromProperty - loading button, {} children", prop->GetChildren().size());
 
     bool hasNormal = false;
 
@@ -46,6 +50,8 @@ auto UIButton::LoadFromProperty(const std::shared_ptr<WzProperty>& prop) -> bool
             continue;
         }
 
+        LOG_DEBUG("UIButton::LoadFromProperty - found state: {}", name);
+
         // Try to get canvas directly
         auto canvas = stateProp->GetCanvas();
         if (!canvas)
@@ -61,6 +67,7 @@ auto UIButton::LoadFromProperty(const std::shared_ptr<WzProperty>& prop) -> bool
         if (canvas)
         {
             SetStateCanvas(state, canvas);
+            LOG_DEBUG("UIButton::LoadFromProperty - loaded canvas for state: {}", name);
 
             if (state == UIState::Normal)
             {
@@ -70,6 +77,10 @@ auto UIButton::LoadFromProperty(const std::shared_ptr<WzProperty>& prop) -> bool
                 m_nWidth = static_cast<std::int32_t>(canvas->GetWidth());
                 m_nHeight = static_cast<std::int32_t>(canvas->GetHeight());
             }
+        }
+        else
+        {
+            LOG_DEBUG("UIButton::LoadFromProperty - no canvas for state: {}", name);
         }
     }
 
@@ -166,19 +177,30 @@ auto UIButton::LoadFromUOL(const std::wstring& sUOL) -> bool
         if (wc > 127)
         {
             // 非 ASCII 字符，返回失敗
+            LOG_DEBUG("UIButton::LoadFromUOL - non-ASCII character in path");
             return false;
         }
         sPath.push_back(static_cast<char>(wc));
     }
 
+    LOG_DEBUG("UIButton::LoadFromUOL - trying: {}", sPath);
+
     auto pProp = resMan.GetProperty(sPath);
     if (!pProp)
     {
+        LOG_DEBUG("UIButton::LoadFromUOL - property not found: {}", sPath);
         return false;
     }
 
+    LOG_DEBUG("UIButton::LoadFromUOL - property found, has {} children", pProp->GetChildren().size());
+
     // 使用現有的 LoadFromProperty
-    return LoadFromProperty(pProp);
+    bool result = LoadFromProperty(pProp);
+    if (!result)
+    {
+        LOG_DEBUG("UIButton::LoadFromUOL - LoadFromProperty failed for: {}", sPath);
+    }
+    return result;
 }
 
 void UIButton::SetStateCanvas(UIState state, std::shared_ptr<WzCanvas> canvas)
