@@ -465,7 +465,11 @@ void Logo::UpdateLoading()
 void Logo::Update()
 {
     // Based on CLogo::Update @ 0xbc7a90
-    if (m_bVideoMode)
+    if (m_bLoadingMode)
+    {
+        UpdateLoading();
+    }
+    else if (m_bVideoMode)
     {
         UpdateVideo();
     }
@@ -534,10 +538,10 @@ void Logo::UpdateVideo()
 {
     // Based on CLogo::UpdateVideo @ 0xbc5950
 
-    // Video unavailable - end logo immediately
+    // Video unavailable - start loading mode instead of ending
     if (m_videoState == VideoState::Unavailable)
     {
-        LogoEnd();
+        StartLoadingMode();
         return;
     }
 
