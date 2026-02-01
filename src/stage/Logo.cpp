@@ -452,6 +452,23 @@ void Logo::FadeOutLoading()
 
 void Logo::UpdateLoading()
 {
+    // TODO: TEMPORARY - Simulated progress for demo/testing
+    // Remove this block when real resource loading tracking is implemented
+    static std::uint64_t demoFrameCount = 0;
+    demoFrameCount++;
+
+    // Simulate progress updates at intervals (60 fps assumed)
+    if (m_nLoadingStepCount > 0)
+    {
+        // Update step every 120 frames (~2 seconds at 60fps)
+        std::int32_t simulatedStep = static_cast<std::int32_t>(demoFrameCount / 120);
+        if (simulatedStep < m_nLoadingStepCount && simulatedStep != m_nLoadingStep)
+        {
+            SetLoadingProgress(simulatedStep);
+        }
+    }
+    // END TODO: Remove simulated progress code
+
     // Handle fade out effect
     if (m_loadingAlpha < 255)
     {
