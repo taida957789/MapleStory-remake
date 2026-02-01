@@ -421,6 +421,47 @@ void Logo::SetLoadingProgress(std::int32_t step)
     }
 }
 
+void Logo::FadeOutLoading()
+{
+    // Set alpha to trigger fade out (will be handled in UpdateLoading)
+    if (m_loadingAlpha == 255)
+    {
+        m_loadingAlpha = 254;  // Start fade out
+        LOG_DEBUG("Starting loading screen fade out");
+    }
+}
+
+void Logo::UpdateLoading()
+{
+    // Handle fade out effect
+    if (m_loadingAlpha < 255)
+    {
+        // Gradually reduce alpha (approximately 5 per frame at 60fps = ~3 second fade)
+        auto alphaInt = static_cast<std::int32_t>(m_loadingAlpha);
+        alphaInt = std::max(0, alphaInt - 5);
+        m_loadingAlpha = static_cast<std::uint8_t>(alphaInt);
+
+        // Apply alpha to all loading layers
+        auto color = (static_cast<std::uint32_t>(m_loadingAlpha) << 24) | 0x00FFFFFF;
+        if (m_pLayerLoadingBg) m_pLayerLoadingBg->SetColor(color);
+        if (m_pLayerLoadingAnim) m_pLayerLoadingAnim->SetColor(color);
+        if (m_pLayerLoadingStep) m_pLayerLoadingStep->SetColor(color);
+
+        // When fully faded out, transition to Login
+        if (m_loadingAlpha == 0)
+        {
+            LOG_INFO("Fade out complete - transitioning to Login");
+            GoToLogin();
+        }
+
+        return;
+    }
+
+    // Repeat animation cycling (future enhancement)
+    // For now, layer animation system handles frame playback automatically
+    // Could add repeat switching logic here if needed
+}
+
 void Logo::Update()
 {
     // Based on CLogo::Update @ 0xbc7a90
