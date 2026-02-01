@@ -161,6 +161,26 @@ auto UIButton::LoadFromProperty(const std::shared_ptr<WzProperty>& prop) -> bool
         }
     }
 
+    // If still no normal state found, try to use the property itself as a canvas
+    // This handles the case where the button is just a single canvas (no states)
+    if (!hasNormal)
+    {
+        auto canvas = prop->GetCanvas();
+        if (canvas)
+        {
+            LOG_DEBUG("UIButton::LoadFromProperty - using property itself as canvas (no states)");
+            // Use same canvas for all states
+            SetStateCanvas(UIState::Normal, canvas);
+            SetStateCanvas(UIState::MouseOver, canvas);
+            SetStateCanvas(UIState::Pressed, canvas);
+            SetStateCanvas(UIState::Disabled, canvas);
+
+            m_nWidth = static_cast<std::int32_t>(canvas->GetWidth());
+            m_nHeight = static_cast<std::int32_t>(canvas->GetHeight());
+            hasNormal = true;
+        }
+    }
+
     return hasNormal;
 }
 

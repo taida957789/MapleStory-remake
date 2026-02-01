@@ -172,6 +172,14 @@ private:
      */
     void FadeOutLoading();
 
+    /**
+     * @brief Load WZ files progressively during loading screen
+     *
+     * Loads one WZ file per call, updating progress accordingly.
+     * Called from UpdateLoading() each frame until all files loaded.
+     */
+    void LoadWzFilesProgressively();
+
 private:
     // Logo properties (from UI/Logo.img)
     std::shared_ptr<WzProperty> m_pLogoProp;      // UI/Logo.img/Logo
@@ -209,6 +217,10 @@ private:
     std::int32_t m_nLoadingStepCount{0};     // Total number of steps
     std::uint8_t m_loadingAlpha{255};        // Loading screen alpha (for fade out)
 
+    // WZ loading state
+    bool m_wzLoadingComplete{false};         // Whether all WZ files are loaded
+    std::size_t m_currentWzFileIndex{0};     // Current WZ file being loaded
+
     // Loading layers
     std::shared_ptr<WzGr2DLayer> m_pLayerLoadingBg;     // Background layer
     std::shared_ptr<WzGr2DLayer> m_pLayerLoadingAnim;   // Animation layer
@@ -220,7 +232,6 @@ private:
     std::vector<std::shared_ptr<WzCanvas>> m_stepFrames;               // step progress images
     std::int32_t m_nCurrentRepeat{0};       // Reserved: future repeat animation switching
     std::int32_t m_nCurrentRepeatFrame{0};  // Reserved: future frame tracking
-    std::uint64_t m_demoFrameCount{0};      // For simulated progress demo
 };
 
 } // namespace ms

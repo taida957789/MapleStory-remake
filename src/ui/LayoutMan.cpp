@@ -1,6 +1,7 @@
 #include "LayoutMan.h"
 #include "UIButton.h"
 #include "UIElement.h"
+#include "graphics/WzGr2D.h"
 #include "graphics/WzGr2DLayer.h"
 #include "util/Logger.h"
 #include "wz/WzCanvas.h"
@@ -158,9 +159,10 @@ void LayoutMan::ProcessButton(
     }
 
     // 4. 構建完整 UOL 路徑 (0xb368b0-0xb368ce)
-    std::wstring sButtonUOL = sRootUOL + L"/" + sCtrlName;
+    std::wstring sButtonUOL = sRootUOL + L"/" + wFullName;
 
     // 5. 調用 AddButton (0xb36908)
+    // 按鈕位置由 canvas origin 決定，這裡的 offset 通常為 0
     auto pButton = AddButton(sButtonUOL, nID, nOffsetX, nOffsetY, bToggle, bSameIDCtrl);
     if (!pButton)
     {
@@ -201,33 +203,28 @@ void LayoutMan::ProcessLayer(
     auto pCanvas = pProp->GetCanvas();
     if (!pCanvas)
     {
+        LOG_DEBUG("LayoutMan::ProcessLayer - no canvas for layer: {}",
+                  std::string(sCtrlName.begin(), sCtrlName.end()));
         return;
     }
 
-    // 2. 獲取 origin
+    // 2. 獲取 origin 並計算位置
     auto origin = pCanvas->GetOrigin();
+    std::int32_t layerX = nOffsetX + m_nOffsetX + origin.x;
+    std::int32_t layerY = nOffsetY + m_nOffsetY + origin.y;
 
-    // 3. 創建圖層
-    if (!m_pParent)
-    {
-        return;
-    }
+    // 3. 存儲待創建的圖層資訊
+    // 實際的 WzGr2DLayer 會在 CreateLayers() 中創建
+    PendingLayer pending;
+    pending.sName = sCtrlName;
+    pending.pCanvas = pCanvas;
+    pending.nX = layerX;
+    pending.nY = layerY;
 
-    // TODO: 需要從 m_pParent 獲取 WzGr2D 實例
-    // auto& gr = m_pParent->GetGraphics();
-    // auto pLayer = gr.CreateLayer(
-    //     nOffsetX + m_nOffsetX + origin.x,
-    //     nOffsetY + m_nOffsetY + origin.y,
-    //     pCanvas->GetWidth(),
-    //     pCanvas->GetHeight(),
-    //     100  // z-order
-    // );
+    m_aPendingLayers.push_back(pending);
 
-    // 4. 插入 canvas
-    // pLayer->InsertCanvas(pCanvas, 0, 255, 255);
-
-    // 5. 註冊圖層
-    // RegisterLayer(pLayer, sCtrlName);
+    LOG_DEBUG("LayoutMan::ProcessLayer - stored pending layer: {}, pos=({},{})",
+              std::string(sCtrlName.begin(), sCtrlName.end()), layerX, layerY);
 }
 
 auto LayoutMan::ABGetButton(const std::wstring& sName) -> std::shared_ptr<UIButton>
@@ -327,6 +324,42 @@ void LayoutMan::ABSetLayerVisibleAll(bool bVisible)
             pLayer->SetVisible(bVisible);
         }
     }
+}
+
+void LayoutMan::CreateLayers(WzGr2D& gr, std::int32_t baseZ, bool screenSpace)
+{
+    for (const auto& pending : m_aPendingLayers)
+    {
+        if (!pending.pCanvas)
+        {
+            continue;
+        }
+
+        // 創建圖層
+        auto pLayer = gr.CreateLayer(
+            pending.nX,
+            pending.nY,
+            pending.pCanvas->GetWidth(),
+            pending.pCanvas->GetHeight(),
+            baseZ
+        );
+
+        if (pLayer)
+        {
+            pLayer->SetScreenSpace(screenSpace);
+            pLayer->InsertCanvas(pending.pCanvas, 0, 255, 255);
+
+            // 註冊圖層
+            RegisterLayer(pLayer, pending.sName);
+
+            LOG_DEBUG("LayoutMan::CreateLayers - created layer: {}, pos=({},{}), z={}",
+                      std::string(pending.sName.begin(), pending.sName.end()),
+                      pending.nX, pending.nY, baseZ);
+        }
+    }
+
+    // 清空待處理列表
+    m_aPendingLayers.clear();
 }
 
 auto LayoutMan::AddButton(

@@ -102,19 +102,6 @@ auto Application::Initialize(int argc, char* argv[]) -> bool
         return false;
     }
 
-    auto& resMan = WzResMan::GetInstance();
-    // Preload Logo resources (including Loading screen assets)
-    // This ensures loading screen is ready before Logo stage starts
-    auto logoProp = resMan.GetProperty("UI/Logo.img");
-    if (logoProp)
-    {
-        LOG_INFO("Preloaded UI/Logo.img for loading screen");
-    }
-    else
-    {
-        LOG_WARN("Failed to preload UI/Logo.img");
-    }
-
     // Initialize text renderer
     if (!TextRenderer::GetInstance().Initialize())
     {
@@ -359,7 +346,16 @@ auto Application::InitializeResMan() -> bool
     LOG_INFO("Using WZ path: {}", wzPath);
     resMan.SetBasePath(wzPath);
 
-    return resMan.Initialize();
+    // Don't load all WZ files here - they will be loaded during Logo loading screen
+    // Only load UI.wz which is needed for Logo stage immediately
+    if (!resMan.LoadWzFile("UI"))
+    {
+        LOG_ERROR("Failed to load UI.wz - Logo stage will not work");
+        return false;
+    }
+
+    LOG_INFO("Loaded UI.wz for Logo stage - other WZ files will load during loading screen");
+    return true;
 }
 
 void Application::ProcessInput()

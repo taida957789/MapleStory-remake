@@ -51,21 +51,16 @@ void UIChannelSelect::OnCreate(Login* pLogin, WzGr2D& gr, UIManager& uiManager,
             auto btChannelProp = worldSelectProp->GetChild("BtChannel");
             if (btChannelProp)
             {
-                m_pChannelSelectProp = btChannelProp->GetChild("test");
+                m_pChannelSelectProp = btChannelProp->GetChild("release");
                 if (m_pChannelSelectProp)
                 {
-                    LOG_DEBUG("UIChannelSelect: BtChannel/test property loaded");
+                    LOG_DEBUG("UIChannelSelect: BtChannel/release property loaded");
                 }
             }
 
             // Load chBackgrn (channel background)
-            // From docs: UI/Login.img/WorldSelect/BtChannel/test/layer:bg
-            auto chBackgrnProp = m_pChannelSelectProp ? m_pChannelSelectProp->GetChild("layer:bg") : nullptr;
-            if (!chBackgrnProp)
-            {
-                // Fallback: try old path
-                chBackgrnProp = worldSelectProp->GetChild("chBackgrn");
-            }
+            // From docs: UI/Login.img/WorldSelect/BtChannel/layer:bg
+            auto chBackgrnProp = btChannelProp ? btChannelProp->GetChild("layer:bg") : nullptr;
             if (chBackgrnProp)
             {
                 auto canvas = chBackgrnProp->GetCanvas();

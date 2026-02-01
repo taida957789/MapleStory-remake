@@ -77,6 +77,13 @@ public:
     virtual void InitWorldButtons();
 
     /**
+     * @brief Initialize world buttons from LayoutMan
+     * @param nDisplayCount Number of display slots
+     * @param layoutProp Layout property for worldID mapping
+     */
+    void InitWorldButtons(int nDisplayCount, std::shared_ptr<WzProperty> layoutProp);
+
+    /**
      * @brief Draw world items - creates buttons for each world
      * Based on CUIWorldSelect::DrawWorldItems (0xbc4b00)
      */

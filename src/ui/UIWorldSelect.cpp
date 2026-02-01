@@ -39,31 +39,87 @@ void UIWorldSelect::OnCreate(Login* pLogin, WzGr2D& gr, UIManager& uiManager)
     }
     m_apLayerBalloon.clear();
 
-    // 基於 IDA 分析 (CUIWorldSelect::OnCreate @ 0xbc54f0)
-    // 創建並初始化 LayoutMan (0xbc5558-0xbc5566)
-    m_pLayoutMan = std::make_unique<LayoutMan>();
-    m_pLayoutMan->Init(this, 0, 0);
+    auto& resMan = WzResMan::GetInstance();
 
-    // 呼叫 AutoBuild 載入 UI 元素 (0xbc55af)
-    // Base UOL: "UI/Login.img/WorldSelect/BtWorld/test"
-    std::wstring sRootUOL = L"UI/Login.img/WorldSelect/BtWorld/test";
-    m_pLayoutMan->AutoBuild(sRootUOL, 0, 0, 0, true, false);
-    LOG_DEBUG("UIWorldSelect: AutoBuild completed");
+    // 1. 讀取顯示世界數量 (BtWorld/release/index/count)
+    auto indexProp = resMan.GetProperty("UI/Login.img/WorldSelect/BtWorld/release/index");
+    int nDisplayCount = 10;  // 默認值
+    if (indexProp)
+    {
+        auto countProp = indexProp->GetChild("count");
+        if (countProp)
+        {
+            nDisplayCount = countProp->GetInt(10);
+            LOG_DEBUG("UIWorldSelect: Display count = {}", nDisplayCount);
+        }
+    }
+
+    // 2. 讀取對應的佈局配置 (../release/{count}/)
+    std::string sLayoutPath = "UI/Login.img/WorldSelect/BtWorld/release/" + std::to_string(nDisplayCount);
+    auto layoutProp = resMan.GetProperty(sLayoutPath);
+    if (!layoutProp)
+    {
+        LOG_WARN("UIWorldSelect: Layout property not found: {}", sLayoutPath);
+        return;
+    }
+
+    // 3. 讀取 UIWorldSelect 視窗位置 (pos)
+    auto posProp = layoutProp->GetChild("pos");
+    if (posProp)
+    {
+        auto posVec = posProp->GetVector();
+        SetPosition(posVec.x, posVec.y);
+        LOG_DEBUG("UIWorldSelect: Window position set to ({}, {})", posVec.x, posVec.y);
+    }
+
+    // 4. 讀取背景 (layer:bg)
+    auto bgProp = layoutProp->GetChild("layer:bg");
+    if (bgProp)
+    {
+        auto bgCanvas = bgProp->GetCanvas();
+        if (bgCanvas)
+        {
+            auto origin = bgCanvas->GetOrigin();
+            auto bgLayer = gr.CreateLayer(
+                origin.x, origin.y,
+                bgCanvas->GetWidth(), bgCanvas->GetHeight(),
+                100  // z-order
+            );
+            if (bgLayer)
+            {
+                bgLayer->SetScreenSpace(true);
+                bgLayer->InsertCanvas(bgCanvas, 0, 255, 255);
+                m_pLayer = bgLayer;
+                LOG_DEBUG("UIWorldSelect: Background layer created at ({}, {})", origin.x, origin.y);
+            }
+        }
+    }
+
+    // 5. 創建 LayoutMan 並使用 AutoBuild 自動創建按鈕
+    if (!m_pLayoutMan)
+    {
+        m_pLayoutMan = std::make_unique<LayoutMan>();
+        m_pLayoutMan->Init(this, 0, 0);
+
+        // 使用 AutoBuild 從 WZ 自動創建按鈕
+        // 路徑: UI/Login.img/WorldSelect/BtWorld/release/
+        std::wstring sLayoutUOL = L"UI/Login.img/WorldSelect/BtWorld/release";
+        m_pLayoutMan->AutoBuild(sLayoutUOL, 0, 0, 0, true, false);
+        LOG_DEBUG("UIWorldSelect: AutoBuild completed for BtWorld/release");
+
+        // 創建圖層 (如果 AutoBuild 創建了 layer)
+        m_pLayoutMan->CreateLayers(*m_pGr, 140, true);
+    }
+
+    // 6. 從 LayoutMan 獲取按鈕並設置
+    InitWorldButtons(nDisplayCount, layoutProp);
 
     // Load WorldSelect WZ property for future use
-    auto& resMan = WzResMan::GetInstance();
     auto loginImgProp = resMan.GetProperty("UI/Login.img");
     if (loginImgProp)
     {
         m_pWorldSelectProp = loginImgProp->GetChild("WorldSelect");
-        if (m_pWorldSelectProp)
-        {
-            LOG_DEBUG("UIWorldSelect: WorldSelect property loaded");
-        }
     }
-
-    // Draw world items
-    DrawWorldItems();
 
     LOG_DEBUG("UIWorldSelect::OnCreate completed");
 }
@@ -75,53 +131,128 @@ void UIWorldSelect::SetRet(std::int32_t ret)
 
 void UIWorldSelect::InitWorldButtons()
 {
-    // Based on CUIWorldSelect::InitWorldButtons (0xbbcb80)
+    // 這個版本不接受參數，用於重置
+    InitWorldButtons(10, nullptr);
+}
 
-    // 1. 隱藏所有 LayoutMan 管理的元素
-    if (m_pLayoutMan)
+void UIWorldSelect::InitWorldButtons(int nDisplayCount, std::shared_ptr<WzProperty> layoutProp)
+{
+    if (!m_pLogin || !m_pLayoutMan)
     {
-        // CLayoutMan::SetShow(this->m_pLm.p, 0);
-        m_pLayoutMan->ABSetButtonShowAll(false);
-        m_pLayoutMan->ABSetLayerVisibleAll(false);
-        LOG_DEBUG("UIWorldSelect::InitWorldButtons - hidden all LayoutMan elements");
+        LOG_WARN("UIWorldSelect::InitWorldButtons - missing references");
+        return;
     }
 
-    // 2. 獲取並顯示 bg 圖層
-    // m_pInterface = CLayoutMan::ABGetLayer(this->m_pLm.p, &result, L"bg")->m_pInterface;
-    // m_pInterface->put_visible(m_pInterface, 1);
-    if (m_pLayoutMan)
+    // 清空現有按鈕
+    for (auto& btn : m_vBtWorld)
     {
-        auto pLayerBg = m_pLayoutMan->ABGetLayer(L"bg");
-        if (pLayerBg)
+        if (btn && btn->GetLayer())
         {
-            pLayerBg->SetVisible(true);
-            LOG_DEBUG("UIWorldSelect::InitWorldButtons - bg layer set visible");
-        }
-        else
-        {
-            LOG_WARN("UIWorldSelect::InitWorldButtons - bg layer not found in LayoutMan");
+            m_pGr->RemoveLayer(btn->GetLayer());
         }
     }
+    m_vBtWorld.clear();
 
-    // 3. 清空按鈕名稱陣列
-    // ZArray<ZXString<char>>::_Destroy(...)
+    // 清空按鈕名稱陣列
     m_aButtonName.clear();
-    LOG_DEBUG("UIWorldSelect::InitWorldButtons - cleared button names");
+
+    const auto& worldItems = m_pLogin->GetWorldItems();
+
+    // 讀取 origin 配置（按鈕位置）
+    std::shared_ptr<WzProperty> originsProp;
+    if (layoutProp)
+    {
+        originsProp = layoutProp->GetChild("origin");
+        if (!originsProp)
+        {
+            LOG_WARN("UIWorldSelect::InitWorldButtons - origin property not found");
+        }
+    }
+
+    // 從 LayoutMan 獲取 AutoBuild 創建的按鈕並設置位置
+    for (int displayIndex = 0; displayIndex < nDisplayCount; ++displayIndex)
+    {
+        // 按鈕名稱是 "0", "1", "2" 等（由 AutoBuild 從 WZ "button:0" 創建）
+        auto btn = m_pLayoutMan->ABGetButton(std::to_wstring(displayIndex));
+        if (!btn)
+        {
+            LOG_DEBUG("UIWorldSelect: Button {} not found in LayoutMan", displayIndex);
+            continue;
+        }
+
+        // 讀取按鈕位置 (origin/{displayIndex})
+        if (originsProp)
+        {
+            auto posVecProp = originsProp->GetChild(std::to_string(displayIndex));
+            if (posVecProp)
+            {
+                auto posVec = posVecProp->GetVector();
+                btn->SetPosition(posVec.x, posVec.y);
+                LOG_DEBUG("UIWorldSelect: Set button {} position to ({}, {})",
+                          displayIndex, posVec.x, posVec.y);
+            }
+        }
+
+        // 讀取這個顯示位置對應的 worldID
+        int worldID = -1;
+        if (layoutProp)
+        {
+            auto worldIdProp = layoutProp->GetChild(std::to_string(displayIndex));
+            if (worldIdProp)
+            {
+                worldID = worldIdProp->GetInt(-1);
+            }
+        }
+
+        // 檢查 worldItems 中是否有這個 worldID
+        bool hasWorld = false;
+        if (worldID >= 0)
+        {
+            for (const auto& world : worldItems)
+            {
+                if (world.nWorldID == worldID)
+                {
+                    hasWorld = true;
+                    break;
+                }
+            }
+        }
+
+        // 設置按鈕屬性
+        btn->SetID(static_cast<std::uint32_t>(worldID >= 0 ? worldID : displayIndex));
+        btn->SetVisible(hasWorld);
+
+        // 設置點擊回調
+        btn->SetClickCallback([this, displayIndex, worldID]() {
+            OnButtonClicked(static_cast<std::uint32_t>(worldID >= 0 ? worldID : displayIndex));
+        });
+
+        m_vBtWorld.push_back(btn);
+        LOG_DEBUG("UIWorldSelect: Initialized button {} (worldID={}, visible={})",
+                  displayIndex, worldID, hasWorld);
+    }
+
+    // 設置初始焦點
+    if (!m_vBtWorld.empty())
+    {
+        m_nKeyFocus = 0;
+        LOG_DEBUG("UIWorldSelect: Set initial key focus to 0");
+    }
+
+    LOG_DEBUG("UIWorldSelect::InitWorldButtons completed - {} buttons", m_vBtWorld.size());
 }
 
 void UIWorldSelect::DrawWorldItems()
 {
     // Based on CUIWorldSelect::DrawWorldItems (0xbc4b00)
+    // Note: 按鈕創建已在 LoadWorldButtons 中完成
     if (!m_pLogin || !m_pGr || !m_pUIManager)
     {
         LOG_WARN("UIWorldSelect::DrawWorldItems - missing references");
         return;
     }
 
-    // 1. 初始化世界按鈕 (隱藏所有，顯示 bg)
-    InitWorldButtons();
-
-    // 2. 處理 Balloon (氣球消息)
+    // 1. 處理 Balloon (氣球消息)
     m_nBalloonCount = m_pLogin->GetBalloonCount();
     if (m_nBalloonCount > 0)
     {
@@ -134,89 +265,15 @@ void UIWorldSelect::DrawWorldItems()
         LOG_DEBUG("UIWorldSelect::DrawWorldItems - {} balloons (not yet implemented)", m_nBalloonCount);
     }
 
-    // 3. 獲取世界數量
+    // 2. 獲取世界數量
     const auto& worldItems = m_pLogin->GetWorldItemFinal();
     m_nWorld = static_cast<std::int32_t>(worldItems.size());
     LOG_DEBUG("UIWorldSelect::DrawWorldItems - {} worlds", m_nWorld);
 
-    // 4. 清空並重建 m_apLayerWorldState
-    for (auto& layer : m_apLayerWorldState)
-    {
-        if (layer)
-        {
-            m_pGr->RemoveLayer(layer);
-        }
-    }
-    m_apLayerWorldState.clear();
+    // 3. TODO: 處理世界狀態圖標 (worldState icons)
+    // 這些會在 LoadWorldButtons 之後根據按鈕位置創建
 
-    // 5. 加載 worldState 屬性 (StringPool 0x12F9 = "UI/Login.img/WorldSelect/worldState")
-    auto& resMan = WzResMan::GetInstance();
-    auto worldStateProp = resMan.GetProperty("UI/Login.img/WorldSelect/worldState");
-
-    // 6. Reset StarPlanet world ID
-    // TSingleton<CWvsContext>::ms_pInstance->m_nStarPlanetWorldID = -1;
-
-    // 7. 遍歷每個世界，通過 LayoutMan 獲取按鈕
-    for (size_t i = 0; i < worldItems.size(); ++i)
-    {
-        const auto& world = worldItems[i];
-        const int worldID = world.nWorldID;
-
-        // 如果是 StarPlanet 世界 (通常 world ID >= 100)
-        // 原始代碼檢查 bStarPlanet 字段
-        if (worldID >= 100)
-        {
-            // TSingleton<CWvsContext>::ms_pInstance->m_nStarPlanetWorldID = worldID;
-            LOG_DEBUG("UIWorldSelect: StarPlanet world detected (ID: {})", worldID);
-            continue;
-        }
-
-        // 從 LayoutMan 獲取世界按鈕 (按鈕名稱是世界 ID 的字符串)
-        // CLayoutMan::ABGetButton(this->m_pLm.p, &pBtn, _itow(worldID, buffer, 10));
-        if (!m_pLayoutMan)
-        {
-            LOG_WARN("UIWorldSelect: LayoutMan not initialized");
-            continue;
-        }
-
-        auto pBtn = m_pLayoutMan->ABGetButton(std::to_wstring(worldID));
-        if (!pBtn)
-        {
-            LOG_WARN("UIWorldSelect: World button {} not found in LayoutMan", worldID);
-            continue;
-        }
-
-        // 設置按鈕顯示
-        // pBtn->SetShow(1, 0);
-        pBtn->SetVisible(true);
-        LOG_DEBUG("UIWorldSelect: World {} button set visible", worldID);
-
-        // 將按鈕名稱添加到 m_aButtonName 陣列
-        m_aButtonName.push_back(std::to_string(worldID));
-
-        // 添加到按鈕陣列 (用於事件處理)
-        m_vBtWorld.push_back(pBtn);
-
-        // 如果有世界狀態圖標 (nWorldState: 0=normal, 1=event, 2=new, 3=hot)
-        // 原始代碼中是 nEventDescriptionTag，但我們的實作中是 nWorldState
-        if (world.nWorldState != 0 && worldStateProp)
-        {
-            // 加載對應的圖標圖層
-            auto iconProp = worldStateProp->GetChild(std::to_string(world.nWorldState));
-            if (iconProp)
-            {
-                // TODO: 創建圖層並定位在按鈕右上角
-                // CAnimationDisplayer::LoadLayer(&pLayerIcon, iconProp, ...)
-                // 調整位置: pBtn->GetX() + pBtn->m_width - icon_width, pBtn->GetY() + 6
-                // 設置 z-order: 110
-                // 設置動畫: Animate(GA_REPEAT, ...)
-                // 添加到 m_apLayerWorldState
-                LOG_DEBUG("UIWorldSelect: World {} has state icon {}", worldID, world.nWorldState);
-            }
-        }
-    }
-
-    LOG_DEBUG("UIWorldSelect::DrawWorldItems - completed, {} world buttons created", m_vBtWorld.size());
+    LOG_DEBUG("UIWorldSelect::DrawWorldItems - completed");
 }
 
 void UIWorldSelect::OnButtonClicked(std::uint32_t nId)

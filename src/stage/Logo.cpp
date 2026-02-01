@@ -334,7 +334,10 @@ void Logo::StartLoadingMode()
     m_loadingAlpha = 255;
     m_nCurrentRepeat = 0;
     m_nCurrentRepeatFrame = 0;
-    m_demoFrameCount = 0;  // Reset demo counter
+
+    // Reset WZ loading state
+    m_wzLoadingComplete = false;
+    m_currentWzFileIndex = 0;
 
     // Hide logo layers
     if (m_pLayerBackground) m_pLayerBackground->SetVisible(false);
@@ -465,23 +468,63 @@ void Logo::FadeOutLoading()
     }
 }
 
-void Logo::UpdateLoading()
+void Logo::LoadWzFilesProgressively()
 {
-    // TODO: TEMPORARY - Simulated progress for demo/testing
-    // Remove this block when real resource loading tracking is implemented
-    m_demoFrameCount++;
+    // WZ files to load (UI.wz already loaded in Application::InitializeResMan)
+    // Order based on WzResMan::WZ_LOAD_ORDER
+    static const std::vector<std::string> wzFiles = {
+        "Character", "Mob", "Skill", "Reactor", "Npc",
+        "Quest", "Item", "Effect", "String",
+        "Etc", "Morph", "TamingMob", "Sound", "Map"
+    };
 
-    // Simulate progress updates at intervals (60 fps assumed)
+    if (m_wzLoadingComplete)
+    {
+        return;  // Already done
+    }
+
+    if (m_currentWzFileIndex >= wzFiles.size())
+    {
+        // All files loaded
+        m_wzLoadingComplete = true;
+        SetLoadingProgress(m_nLoadingStepCount - 1);  // Final step
+        LOG_INFO("All WZ files loaded");
+        return;
+    }
+
+    // Load current file
+    const auto& filename = wzFiles[m_currentWzFileIndex];
+    auto& resMan = WzResMan::GetInstance();
+
+    LOG_INFO("Loading WZ file: {}.wz ({}/{})", filename, m_currentWzFileIndex + 1, wzFiles.size());
+
+    if (resMan.LoadWzFile(filename))
+    {
+        LOG_INFO("Loaded WZ file: {}.wz", filename);
+    }
+    else
+    {
+        LOG_WARN("Failed to load WZ file: {}.wz - continuing anyway", filename);
+    }
+
+    m_currentWzFileIndex++;
+
+    // Update progress based on files loaded
     if (m_nLoadingStepCount > 0)
     {
-        // Update step every 120 frames (~2 seconds at 60fps)
-        std::int32_t simulatedStep = static_cast<std::int32_t>(m_demoFrameCount / 120);
-        if (simulatedStep < m_nLoadingStepCount && simulatedStep != m_nLoadingStep)
-        {
-            SetLoadingProgress(simulatedStep);
-        }
+        // Calculate step based on progress (leave last step for final completion)
+        auto progress = static_cast<std::int32_t>(m_currentWzFileIndex * (m_nLoadingStepCount - 1) / wzFiles.size());
+        SetLoadingProgress(progress);
     }
-    // END TODO: Remove simulated progress code
+}
+
+void Logo::UpdateLoading()
+{
+    // Load WZ files progressively
+    if (!m_wzLoadingComplete)
+    {
+        LoadWzFilesProgressively();
+    }
 
     // Handle fade out effect
     if (m_loadingAlpha < 255)

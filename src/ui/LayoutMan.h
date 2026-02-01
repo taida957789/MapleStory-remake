@@ -135,6 +135,14 @@ public:
      */
     void ABSetLayerVisibleAll(bool bVisible);
 
+    /**
+     * @brief 創建所有待處理的圖層
+     * @param gr WzGr2D 圖形上下文
+     * @param baseZ 基礎 z-order
+     * @param screenSpace 是否為螢幕空間座標
+     */
+    void CreateLayers(class WzGr2D& gr, std::int32_t baseZ = 100, bool screenSpace = true);
+
 private:
     /**
      * @brief 處理單個子屬性
@@ -193,10 +201,22 @@ private:
         bool bSkipIDCheck = false
     ) -> std::shared_ptr<UIButton>;
 
+    // 待創建的圖層資訊
+    struct PendingLayer
+    {
+        std::wstring sName;
+        std::shared_ptr<class WzCanvas> pCanvas;
+        std::int32_t nX;
+        std::int32_t nY;
+    };
+
     UIElement* m_pParent{nullptr};  // 父 UI 元素
 
     // 按鈕映射表（按名稱索引）
     std::map<std::wstring, std::shared_ptr<UIButton>> m_mButtons;
+
+    // 待創建的圖層列表
+    std::vector<PendingLayer> m_aPendingLayers;
 
     // 圖層映射表（按名稱索引）
     std::map<std::wstring, std::shared_ptr<WzGr2DLayer>> m_mLayers;

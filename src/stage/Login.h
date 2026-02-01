@@ -168,6 +168,7 @@ public:
     void SendWorldInfoRequest();
     void OnWorldInfoReceived();
     [[nodiscard]] auto GetWorldItemFinal() const noexcept -> const std::vector<WorldItem>& { return m_vWorldItemFinal; }
+    [[nodiscard]] auto GetWorldItems() const noexcept -> const std::vector<WorldItem>& { return m_vWorldItem; }
 
     /**
      * @brief Go back to world selection from character selection
