@@ -102,6 +102,19 @@ auto Application::Initialize(int argc, char* argv[]) -> bool
         return false;
     }
 
+    auto& resMan = WzResMan::GetInstance();
+    // Preload Logo resources (including Loading screen assets)
+    // This ensures loading screen is ready before Logo stage starts
+    auto logoProp = resMan.GetProperty("UI/Logo.img");
+    if (logoProp)
+    {
+        LOG_INFO("Preloaded UI/Logo.img for loading screen");
+    }
+    else
+    {
+        LOG_WARN("Failed to preload UI/Logo.img");
+    }
+
     // Initialize text renderer
     if (!TextRenderer::GetInstance().Initialize())
     {
