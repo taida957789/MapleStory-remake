@@ -465,14 +465,14 @@ void WzGr2DLayer::Render(SDL_Renderer* renderer, std::int32_t offsetX, std::int3
             baseX = static_cast<float>(m_nLeft + offsetX);
             baseY = static_cast<float>(m_nTop + offsetY);
 
-#ifdef MS_DEBUG_CANVAS
-            static int debugCounter = 0;
-            if (debugCounter++ % 60 == 0)  // Log every 60 frames
-            {
-                LOG_DEBUG("Screen-space (center-based) layer: pos=({},{}), offset=({},{}), base=({},{})",
-                          m_nLeft, m_nTop, offsetX, offsetY, baseX, baseY);
-            }
-#endif
+// #ifdef MS_DEBUG_CANVAS
+//             static int debugCounter = 0;
+//             if (debugCounter++ % 60 == 0)  // Log every 60 frames
+//             {
+//                 LOG_DEBUG("Screen-space (center-based) layer: pos=({},{}), offset=({},{}), base=({},{})",
+//                           m_nLeft, m_nTop, offsetX, offsetY, baseX, baseY);
+//             }
+// #endif
         }
         else
         {
@@ -480,14 +480,14 @@ void WzGr2DLayer::Render(SDL_Renderer* renderer, std::int32_t offsetX, std::int3
             baseX = static_cast<float>(m_nLeft);
             baseY = static_cast<float>(m_nTop);
 
-#ifdef MS_DEBUG_CANVAS
-            static int debugCounter2 = 0;
-            if (debugCounter2++ % 60 == 0)  // Log every 60 frames
-            {
-                LOG_DEBUG("Screen-space layer: pos=({},{}), base=({},{}), z={}",
-                          m_nLeft, m_nTop, baseX, baseY, m_nZ);
-            }
-#endif
+// #ifdef MS_DEBUG_CANVAS
+//             static int debugCounter2 = 0;
+//             if (debugCounter2++ % 60 == 0)  // Log every 60 frames
+//             {
+//                 LOG_DEBUG("Screen-space layer: pos=({},{}), base=({},{}), z={}",
+//                           m_nLeft, m_nTop, baseX, baseY, m_nZ);
+//             }
+// #endif
         }
     }
     // Handle X parallax
@@ -548,17 +548,17 @@ void WzGr2DLayer::Render(SDL_Renderer* renderer, std::int32_t offsetX, std::int3
         renderHeight = canvasHeight;
     }
 
-#ifdef MS_DEBUG_CANVAS
-    if (m_bScreenSpace)
-    {
-        static int debugCounter3 = 0;
-        if (debugCounter3++ % 60 == 0)  // Log every 60 frames
-        {
-            LOG_DEBUG("Screen-space render: base=({:.1f},{:.1f}), origin=({},{}), final=({:.1f},{:.1f}), z={}",
-                      baseX, baseY, canvasOrigin.x, canvasOrigin.y, renderX, renderY, m_nZ);
-        }
-    }
-#endif
+// #ifdef MS_DEBUG_CANVAS
+//     if (m_bScreenSpace)
+//     {
+//         static int debugCounter3 = 0;
+//         if (debugCounter3++ % 60 == 0)  // Log every 60 frames
+//         {
+//             LOG_DEBUG("Screen-space render: base=({:.1f},{:.1f}), origin=({},{}), final=({:.1f},{:.1f}), z={}",
+//                       baseX, baseY, canvasOrigin.x, canvasOrigin.y, renderX, renderY, m_nZ);
+//         }
+//     }
+// #endif
 
     // Apply color modulation
     auto alpha = static_cast<std::uint8_t>((m_dwColor >> 24) & 0xFF);
