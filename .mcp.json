@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "ida": {
+      "type": "sse",
+      "url": "http://192.168.36.2:13337/sse"
+    }
+  }
+}

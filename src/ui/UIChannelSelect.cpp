@@ -1,0 +1,1000 @@
+#include "UIChannelSelect.h"
+#include "UIButton.h"
+#include "UIManager.h"
+#include "graphics/WzGr2D.h"
+#include "graphics/WzGr2DLayer.h"
+#include "stage/Login.h"
+#include "util/Logger.h"
+#include "wz/WzCanvas.h"
+#include "wz/WzProperty.h"
+#include "wz/WzResMan.h"
+
+namespace ms
+{
+
+UIChannelSelect::UIChannelSelect() = default;
+
+UIChannelSelect::~UIChannelSelect()
+{
+    Destroy();
+}
+
+void UIChannelSelect::OnCreate(Login* pLogin, WzGr2D& gr, UIManager& uiManager,
+                                std::int32_t worldIndex)
+{
+    // Based on CUIChannelSelect::OnCreate (0xbc4780)
+    m_pLogin = pLogin;
+    m_pGr = &gr;
+    m_pUIManager = &uiManager;
+    m_nWorldIndex = worldIndex;
+    m_bSelectWorld = false;
+    m_nSelect = 0;
+
+    // CUIChannelSelect dialog position from IDA: (203, 194) with Origin_LT
+    constexpr int kDialogX = 203;
+    constexpr int kDialogY = 194;
+
+    // Load WorldSelect WZ properties
+    auto& resMan = WzResMan::GetInstance();
+    auto loginImgProp = resMan.GetProperty("UI/Login.img");
+    if (loginImgProp)
+    {
+        auto worldSelectProp = loginImgProp->GetChild("WorldSelect");
+        if (worldSelectProp)
+        {
+            // Load channel property for channel buttons
+            // string.csv idx 2375: UI/Login.img/WorldSelect/channel/%d/normal
+            // string.csv idx 2376: UI/Login.img/WorldSelect/channel/%d/disabled
+            m_pChannelSelectProp = worldSelectProp->GetChild("channel");
+            if (m_pChannelSelectProp)
+            {
+                LOG_DEBUG("UIChannelSelect: channel property loaded");
+            }
+
+            // Load chBackgrn (channel background)
+            // string.csv idx 2367: UI/Login.img/WorldSelect/chBackgrn
+            auto chBackgrnProp = worldSelectProp->GetChild("chBackgrn");
+            if (chBackgrnProp)
+            {
+                auto canvas = chBackgrnProp->GetCanvas();
+                if (canvas)
+                {
+                    LOG_DEBUG("UIChannelSelect: chBackgrn canvas loaded ({}x{})",
+                              canvas->GetWidth(), canvas->GetHeight());
+
+                    // For dialog backgrounds (Origin_LT style):
+                    // - kDialogX/kDialogY is the desired TOP-LEFT position
+                    // - render formula: renderPos = layerPos - origin
+                    // - To get renderPos = dialogPos, we need: layerPos = dialogPos + origin
+                    auto origin = canvas->GetOrigin();
+                    int layerX = kDialogX + origin.x;
+                    int layerY = kDialogY + origin.y;
+
+                    m_pLayerBg = gr.CreateLayer(layerX, layerY,
+                                                 static_cast<std::uint32_t>(canvas->GetWidth()),
+                                                 static_cast<std::uint32_t>(canvas->GetHeight()), 140);
+                    if (m_pLayerBg)
+                    {
+                        m_pLayerBg->SetScreenSpace(true);
+                        m_pLayerBg->InsertCanvas(canvas, 0, 255, 255);
+                        LOG_DEBUG("UIChannelSelect: chBackgrn layer at ({}, {}), renders at ({}, {})",
+                                  layerX, layerY, kDialogX, kDialogY);
+                    }
+                }
+                else
+                {
+                    LOG_DEBUG("UIChannelSelect: chBackgrn has no canvas, trying child '0'");
+                    // Some WZ properties store canvas in child "0"
+                    auto child0 = chBackgrnProp->GetChild("0");
+                    if (child0)
+                    {
+                        canvas = child0->GetCanvas();
+                        if (canvas)
+                        {
+                            // Origin_LT style: layerPos = targetTopLeft + origin
+                            auto origin = canvas->GetOrigin();
+                            int layerX = kDialogX + origin.x;
+                            int layerY = kDialogY + origin.y;
+
+                            m_pLayerBg = gr.CreateLayer(layerX, layerY,
+                                                         static_cast<std::uint32_t>(canvas->GetWidth()),
+                                                         static_cast<std::uint32_t>(canvas->GetHeight()), 140);
+                            if (m_pLayerBg)
+                            {
+                                m_pLayerBg->SetScreenSpace(true);
+                                m_pLayerBg->InsertCanvas(canvas, 0, 255, 255);
+                                LOG_DEBUG("UIChannelSelect: chBackgrn/0 layer at ({}, {})", layerX, layerY);
+                            }
+                        }
+                    }
+                }
+            }
+            else
+            {
+                LOG_DEBUG("UIChannelSelect: chBackgrn property not found");
+            }
+        }
+    }
+
+    // Create placeholder background if WZ chBackgrn not loaded
+    if (!m_pLayerBg)
+    {
+        CreatePlaceholderBackground(gr, kDialogX, kDialogY);
+    }
+
+    // Reset info for the selected world
+    ResetInfo(worldIndex, false);
+
+    LOG_DEBUG("UIChannelSelect::OnCreate completed for world {}", worldIndex);
+}
+
+void UIChannelSelect::ResetInfo(std::int32_t worldIndex, bool bRedraw)
+{
+    // Based on CUIChannelSelect::ResetInfo (0xbc3150)
+    if (!m_pLogin || !m_pGr || !m_pUIManager)
+    {
+        LOG_WARN("UIChannelSelect::ResetInfo - missing references");
+        return;
+    }
+
+    m_nWorldIndex = worldIndex;
+
+    const auto& worldItems = m_pLogin->GetWorldItemFinal();
+    if (worldIndex < 0 || worldIndex >= static_cast<std::int32_t>(worldItems.size()))
+    {
+        LOG_WARN("UIChannelSelect::ResetInfo - invalid world index {}", worldIndex);
+        CreatePlaceholderUI();
+        return;
+    }
+
+    const auto& world = worldItems[static_cast<size_t>(worldIndex)];
+
+    LOG_DEBUG("UIChannelSelect::ResetInfo - world {} ({}) with {} channels",
+              world.sName, world.nWorldID, world.aChannelLoad.size());
+
+    // Clear existing channel buttons
+    for (size_t i = 0; i < m_vBtChannel.size(); ++i)
+    {
+        if (m_vBtChannel[i])
+        {
+            m_pUIManager->RemoveElement("channel" + std::to_string(i));
+            if (m_vBtChannel[i]->GetLayer())
+            {
+                m_pGr->RemoveLayer(m_vBtChannel[i]->GetLayer());
+            }
+        }
+    }
+    m_vBtChannel.clear();
+
+    // Clear GoWorld button
+    if (m_pBtnGoWorld)
+    {
+        m_pUIManager->RemoveElement("btnGoWorld_channel");
+        if (m_pBtnGoWorld->GetLayer())
+        {
+            m_pGr->RemoveLayer(m_pBtnGoWorld->GetLayer());
+        }
+        m_pBtnGoWorld.reset();
+    }
+
+    // CUIChannelSelect dialog position from IDA: (203, 194) with Origin_LT
+    constexpr int kDialogX = 203;
+    constexpr int kDialogY = 194;
+
+    // Channel buttons start at approximately (10, 55) relative to dialog
+    // Original uses WZ layout manager; we use hardcoded offsets
+    // Increased Y offset to account for dialog header/title area
+    const int startX = kDialogX + 10;
+    int channelY = kDialogY + 55;
+
+    // Load chgauge for channel load indicator
+    // string.csv idx 2368: UI/Login.img/WorldSelect/channel/chgauge
+    if (m_pChannelSelectProp && !m_pCanvasGauge)
+    {
+        auto chgaugeProp = m_pChannelSelectProp->GetChild("chgauge");
+        if (chgaugeProp)
+        {
+            m_pCanvasGauge = chgaugeProp->GetCanvas();
+            if (m_pCanvasGauge)
+            {
+                LOG_DEBUG("UIChannelSelect: chgauge canvas loaded ({}x{})",
+                          m_pCanvasGauge->GetWidth(), m_pCanvasGauge->GetHeight());
+            }
+            else
+            {
+                // Try child "0"
+                auto child0 = chgaugeProp->GetChild("0");
+                if (child0)
+                {
+                    m_pCanvasGauge = child0->GetCanvas();
+                    if (m_pCanvasGauge)
+                    {
+                        LOG_DEBUG("UIChannelSelect: chgauge/0 canvas loaded");
+                    }
+                }
+            }
+        }
+    }
+
+    // Load chSelect for selection indicator
+    // string.csv idx 2382: UI/Login.img/WorldSelect/channel/chSelect
+    std::shared_ptr<WzCanvas> chSelectCanvas;
+    if (m_pChannelSelectProp)
+    {
+        auto chSelectProp = m_pChannelSelectProp->GetChild("chSelect");
+        if (chSelectProp)
+        {
+            chSelectCanvas = chSelectProp->GetCanvas();
+            if (chSelectCanvas)
+            {
+                LOG_DEBUG("UIChannelSelect: chSelect canvas loaded ({}x{})",
+                          chSelectCanvas->GetWidth(), chSelectCanvas->GetHeight());
+            }
+            else
+            {
+                // Try child "0"
+                auto child0 = chSelectProp->GetChild("0");
+                if (child0)
+                {
+                    chSelectCanvas = child0->GetCanvas();
+                    if (chSelectCanvas)
+                    {
+                        LOG_DEBUG("UIChannelSelect: chSelect/0 canvas loaded");
+                    }
+                }
+            }
+        }
+    }
+
+    bool bSelected = false;
+
+    // Create button for each channel
+    const int channelsPerRow = 5;
+    const int btnSpacingX = 65;
+    const int btnSpacingY = 30;
+
+    for (size_t i = 0; i < world.aChannelLoad.size(); ++i)
+    {
+        const int load = world.aChannelLoad[i];
+        const int row = static_cast<int>(i) / channelsPerRow;
+        const int col = static_cast<int>(i) % channelsPerRow;
+        const int btnX = startX + col * btnSpacingX;
+        const int btnY = channelY + row * btnSpacingY;
+
+        auto btn = CreateChannelButton(static_cast<std::int32_t>(i), load, btnX, btnY);
+        if (btn)
+        {
+            const size_t channelIndex = i;
+            btn->SetClickCallback([this, channelIndex]() {
+                OnButtonClicked(static_cast<std::uint32_t>(channelIndex));
+            });
+
+            m_pUIManager->AddElement("channel" + std::to_string(i), btn);
+            m_vBtChannel.push_back(btn);
+
+            // Auto-select first channel with load < 73% (from original)
+            if (!bSelected && load < 73)
+            {
+                m_nSelect = static_cast<std::int32_t>(i);
+                bSelected = true;
+                LOG_DEBUG("Auto-selected channel {} with load {}%", i + 1, load);
+            }
+        }
+    }
+
+    // If no channel was auto-selected, select channel 0
+    if (!bSelected && !world.aChannelLoad.empty())
+    {
+        m_nSelect = 0;
+        LOG_DEBUG("Default selected channel 1");
+    }
+
+    // Calculate GoWorld button position (below channel buttons)
+    const int numRows = (static_cast<int>(world.aChannelLoad.size()) + channelsPerRow - 1) / channelsPerRow;
+    const int goWorldY = channelY + numRows * btnSpacingY + 10;
+    const int goBtnX = kDialogX + 50;
+
+    // Create GoWorld button
+    // string.csv idx 2369: UI/Login.img/WorldSelect/BtGoworld
+    bool btGoworldLoaded = false;
+    auto& resMan = WzResMan::GetInstance();
+    auto loginImgProp = resMan.GetProperty("UI/Login.img");
+    if (loginImgProp)
+    {
+        auto worldSelectProp = loginImgProp->GetChild("WorldSelect");
+        if (worldSelectProp)
+        {
+            auto btGoworldProp = worldSelectProp->GetChild("BtGoworld");
+            if (btGoworldProp)
+            {
+                m_pBtnGoWorld = std::make_shared<UIButton>();
+                if (m_pBtnGoWorld->LoadFromProperty(btGoworldProp))
+                {
+                    m_pBtnGoWorld->SetPosition(goBtnX, goWorldY);
+                    m_pBtnGoWorld->CreateLayer(*m_pGr, 160);
+                    btGoworldLoaded = true;
+                    LOG_DEBUG("UIChannelSelect: BtGoworld loaded from WZ at ({}, {})", goBtnX, goWorldY);
+                }
+                else
+                {
+                    m_pBtnGoWorld.reset();
+                }
+            }
+        }
+    }
+
+    // Create placeholder if WZ not loaded
+    if (!btGoworldLoaded)
+    {
+        const int goBtnWidth = 100;
+        const int goBtnHeight = 35;
+
+        m_pBtnGoWorld = std::make_shared<UIButton>();
+
+        // Create green gradient button for "Enter Channel"
+        auto canvas = std::make_shared<WzCanvas>(goBtnWidth, goBtnHeight);
+        std::vector<std::uint8_t> pixels(static_cast<size_t>(goBtnWidth * goBtnHeight * 4));
+        for (int y = 0; y < goBtnHeight; ++y)
+        {
+            for (int x = 0; x < goBtnWidth; ++x)
+            {
+                auto idx = static_cast<size_t>((y * goBtnWidth + x) * 4);
+                float t = static_cast<float>(y) / static_cast<float>(goBtnHeight);
+                // Green gradient
+                pixels[idx + 0] = static_cast<std::uint8_t>(60 + 20 * t);
+                pixels[idx + 1] = static_cast<std::uint8_t>(180 - 60 * t);
+                pixels[idx + 2] = static_cast<std::uint8_t>(80 + 20 * t);
+                pixels[idx + 3] = 255;
+            }
+        }
+        canvas->SetPixelData(std::move(pixels));
+        m_pBtnGoWorld->SetStateCanvas(UIState::Normal, canvas);
+        m_pBtnGoWorld->SetSize(goBtnWidth, goBtnHeight);
+        m_pBtnGoWorld->SetPosition(goBtnX, goWorldY);
+        m_pBtnGoWorld->CreateLayer(*m_pGr, 160);
+        LOG_DEBUG("UIChannelSelect: Placeholder BtGoworld at ({}, {})", goBtnX, goWorldY);
+    }
+
+    m_pBtnGoWorld->SetClickCallback([this]() {
+        EnterChannel();
+    });
+    m_pUIManager->AddElement("btnGoWorld_channel", m_pBtnGoWorld);
+
+    if (bRedraw)
+    {
+        // Force redraw - layers will handle this
+    }
+}
+
+void UIChannelSelect::EnterChannel()
+{
+    // Based on CUIChannelSelect::EnterChannel (0xbbb950)
+    if (!m_pLogin)
+    {
+        return;
+    }
+
+    if (!IsRequestValid())
+    {
+        LOG_DEBUG("UIChannelSelect::EnterChannel - request not valid");
+        return;
+    }
+
+    m_bSelectWorld = true;
+
+    const auto& worldItems = m_pLogin->GetWorldItemFinal();
+    if (m_nWorldIndex >= 0 && m_nWorldIndex < static_cast<std::int32_t>(worldItems.size()))
+    {
+        const auto& world = worldItems[static_cast<size_t>(m_nWorldIndex)];
+        LOG_DEBUG("Entering world {} channel {}", world.sName, m_nSelect + 1);
+    }
+
+    // Transition to character selection
+    m_pLogin->ChangeStep(2);
+}
+
+void UIChannelSelect::OnButtonClicked(std::uint32_t nId)
+{
+    // Based on CUIChannelSelect::OnButtonClicked (0xbbc880)
+    if (!m_pLogin)
+    {
+        return;
+    }
+
+    // Check if request already sent
+    if (m_pLogin->IsRequestSent() || m_pLogin->GetLoginStep() != 1)
+    {
+        return;
+    }
+
+    // If clicking the same channel, enter it
+    if (nId == static_cast<std::uint32_t>(m_nSelect))
+    {
+        m_bSelectWorld = true;
+        DrawNoticeConnecting();
+        EnterChannel();
+        return;
+    }
+
+    // Otherwise, just select the channel
+    LOG_DEBUG("Channel {} selected", nId + 1);
+    m_nSelect = static_cast<std::int32_t>(nId);
+
+    // Update visual feedback for selected channel
+    // In original, this plays UI sound (StringPool 0x946) and updates button focus
+    UpdateChannelButtonStates();
+}
+
+auto UIChannelSelect::OnSetFocus(bool bFocus) -> bool
+{
+    // Based on CUIChannelSelect::OnSetFocus (0xbbb8d0)
+    return UIElement::OnSetFocus(bFocus);
+}
+
+auto UIChannelSelect::IsRequestValid() const -> bool
+{
+    // Based on CUIChannelSelect::IsRequestValid (0xbbb9b0)
+    if (!m_pLogin)
+    {
+        return false;
+    }
+    return !m_pLogin->IsRequestSent();
+}
+
+void UIChannelSelect::DrawNoticeConnecting()
+{
+    // Based on CUIChannelSelect::DrawNoticeConnecting (0xbbbe50)
+    // In original: Creates CConnectionNoticeDlg and shows it as modal dialog
+    // For now, just log the connection attempt
+    LOG_INFO("Connecting to channel {}...", m_nSelect + 1);
+
+    // Disable all buttons during connection
+    for (auto& btn : m_vBtChannel)
+    {
+        if (btn)
+        {
+            btn->SetEnabled(false);
+        }
+    }
+    if (m_pBtnGoWorld)
+    {
+        m_pBtnGoWorld->SetEnabled(false);
+    }
+}
+
+void UIChannelSelect::RemoveNoticeConnecting()
+{
+    // Based on CUIChannelSelect::RemoveNoticeConnecting (0xbbbc50)
+    // Re-enable buttons after connection attempt
+    for (auto& btn : m_vBtChannel)
+    {
+        if (btn)
+        {
+            btn->SetEnabled(true);
+        }
+    }
+    if (m_pBtnGoWorld)
+    {
+        m_pBtnGoWorld->SetEnabled(true);
+    }
+}
+
+void UIChannelSelect::Destroy()
+{
+    if (!m_pGr)
+    {
+        return;
+    }
+
+    // Clean up GoWorld button
+    if (m_pBtnGoWorld)
+    {
+        if (m_pUIManager)
+        {
+            m_pUIManager->RemoveElement("btnGoWorld_channel");
+        }
+        if (m_pBtnGoWorld->GetLayer())
+        {
+            m_pGr->RemoveLayer(m_pBtnGoWorld->GetLayer());
+        }
+        m_pBtnGoWorld.reset();
+    }
+
+    // Clean up channel buttons
+    for (size_t i = 0; i < m_vBtChannel.size(); ++i)
+    {
+        if (m_vBtChannel[i])
+        {
+            if (m_pUIManager)
+            {
+                m_pUIManager->RemoveElement("channel" + std::to_string(i));
+            }
+            if (m_vBtChannel[i]->GetLayer())
+            {
+                m_pGr->RemoveLayer(m_vBtChannel[i]->GetLayer());
+            }
+        }
+    }
+    m_vBtChannel.clear();
+
+    // Clean up layers
+    if (m_pLayerBg)
+    {
+        m_pGr->RemoveLayer(m_pLayerBg);
+        m_pLayerBg.reset();
+    }
+
+    if (m_pLayerGauge)
+    {
+        m_pGr->RemoveLayer(m_pLayerGauge);
+        m_pLayerGauge.reset();
+    }
+
+    if (m_pLayerEventDesc)
+    {
+        m_pGr->RemoveLayer(m_pLayerEventDesc);
+        m_pLayerEventDesc.reset();
+    }
+
+    m_pLogin = nullptr;
+    m_pGr = nullptr;
+    m_pUIManager = nullptr;
+    m_pChannelSelectProp.reset();
+    m_pCanvasGauge.reset();
+
+    LOG_DEBUG("UIChannelSelect destroyed");
+}
+
+void UIChannelSelect::Update()
+{
+    // Update channel buttons
+    for (auto& btn : m_vBtChannel)
+    {
+        if (btn)
+        {
+            btn->Update();
+        }
+    }
+
+    if (m_pBtnGoWorld)
+    {
+        m_pBtnGoWorld->Update();
+    }
+}
+
+void UIChannelSelect::Draw()
+{
+    // Drawing is handled by layers
+}
+
+void UIChannelSelect::OnMouseMove(std::int32_t x, std::int32_t y)
+{
+    for (auto& btn : m_vBtChannel)
+    {
+        if (btn)
+        {
+            btn->OnMouseMove(x, y);
+        }
+    }
+
+    if (m_pBtnGoWorld)
+    {
+        m_pBtnGoWorld->OnMouseMove(x, y);
+    }
+}
+
+void UIChannelSelect::OnMouseDown(std::int32_t x, std::int32_t y, std::int32_t button)
+{
+    for (auto& btn : m_vBtChannel)
+    {
+        if (btn)
+        {
+            btn->OnMouseDown(x, y, button);
+        }
+    }
+
+    if (m_pBtnGoWorld)
+    {
+        m_pBtnGoWorld->OnMouseDown(x, y, button);
+    }
+}
+
+void UIChannelSelect::OnMouseUp(std::int32_t x, std::int32_t y, std::int32_t button)
+{
+    for (auto& btn : m_vBtChannel)
+    {
+        if (btn)
+        {
+            btn->OnMouseUp(x, y, button);
+        }
+    }
+
+    if (m_pBtnGoWorld)
+    {
+        m_pBtnGoWorld->OnMouseUp(x, y, button);
+    }
+}
+
+void UIChannelSelect::OnKeyDown(std::int32_t keyCode)
+{
+    // Based on CUIChannelSelect::OnKey (0xbbbd10)
+    // Navigation uses 5-channel grid pattern
+
+    if (!m_pLogin)
+    {
+        return;
+    }
+
+    constexpr int kChannelsPerRow = 5;
+
+    switch (keyCode)
+    {
+    case 0x09:  // VK_TAB
+        // Shift+Tab goes left, Tab goes right
+        // For now, treat Tab as right navigation
+        NavigateChannel(1);
+        break;
+
+    case 0x0D:  // VK_RETURN (Enter)
+        // Enter selected channel
+        OnButtonClicked(static_cast<std::uint32_t>(m_nSelect));
+        break;
+
+    case 0x1B:  // VK_ESCAPE
+        // Close channel select and return to world select
+        if (m_pLogin->GetLoginStep() == 1)
+        {
+            LOG_DEBUG("UIChannelSelect: Escape pressed, closing channel select");
+            Destroy();
+        }
+        break;
+
+    case 0x25:  // VK_LEFT
+        NavigateChannel(-1);
+        break;
+
+    case 0x26:  // VK_UP
+        NavigateChannel(-kChannelsPerRow);
+        break;
+
+    case 0x27:  // VK_RIGHT
+        NavigateChannel(1);
+        break;
+
+    case 0x28:  // VK_DOWN
+        NavigateChannel(kChannelsPerRow);
+        break;
+
+    default:
+        break;
+    }
+}
+
+void UIChannelSelect::NavigateChannel(std::int32_t delta)
+{
+    // Based on CUIChannelSelect::OnKey navigation logic
+    const auto& worldItems = m_pLogin->GetWorldItemFinal();
+    if (m_nWorldIndex < 0 || m_nWorldIndex >= static_cast<std::int32_t>(worldItems.size()))
+    {
+        return;
+    }
+
+    const auto& world = worldItems[static_cast<size_t>(m_nWorldIndex)];
+    const int channelCount = static_cast<int>(world.aChannelLoad.size());
+    if (channelCount == 0)
+    {
+        return;
+    }
+
+    int newSelect = m_nSelect + delta;
+
+    // Wrap around
+    if (newSelect < 0)
+    {
+        newSelect = newSelect + channelCount;
+    }
+    else if (newSelect >= channelCount)
+    {
+        newSelect = newSelect - channelCount;
+    }
+
+    if (m_nSelect != newSelect)
+    {
+        LOG_DEBUG("Channel navigation: {} -> {}", m_nSelect + 1, newSelect + 1);
+        m_nSelect = newSelect;
+
+        // Update visual feedback for buttons
+        UpdateChannelButtonStates();
+    }
+}
+
+void UIChannelSelect::UpdateChannelButtonStates()
+{
+    // Update visual feedback for selected channel
+    for (size_t i = 0; i < m_vBtChannel.size(); ++i)
+    {
+        if (m_vBtChannel[i])
+        {
+            if (static_cast<std::int32_t>(i) == m_nSelect)
+            {
+                m_vBtChannel[i]->SetState(UIState::Pressed);
+            }
+            else
+            {
+                m_vBtChannel[i]->SetState(UIState::Normal);
+            }
+        }
+    }
+}
+
+void UIChannelSelect::CreateLayer(WzGr2D& gr, std::int32_t z)
+{
+    (void)gr;
+    (void)z;
+    // Layer creation is handled in ResetInfo
+}
+
+void UIChannelSelect::CreatePlaceholderUI()
+{
+    if (!m_pGr || !m_pUIManager)
+    {
+        return;
+    }
+
+    LOG_DEBUG("Creating placeholder channel select UI");
+
+    // CUIChannelSelect dialog position from IDA: (203, 194) with Origin_LT
+    constexpr int kDialogX = 203;
+    constexpr int kDialogY = 194;
+
+    const int startX = kDialogX + 10;
+    int channelY = kDialogY + 55;
+
+    // Create placeholder channel buttons (20 channels)
+    const int channelsPerRow = 5;
+    const int btnSpacingX = 65;
+    const int btnSpacingY = 30;
+
+    for (int i = 0; i < 20; ++i)
+    {
+        const int row = i / channelsPerRow;
+        const int col = i % channelsPerRow;
+        const int btnX = startX + col * btnSpacingX;
+        const int btnY = channelY + row * btnSpacingY;
+
+        // Random load for placeholder
+        const int load = 30 + (i * 3) % 50;
+
+        auto btn = CreateChannelButton(i, load, btnX, btnY);
+        if (btn)
+        {
+            const int channelIndex = i;
+            btn->SetClickCallback([this, channelIndex]() {
+                m_nSelect = channelIndex;
+                LOG_DEBUG("Placeholder channel {} selected", channelIndex + 1);
+            });
+
+            m_pUIManager->AddElement("channel" + std::to_string(i), btn);
+            m_vBtChannel.push_back(btn);
+        }
+    }
+
+    // Select first channel
+    m_nSelect = 0;
+
+    // Calculate GoWorld button position
+    const int numRows = 4;  // 20 channels / 5 per row
+    const int goWorldY = channelY + numRows * btnSpacingY + 10;
+
+    // Create GoWorld button
+    {
+        const int goBtnWidth = 100;
+        const int goBtnHeight = 35;
+        const int goBtnX = kDialogX + 50;
+
+        m_pBtnGoWorld = std::make_shared<UIButton>();
+
+        auto canvas = std::make_shared<WzCanvas>(goBtnWidth, goBtnHeight);
+        std::vector<std::uint8_t> pixels(static_cast<size_t>(goBtnWidth * goBtnHeight * 4));
+        for (int y = 0; y < goBtnHeight; ++y)
+        {
+            for (int x = 0; x < goBtnWidth; ++x)
+            {
+                auto idx = static_cast<size_t>((y * goBtnWidth + x) * 4);
+                float t = static_cast<float>(y) / static_cast<float>(goBtnHeight);
+                pixels[idx + 0] = static_cast<std::uint8_t>(60 + 20 * t);
+                pixels[idx + 1] = static_cast<std::uint8_t>(180 - 60 * t);
+                pixels[idx + 2] = static_cast<std::uint8_t>(80 + 20 * t);
+                pixels[idx + 3] = 255;
+            }
+        }
+        canvas->SetPixelData(std::move(pixels));
+        m_pBtnGoWorld->SetStateCanvas(UIState::Normal, canvas);
+        m_pBtnGoWorld->SetSize(goBtnWidth, goBtnHeight);
+        m_pBtnGoWorld->SetPosition(goBtnX, goWorldY);
+        m_pBtnGoWorld->CreateLayer(*m_pGr, 160);
+        m_pBtnGoWorld->SetClickCallback([this]() {
+            if (m_pLogin)
+            {
+                LOG_DEBUG("Entering placeholder world, channel {}", m_nSelect + 1);
+                m_pLogin->ChangeStep(2);
+            }
+        });
+        m_pUIManager->AddElement("btnGoWorld_channel", m_pBtnGoWorld);
+    }
+}
+
+auto UIChannelSelect::CreateChannelButton(std::int32_t channelIndex, std::int32_t load,
+                                           std::int32_t x, std::int32_t y)
+    -> std::shared_ptr<UIButton>
+{
+    if (!m_pGr)
+    {
+        return nullptr;
+    }
+
+    auto btn = std::make_shared<UIButton>();
+    bool wzLoaded = false;
+
+    // Try to load from WZ
+    // string.csv idx 2375: UI/Login.img/WorldSelect/channel/%d/normal
+    // string.csv idx 2376: UI/Login.img/WorldSelect/channel/%d/disabled
+    if (m_pChannelSelectProp)
+    {
+        // Get channel property: channel/{channelIndex}
+        auto channelProp = m_pChannelSelectProp->GetChild(std::to_string(channelIndex));
+        if (channelProp)
+        {
+            // Use "disabled" state if load >= 100 (full), otherwise "normal"
+            std::string stateName = (load >= 100) ? "disabled" : "normal";
+            auto stateProp = channelProp->GetChild(stateName);
+            if (stateProp)
+            {
+                if (btn->LoadFromProperty(stateProp))
+                {
+                    btn->SetPosition(x, y);
+                    btn->CreateLayer(*m_pGr, 160);
+                    wzLoaded = true;
+                    LOG_DEBUG("UIChannelSelect: Channel {} button loaded from WZ ({}) at ({}, {})",
+                              channelIndex + 1, stateName, x, y);
+                }
+            }
+            // Fallback: try loading channelProp directly as a button
+            if (!wzLoaded && btn->LoadFromProperty(channelProp))
+            {
+                btn->SetPosition(x, y);
+                btn->CreateLayer(*m_pGr, 160);
+                wzLoaded = true;
+                LOG_DEBUG("UIChannelSelect: Channel {} button loaded from WZ at ({}, {})",
+                          channelIndex + 1, x, y);
+            }
+        }
+    }
+
+    // Create placeholder if WZ not loaded
+    if (!wzLoaded)
+    {
+        const int btnWidth = 60;
+        const int btnHeight = 25;
+
+        // Create button canvas with load indicator color
+        auto canvas = std::make_shared<WzCanvas>(btnWidth, btnHeight);
+        std::vector<std::uint8_t> pixels(static_cast<size_t>(btnWidth * btnHeight * 4));
+
+        // Color based on load: green (low) -> yellow (medium) -> red (high)
+        std::uint8_t r, g, b;
+        if (load < 40)
+        {
+            // Green for low load
+            r = 60;
+            g = 160;
+            b = 80;
+        }
+        else if (load < 70)
+        {
+            // Yellow for medium load
+            r = 180;
+            g = 160;
+            b = 60;
+        }
+        else
+        {
+            // Red for high load
+            r = 180;
+            g = 80;
+            b = 60;
+        }
+
+        for (int py = 0; py < btnHeight; ++py)
+        {
+            for (int px = 0; px < btnWidth; ++px)
+            {
+                auto idx = static_cast<size_t>((py * btnWidth + px) * 4);
+                float t = static_cast<float>(py) / static_cast<float>(btnHeight);
+                pixels[idx + 0] = static_cast<std::uint8_t>(r + 20 * t);
+                pixels[idx + 1] = static_cast<std::uint8_t>(g - 30 * t);
+                pixels[idx + 2] = static_cast<std::uint8_t>(b + 10 * t);
+                pixels[idx + 3] = 230;
+            }
+        }
+        canvas->SetPixelData(std::move(pixels));
+        btn->SetStateCanvas(UIState::Normal, canvas);
+
+        // Create hover state (brighter)
+        auto hoverCanvas = std::make_shared<WzCanvas>(btnWidth, btnHeight);
+        std::vector<std::uint8_t> hoverPixels(static_cast<size_t>(btnWidth * btnHeight * 4));
+        for (int py = 0; py < btnHeight; ++py)
+        {
+            for (int px = 0; px < btnWidth; ++px)
+            {
+                auto idx = static_cast<size_t>((py * btnWidth + px) * 4);
+                float t = static_cast<float>(py) / static_cast<float>(btnHeight);
+                hoverPixels[idx + 0] = static_cast<std::uint8_t>(std::min(255, r + 40 + static_cast<int>(20 * t)));
+                hoverPixels[idx + 1] = static_cast<std::uint8_t>(std::min(255, g + 20 - static_cast<int>(30 * t)));
+                hoverPixels[idx + 2] = static_cast<std::uint8_t>(std::min(255, b + 30 + static_cast<int>(10 * t)));
+                hoverPixels[idx + 3] = 255;
+            }
+        }
+        hoverCanvas->SetPixelData(std::move(hoverPixels));
+        btn->SetStateCanvas(UIState::MouseOver, hoverCanvas);
+
+        btn->SetSize(btnWidth, btnHeight);
+        btn->SetPosition(x, y);
+        btn->CreateLayer(*m_pGr, 160);
+
+        LOG_DEBUG("UIChannelSelect: Placeholder channel {} button at ({}, {}) load {}%",
+                  channelIndex + 1, x, y, load);
+    }
+
+    return btn;
+}
+
+void UIChannelSelect::CreatePlaceholderBackground(WzGr2D& gr, std::int32_t x, std::int32_t y)
+{
+    // Create placeholder background when WZ chBackgrn not available
+    // Based on typical MapleStory channel select dialog size
+    constexpr std::uint32_t bgWidth = 350;
+    constexpr std::uint32_t bgHeight = 200;
+
+    auto canvas = std::make_shared<WzCanvas>(bgWidth, bgHeight);
+    std::vector<std::uint8_t> pixels(bgWidth * bgHeight * 4);
+
+    // Create a semi-transparent dark blue gradient background
+    for (std::uint32_t py = 0; py < bgHeight; ++py)
+    {
+        for (std::uint32_t px = 0; px < bgWidth; ++px)
+        {
+            auto idx = (py * bgWidth + px) * 4;
+            float t = static_cast<float>(py) / static_cast<float>(bgHeight);
+
+            // Dark blue gradient with slight transparency
+            pixels[idx + 0] = static_cast<std::uint8_t>(30 + 10 * t);   // R
+            pixels[idx + 1] = static_cast<std::uint8_t>(40 + 15 * t);   // G
+            pixels[idx + 2] = static_cast<std::uint8_t>(70 + 30 * t);   // B
+            pixels[idx + 3] = 220;                                       // A
+
+            // Add border (2px)
+            if (px < 2 || px >= bgWidth - 2 || py < 2 || py >= bgHeight - 2)
+            {
+                pixels[idx + 0] = 80;
+                pixels[idx + 1] = 100;
+                pixels[idx + 2] = 140;
+                pixels[idx + 3] = 255;
+            }
+        }
+    }
+
+    canvas->SetPixelData(std::move(pixels));
+
+    // Create layer at z-order 140 (below channel buttons which are at 160)
+    m_pLayerBg = gr.CreateLayer(x, y, bgWidth, bgHeight, 140);
+    if (m_pLayerBg)
+    {
+        m_pLayerBg->SetScreenSpace(true);
+        m_pLayerBg->InsertCanvas(canvas, 0, 255, 255);
+        LOG_DEBUG("UIChannelSelect: Placeholder background created at ({}, {}) size {}x{}",
+                  x, y, bgWidth, bgHeight);
+    }
+}
+
+} // namespace ms

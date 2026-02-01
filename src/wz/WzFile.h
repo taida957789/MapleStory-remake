@@ -107,6 +107,18 @@ private:
      */
     [[nodiscard]] auto ParseSoundProperty() -> WzSoundData;
 
+public:
+    /**
+     * @brief Load raw sound bytes from a WzSoundData
+     *
+     * WZ sounds are MP3 encoded. This returns the raw MP3 data.
+     *
+     * @param soundData Sound metadata from GetSound()
+     * @return Raw MP3 audio data, or empty vector on failure
+     */
+    [[nodiscard]] auto LoadSoundData(const WzSoundData& soundData) -> std::vector<std::uint8_t>;
+
+private:
     /**
      * @brief Load and decompress canvas data
      */

@@ -233,8 +233,8 @@ auto WzGr2D::RenderFrame(std::int32_t tCur) -> bool
     SDL_RenderClear(m_pRenderer);
 
     // Update and render all layers
-    // MapleStory uses a coordinate system where (0,0) is at screen center when camera is at (0,0)
-    // So we add half screen size to the camera offset for world-space layers
+    // MapleStory uses a coordinate system where (0,0) is at screen center
+    // Both world-space and screen-space layers use this center-based system
     auto screenCenterX = static_cast<std::int32_t>(m_uWidth / 2);
     auto screenCenterY = static_cast<std::int32_t>(m_uHeight / 2);
 
@@ -246,8 +246,17 @@ auto WzGr2D::RenderFrame(std::int32_t tCur) -> bool
 
             if (layer->IsScreenSpace())
             {
-                // Screen-space layers: position is in screen coordinates, no camera offset
-                layer->Render(m_pRenderer, 0, 0);
+                if (layer->IsCenterBased())
+                {
+                    // Center-based layers: position is relative to screen center (matching original MS client)
+                    // This allows UI to use fixed positions like (-400, -300) that work at any resolution
+                    layer->Render(m_pRenderer, screenCenterX, screenCenterY);
+                }
+                else
+                {
+                    // Screen-space layers: position is in screen coordinates (0,0 = top-left)
+                    layer->Render(m_pRenderer, 0, 0);
+                }
             }
             else
             {

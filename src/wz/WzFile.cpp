@@ -35,6 +35,7 @@ auto WzFile::Open(const std::string& path, const std::uint8_t* iv) -> bool
 
     // Create root property
     m_pRoot = std::make_shared<WzProperty>(path);
+    m_pRoot->SetWzFile(this);  // Set WzFile for data access
 
     // Parse directory structure
     if (!ParseDirectories(m_pRoot))
@@ -196,6 +197,7 @@ auto WzFile::ParseDirectories(std::shared_ptr<WzProperty> parent) -> bool
             // Convert u16string to string for property name
             std::string nameStr(name.begin(), name.end());
             auto child = std::make_shared<WzProperty>(nameStr);
+            child->SetWzFile(this);  // Set WzFile for data access
 
             if (type == 3)
             {
@@ -274,6 +276,7 @@ auto WzFile::ParsePropertyList(std::shared_ptr<WzProperty> target, std::size_t b
 
         std::string nameStr(name.begin(), name.end());
         auto prop = std::make_shared<WzProperty>(nameStr);
+        prop->SetWzFile(this);  // Set WzFile for data access (sounds, etc.)
 
 #ifdef MS_DEBUG_CANVAS
         // Save current path and append this property name
@@ -367,6 +370,15 @@ void WzFile::ParseExtendedProperty(const std::u16string& name,
 #ifdef MS_DEBUG_CANVAS
             canvas->SetWzPath(m_currentParsePath);
 #endif
+            // Read origin from child property if present
+            // MapleStory WZ canvases often have an "origin" child specifying the anchor point
+            auto originProp = target->GetChild("origin");
+            if (originProp)
+            {
+                auto originVec = originProp->GetVector();
+                canvas->SetOrigin(Point2D{originVec.x, originVec.y});
+            }
+
             target->SetCanvas(canvas);
         }
         else
@@ -390,6 +402,7 @@ void WzFile::ParseExtendedProperty(const std::u16string& name,
         for (int i = 0; i < convexCount; ++i)
         {
             auto pointProp = std::make_shared<WzProperty>(std::to_string(i));
+            pointProp->SetWzFile(this);  // Set WzFile for data access
             ParseExtendedProperty(name, pointProp, baseOffset);
             target->AddChild(pointProp);
         }
@@ -462,14 +475,35 @@ auto WzFile::ParseSoundProperty() -> WzSoundData
     m_reader.Skip(sizeof(std::uint8_t));
     sound.size = m_reader.ReadCompressedInt();
     sound.length = m_reader.ReadCompressedInt();
-    m_reader.Skip(56);
+    // Skip WAVEFORMATEX header (18 bytes) + extra header data
+    m_reader.Skip(51);
     sound.frequency = m_reader.Read<std::int32_t>();
-    m_reader.Skip(22);
+    m_reader.Skip(27);
 
     sound.offset = m_reader.GetPosition();
     m_reader.SetPosition(sound.offset + static_cast<std::size_t>(sound.size));
 
     return sound;
+}
+
+auto WzFile::LoadSoundData(const WzSoundData& soundData) -> std::vector<std::uint8_t>
+{
+    if (soundData.size <= 0 || soundData.offset == 0)
+    {
+        return {};
+    }
+
+    // Save current position
+    auto prevPos = m_reader.GetPosition();
+
+    // Read raw audio data (MP3 format)
+    m_reader.SetPosition(soundData.offset);
+    auto data = m_reader.ReadBytes(static_cast<std::size_t>(soundData.size));
+
+    // Restore position
+    m_reader.SetPosition(prevPos);
+
+    return data;
 }
 
 auto WzFile::LoadCanvasData(const WzCanvasData& canvasData) -> std::shared_ptr<WzCanvas>

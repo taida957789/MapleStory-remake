@@ -37,6 +37,14 @@ add_subdirectory(3rdparty/SDL EXCLUDE_FROM_ALL)
 # Find zlib for WZ decompression
 find_package(ZLIB REQUIRED)
 
+# FreeType from submodule
+set(FT_DISABLE_ZLIB ON CACHE BOOL "" FORCE)  # Use our own zlib
+set(FT_DISABLE_BZIP2 ON CACHE BOOL "" FORCE)
+set(FT_DISABLE_PNG ON CACHE BOOL "" FORCE)
+set(FT_DISABLE_HARFBUZZ ON CACHE BOOL "" FORCE)
+set(FT_DISABLE_BROTLI ON CACHE BOOL "" FORCE)
+add_subdirectory(3rdparty/freetype EXCLUDE_FROM_ALL)
+
 # spdlog for logging
 include(FetchContent)
 FetchContent_Declare(
@@ -58,7 +66,13 @@ set(SOURCES
     src/stage/Login.cpp
     src/ui/UIElement.cpp
     src/ui/UIButton.cpp
+    src/ui/UIChannelSelect.cpp
+    src/ui/UIEdit.cpp
     src/ui/UIManager.cpp
+    src/ui/UINewCharRaceSelect.cpp
+    src/ui/UISelectChar.cpp
+    src/ui/UIWorldSelect.cpp
+    src/ui/WndMan.cpp
     src/wz/WzResMan.cpp
     src/wz/WzCanvas.cpp
     src/wz/WzProperty.cpp
@@ -76,6 +90,7 @@ set(SOURCES
     src/util/ZXString.cpp
     src/util/Logger.cpp
     src/debug/DebugOverlay.cpp
+    src/text/TextRenderer.cpp
 )
 
 # Header files
@@ -89,7 +104,11 @@ set(HEADERS
     src/stage/Login.h
     src/ui/UIElement.h
     src/ui/UIButton.h
+    src/ui/UIChannelSelect.h
+    src/ui/UIEdit.h
     src/ui/UIManager.h
+    src/ui/UIWorldSelect.h
+    src/ui/WndMan.h
     src/wz/WzResMan.h
     src/wz/WzCanvas.h
     src/wz/WzProperty.h
@@ -110,19 +129,22 @@ set(HEADERS
     src/util/Point.h
     src/util/Logger.h
     src/debug/DebugOverlay.h
+    src/text/TextRenderer.h
 )
 
 add_executable(${PROJECT_NAME} ${SOURCES} ${HEADERS})
 
 target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/3rdparty/freetype/include
+    ${CMAKE_SOURCE_DIR}/3rdparty/minimp3
 )
 
-# Link SDL3, zlib, and spdlog
+# Link SDL3, zlib, spdlog, and FreeType
 if(BUILD_SHARED_LIBS)
-    target_link_libraries(${PROJECT_NAME} PRIVATE SDL3::SDL3 ZLIB::ZLIB spdlog::spdlog)
+    target_link_libraries(${PROJECT_NAME} PRIVATE SDL3::SDL3 ZLIB::ZLIB spdlog::spdlog freetype)
 else()
-    target_link_libraries(${PROJECT_NAME} PRIVATE SDL3::SDL3-static ZLIB::ZLIB spdlog::spdlog)
+    target_link_libraries(${PROJECT_NAME} PRIVATE SDL3::SDL3-static ZLIB::ZLIB spdlog::spdlog freetype)
 endif()
 
 # Platform-specific settings

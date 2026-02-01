@@ -6,6 +6,8 @@
 #include "input/InputSystem.h"
 #include "stage/Logo.h"
 #include "stage/Stage.h"
+#include "text/TextRenderer.h"
+#include "ui/WndMan.h"
 #include "util/Logger.h"
 #include "wz/WzResMan.h"
 
@@ -51,8 +53,9 @@ auto Application::Initialize(int argc, char* argv[]) -> bool
     // Create Configuration singleton
     auto& config = Configuration::GetInstance();
 
-    // Parse command line arguments for WZ path
+    // Parse command line arguments
     // Usage: --wz-path <path> or -w <path>
+    //        --offline - Run in offline mode with sample worlds
     for (int i = 1; i < argc; ++i)
     {
         std::string arg = argv[i];
@@ -60,6 +63,11 @@ auto Application::Initialize(int argc, char* argv[]) -> bool
         {
             config.SetWzPath(argv[i + 1]);
             ++i;  // Skip next argument
+        }
+        else if (arg == "--offline")
+        {
+            config.SetOfflineMode(true);
+            LOG_INFO("Offline mode enabled");
         }
     }
 
@@ -94,6 +102,15 @@ auto Application::Initialize(int argc, char* argv[]) -> bool
         return false;
     }
 
+    // Initialize text renderer
+    if (!TextRenderer::GetInstance().Initialize())
+    {
+        LOG_WARN("Failed to initialize text renderer - text will not be displayed");
+    }
+
+    // Initialize WndMan (global window manager)
+    WndMan::GetInstance().Initialize();
+
     // Create initial stage (CLogo)
     auto logo = std::make_shared<Logo>();
     SetStage(logo);
@@ -123,56 +140,78 @@ void Application::Run()
             // Process input
             InputSystem::GetInstance().ProcessEvent(event);
 
-            // Forward events to current stage
-            if (m_pStage)
-            {
-                switch (event.type)
-                {
-                case SDL_EVENT_MOUSE_MOTION:
-                    m_pStage->OnMouseMove(static_cast<std::int32_t>(event.motion.x),
-                                          static_cast<std::int32_t>(event.motion.y));
-                    break;
+            // Forward events through WndMan (mirrors CWvsApp -> CWndMan event flow)
+            auto& wndMan = WndMan::GetInstance();
 
-                case SDL_EVENT_MOUSE_BUTTON_DOWN:
+            switch (event.type)
+            {
+            case SDL_EVENT_MOUSE_MOTION:
+                wndMan.OnMouseMove(static_cast<std::int32_t>(event.motion.x),
+                                   static_cast<std::int32_t>(event.motion.y));
+                break;
+
+            case SDL_EVENT_MOUSE_BUTTON_DOWN:
 #ifdef MS_DEBUG_CANVAS
-                    if (DebugOverlay::GetInstance().OnMouseClick(
-                            static_cast<int>(event.button.x),
-                            static_cast<int>(event.button.y)))
+                if (DebugOverlay::GetInstance().OnMouseClick(
+                        static_cast<int>(event.button.x),
+                        static_cast<int>(event.button.y)))
+                {
+                    wndMan.OnMouseDown(static_cast<std::int32_t>(event.button.x),
+                                   static_cast<std::int32_t>(event.button.y),
+                                   static_cast<std::int32_t>(event.button.button));
+                    break;
+                }
+#endif
+                wndMan.OnMouseDown(static_cast<std::int32_t>(event.button.x),
+                                   static_cast<std::int32_t>(event.button.y),
+                                   static_cast<std::int32_t>(event.button.button));
+                break;
+
+            case SDL_EVENT_MOUSE_BUTTON_UP:
+                wndMan.OnMouseUp(static_cast<std::int32_t>(event.button.x),
+                                 static_cast<std::int32_t>(event.button.y),
+                                 static_cast<std::int32_t>(event.button.button));
+                break;
+
+            case SDL_EVENT_KEY_DOWN:
+                if (!event.key.repeat)
+                {
+#ifdef MS_DEBUG_CANVAS
+                    if (DebugOverlay::GetInstance().OnKeyDown(event.key.key))
                     {
                         break;
                     }
 #endif
-                    m_pStage->OnMouseDown(static_cast<std::int32_t>(event.button.x),
-                                          static_cast<std::int32_t>(event.button.y),
-                                          static_cast<std::int32_t>(event.button.button));
-                    break;
-
-                case SDL_EVENT_MOUSE_BUTTON_UP:
-                    m_pStage->OnMouseUp(static_cast<std::int32_t>(event.button.x),
-                                        static_cast<std::int32_t>(event.button.y),
-                                        static_cast<std::int32_t>(event.button.button));
-                    break;
-
-                case SDL_EVENT_KEY_DOWN:
-                    if (!event.key.repeat)
-                    {
-#ifdef MS_DEBUG_CANVAS
-                        if (DebugOverlay::GetInstance().OnKeyDown(event.key.key))
-                        {
-                            break;
-                        }
-#endif
-                        m_pStage->OnKeyDown(static_cast<std::int32_t>(event.key.key));
-                    }
-                    break;
-
-                case SDL_EVENT_KEY_UP:
-                    m_pStage->OnKeyUp(static_cast<std::int32_t>(event.key.key));
-                    break;
-
-                default:
-                    break;
+                    wndMan.OnKeyDown(static_cast<std::int32_t>(event.key.key));
                 }
+                break;
+
+            case SDL_EVENT_KEY_UP:
+                wndMan.OnKeyUp(static_cast<std::int32_t>(event.key.key));
+                break;
+
+            case SDL_EVENT_TEXT_INPUT:
+                wndMan.OnTextInput(event.text.text);
+                break;
+
+            case SDL_EVENT_WINDOW_MOUSE_ENTER:
+                wndMan.OnMouseEnter(true);
+                break;
+
+            case SDL_EVENT_WINDOW_MOUSE_LEAVE:
+                wndMan.OnMouseEnter(false);
+                break;
+
+            case SDL_EVENT_WINDOW_FOCUS_GAINED:
+                wndMan.OnSetFocus(true);
+                break;
+
+            case SDL_EVENT_WINDOW_FOCUS_LOST:
+                wndMan.OnSetFocus(false);
+                break;
+
+            default:
+                break;
             }
         }
 
@@ -201,6 +240,9 @@ void Application::Shutdown()
         m_pStage.reset();
     }
 
+    // Shutdown WndMan
+    WndMan::GetInstance().Shutdown();
+
     // Shutdown graphics engine
     get_gr().Shutdown();
 }
@@ -217,6 +259,9 @@ void Application::SetStage(std::shared_ptr<Stage> stage, void* param)
 
     // Set new stage
     m_pStage = std::move(stage);
+
+    // Update WndMan's stage pointer (mirrors g_pStage in original)
+    WndMan::GetInstance().SetStage(m_pStage.get());
 
     // Initialize new stage
     if (m_pStage)
@@ -329,6 +374,9 @@ void Application::Update(std::uint64_t tCurTime)
     {
         m_pStage->Update();
     }
+
+    // Update global UI (WndMan)
+    WndMan::GetInstance().Update();
 }
 
 void Application::Render()
@@ -345,6 +393,9 @@ void Application::Render()
     {
         m_pStage->Draw();
     }
+
+    // Draw global UI (WndMan) - renders on top of stage
+    WndMan::GetInstance().Draw();
 
     // Render all layers and present
     (void)gr.RenderFrame(tCur);
