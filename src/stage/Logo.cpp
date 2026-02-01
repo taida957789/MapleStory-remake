@@ -311,6 +311,75 @@ void Logo::InitLoading()
              m_nLoadingStepCount);
 }
 
+void Logo::StartLoadingMode()
+{
+    LOG_INFO("Starting loading mode");
+
+    m_bLoadingMode = true;
+    m_nLoadingStep = 0;
+    m_loadingAlpha = 255;
+    m_nCurrentRepeat = 0;
+    m_nCurrentRepeatFrame = 0;
+
+    // Hide logo layers
+    if (m_pLayerBackground) m_pLayerBackground->SetVisible(false);
+    if (m_pLayerMain) m_pLayerMain->SetVisible(false);
+
+    // Setup and show background layer
+    if (m_pLayerLoadingBg && m_pLoadingBgCanvas)
+    {
+        m_pLayerLoadingBg->RemoveAllCanvases();
+        m_pLayerLoadingBg->InsertCanvas(m_pLoadingBgCanvas);
+
+        // Center with origin offset
+        auto origin = m_pLoadingBgCanvas->GetOrigin();
+        auto& gr = get_gr();
+        auto screenWidth = static_cast<std::int32_t>(gr.GetWidth());
+        auto screenHeight = static_cast<std::int32_t>(gr.GetHeight());
+        auto layerX = (screenWidth - m_pLoadingBgCanvas->GetWidth()) / 2 + origin.x;
+        auto layerY = (screenHeight - m_pLoadingBgCanvas->GetHeight()) / 2 + origin.y;
+        m_pLayerLoadingBg->SetPosition(layerX, layerY);
+        m_pLayerLoadingBg->SetColor(0xFFFFFFFF);
+        m_pLayerLoadingBg->SetVisible(true);
+    }
+
+    // Setup and show animation layer with first repeat
+    if (m_pLayerLoadingAnim && !m_repeatAnims.empty())
+    {
+        m_pLayerLoadingAnim->RemoveAllCanvases();
+
+        // Load first repeat animation frames
+        auto& firstRepeat = m_repeatAnims[0];
+        for (auto& frameCanvas : firstRepeat)
+        {
+            // Use default delay of 100ms (will be read from WZ in future refinement)
+            m_pLayerLoadingAnim->InsertCanvas(frameCanvas, 100, 255, 255);
+        }
+
+        // Center first frame for positioning
+        if (!firstRepeat.empty())
+        {
+            auto origin = firstRepeat[0]->GetOrigin();
+            auto& gr = get_gr();
+            auto screenWidth = static_cast<std::int32_t>(gr.GetWidth());
+            auto screenHeight = static_cast<std::int32_t>(gr.GetHeight());
+            auto layerX = (screenWidth - firstRepeat[0]->GetWidth()) / 2 + origin.x;
+            auto layerY = (screenHeight - firstRepeat[0]->GetHeight()) / 2 + origin.y;
+            m_pLayerLoadingAnim->SetPosition(layerX, layerY);
+        }
+
+        m_pLayerLoadingAnim->SetColor(0xFFFFFFFF);
+        m_pLayerLoadingAnim->SetVisible(true);
+    }
+
+    // Setup and show progress layer
+    if (m_pLayerLoadingStep)
+    {
+        m_pLayerLoadingStep->SetVisible(true);
+        SetLoadingProgress(0);  // Show first step
+    }
+}
+
 void Logo::Update()
 {
     // Based on CLogo::Update @ 0xbc7a90
