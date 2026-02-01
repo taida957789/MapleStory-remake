@@ -43,6 +43,13 @@ public:
     auto LoadFromProperty(const std::shared_ptr<WzProperty>& prop) -> bool;
 
     /**
+     * @brief 從 WZ UOL 路徑加載按鈕資源
+     * @param sUOL WZ 資源完整路徑
+     * @return 是否成功加載
+     */
+    auto LoadFromUOL(const std::wstring& sUOL) -> bool;
+
+    /**
      * @brief Set canvas for a specific state
      * @param stateIndex State index (0-3 for normal, 4-7 for checked)
      */

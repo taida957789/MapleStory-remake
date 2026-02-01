@@ -137,8 +137,54 @@ auto LayoutMan::AddButton(
     bool bToggle,
     bool bSkipIDCheck) -> std::shared_ptr<UIButton>
 {
-    // TODO: Task 4
-    return nullptr;
+    // IDA: 創建按鈕對象 (0xb30424)
+    auto pButton = std::make_shared<UIButton>();
+
+    // IDA: 從 UOL 路徑加載資源
+    if (!pButton->LoadFromUOL(sButtonUOL))
+    {
+        return nullptr;
+    }
+
+    // IDA: 設置 toggle 模式
+    if (bToggle)
+    {
+        pButton->SetCheckMode(true);
+    }
+
+    // IDA: 設置位置 (0xb3048b-0xb30498)
+    // 使用全局偏移 + 局部偏移
+    pButton->SetPosition(nOffsetX + m_nOffsetX, nOffsetY + m_nOffsetY);
+
+    // IDA: 設置父元素
+    if (m_pParent)
+    {
+        pButton->SetParent(m_pParent);
+    }
+
+    // TODO: 設置控件 ID (需要在 UIElement 添加 m_nCtrlId)
+    // pButton->m_nCtrlId = nID;
+
+    // IDA: ID 檢查和替換邏輯 (0xb304a1-0xb304d0)
+    if (!bSkipIDCheck && nID != 0)
+    {
+        // 檢查是否已存在相同 ID 的控件
+        for (size_t i = 0; i < m_aCtrl.size(); ++i)
+        {
+            // TODO: 需要 GetID() 方法
+            // if (m_aCtrl[i]->GetID() == nID)
+            // {
+            //     // 替換現有控件
+            //     m_aCtrl[i] = pButton;
+            //     return pButton;
+            // }
+        }
+    }
+
+    // IDA: 添加到控件陣列 (0xb305a1-0xb30696)
+    m_aCtrl.push_back(pButton);
+
+    return pButton;
 }
 
 } // namespace ms

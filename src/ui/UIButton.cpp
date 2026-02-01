@@ -4,6 +4,7 @@
 #include "graphics/WzGr2DLayer.h"
 #include "wz/WzCanvas.h"
 #include "wz/WzProperty.h"
+#include "wz/WzResMan.h"
 
 namespace
 {
@@ -150,6 +151,34 @@ auto UIButton::LoadFromProperty(const std::shared_ptr<WzProperty>& prop) -> bool
     }
 
     return hasNormal;
+}
+
+auto UIButton::LoadFromUOL(const std::wstring& sUOL) -> bool
+{
+    // 從 WzResMan 獲取屬性
+    auto& resMan = WzResMan::GetInstance();
+
+    // 轉換 wstring 到 string (簡化處理：WZ 路徑通常是 ASCII)
+    std::string sPath;
+    sPath.reserve(sUOL.size());
+    for (wchar_t wc : sUOL)
+    {
+        if (wc > 127)
+        {
+            // 非 ASCII 字符，返回失敗
+            return false;
+        }
+        sPath.push_back(static_cast<char>(wc));
+    }
+
+    auto pProp = resMan.GetProperty(sPath);
+    if (!pProp)
+    {
+        return false;
+    }
+
+    // 使用現有的 LoadFromProperty
+    return LoadFromProperty(pProp);
 }
 
 void UIButton::SetStateCanvas(UIState state, std::shared_ptr<WzCanvas> canvas)
