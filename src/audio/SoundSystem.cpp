@@ -125,9 +125,6 @@ void SoundSystem::PlayBGM(const std::string& sPath,
     // Calculate volume: (nStartVolume128 * m_uBGMVolume / 100)
     std::uint32_t actualVolume = nStartVolume128 * m_uBGMVolume / 100;
 
-    LOG_DEBUG("PlayBGM: {} (loop={}, volume={}/{}, fadeIn={}, fadeOut={})",
-              sPath, nLoop, actualVolume, nEndVolume128, nFadeInTime, nFadeOutTime);
-
     // Load MP3 data from WZ
     auto mp3Data = LoadSoundFromWZ(sPath);
     if (mp3Data.empty())
@@ -277,9 +274,6 @@ auto SoundSystem::PlaySE(const std::string& sPath,
 
     // Calculate volume
     std::uint32_t actualVolume = nStartVolume128 * m_uSEVolume / 100;
-
-    LOG_DEBUG("PlaySE: {} (cookie={}, volume={}, loop={}, pan={}, fadeOut={})",
-              sPath, cookie, actualVolume, nLoop, nPan, nFadeOutTime);
 
     // Try to get from cache
     auto* cacheItem = GetOrCreateCachedSE(sPath);
@@ -464,9 +458,6 @@ auto SoundSystem::PlayAmbient(const std::string& sPath,
     // Convert to 0-128 range for audio playback
     std::uint32_t volume128 = actualVolume * 128 / 100;
 
-    LOG_DEBUG("PlayAmbient: {} (cookie={}, rate={}, volume={}, fadeIn={})",
-              sPath, cookie, nVolumeRate, actualVolume, nFadeInTime);
-
     // Load and decode audio
     auto mp3Data = LoadSoundFromWZ(sPath);
     if (mp3Data.empty())
@@ -613,8 +604,6 @@ void SoundSystem::PlayExclSE(const std::string& sPath, std::uint32_t nVolume128,
 
     std::uint32_t actualVolume = nVolume128 * m_uSEVolume / 100;
 
-    LOG_DEBUG("PlayExclSE: {} (volume={}, loop={})", sPath, actualVolume, bLoop);
-
     // Load and decode audio
     auto mp3Data = LoadSoundFromWZ(sPath);
     if (mp3Data.empty())
@@ -681,8 +670,6 @@ void SoundSystem::PlaySkillVoice(const std::string& sPath, std::uint32_t nVolume
     StopSkillVoice();
 
     std::uint32_t actualVolume = nVolume128 * m_uVoiceVolume / 100;
-
-    LOG_DEBUG("PlaySkillVoice: {} (volume={}, loop={})", sPath, actualVolume, bLoop);
 
     // Load and decode audio
     auto mp3Data = LoadSoundFromWZ(sPath);
@@ -1107,8 +1094,6 @@ auto SoundSystem::PlayAudio(const DecodedAudio& audio, int volume, bool loop) ->
 
     // Resume playback
     SDL_ResumeAudioStreamDevice(stream);
-
-    LOG_DEBUG("Playing audio: {} samples, volume={}, loop={}", audio.samples.size(), volume, loop);
 
     // Note: SDL3 doesn't have built-in loop support for streams.
     // Looping is handled in Update() by refilling the buffer when it drains.
