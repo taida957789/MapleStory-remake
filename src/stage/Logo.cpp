@@ -698,10 +698,34 @@ void Logo::Close()
         m_pLayerMain.reset();
     }
 
+    // Cleanup loading layers
+    if (m_pLayerLoadingBg)
+    {
+        gr.RemoveLayer(m_pLayerLoadingBg);
+        m_pLayerLoadingBg.reset();
+    }
+
+    if (m_pLayerLoadingAnim)
+    {
+        gr.RemoveLayer(m_pLayerLoadingAnim);
+        m_pLayerLoadingAnim.reset();
+    }
+
+    if (m_pLayerLoadingStep)
+    {
+        gr.RemoveLayer(m_pLayerLoadingStep);
+        m_pLayerLoadingStep.reset();
+    }
+
     // Clear frame references
     m_logoFrames.clear();
     m_gradeFrames.clear();
     m_messageFrames.clear();
+
+    // Clear loading frame references
+    m_pLoadingBgCanvas.reset();
+    m_repeatAnims.clear();
+    m_stepFrames.clear();
 
     // Clear property references
     m_pLogoProp.reset();
