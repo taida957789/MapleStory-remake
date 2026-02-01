@@ -376,8 +376,8 @@ auto LayoutMan::AddButton(
         pButton->SetParent(m_pParent);
     }
 
-    // TODO: 設置控件 ID (需要在 UIElement 添加 m_nCtrlId)
-    // pButton->m_nCtrlId = nID;
+    // IDA: 設置控件 ID (0xb30499)
+    pButton->SetID(nID);
 
     // IDA: ID 檢查和替換邏輯 (0xb304a1-0xb304d0)
     if (!bSkipIDCheck && nID != 0)
@@ -385,13 +385,13 @@ auto LayoutMan::AddButton(
         // 檢查是否已存在相同 ID 的控件
         for (size_t i = 0; i < m_aCtrl.size(); ++i)
         {
-            // TODO: 需要 GetID() 方法
-            // if (m_aCtrl[i]->GetID() == nID)
-            // {
-            //     // 替換現有控件
-            //     m_aCtrl[i] = pButton;
-            //     return pButton;
-            // }
+            if (m_aCtrl[i] && m_aCtrl[i]->GetID() == nID)
+            {
+                // 替換現有控件
+                LOG_DEBUG("LayoutMan::AddButton - replacing existing control with ID {}", nID);
+                m_aCtrl[i] = pButton;
+                return pButton;
+            }
         }
     }
 

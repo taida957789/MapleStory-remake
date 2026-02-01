@@ -153,6 +153,20 @@ public:
     [[nodiscard]] auto GetHeight() const noexcept -> std::int32_t { return m_nHeight; }
     void SetSize(std::int32_t width, std::int32_t height) noexcept;
 
+    // ========== Control ID (from CCtrlWnd) ==========
+
+    /**
+     * @brief Get control ID
+     * @note Used by LayoutMan for control identification and replacement
+     */
+    [[nodiscard]] auto GetID() const noexcept -> std::uint32_t { return m_nCtrlId; }
+
+    /**
+     * @brief Set control ID
+     * @note Used by LayoutMan when creating controls
+     */
+    void SetID(std::uint32_t nID) noexcept { m_nCtrlId = nID; }
+
     // ========== Visibility & State ==========
 
     [[nodiscard]] auto IsVisible() const noexcept -> bool { return m_bVisible; }
@@ -225,6 +239,9 @@ protected:
     bool m_bEnabled{true};
     UIState m_state{UIState::Normal};
     OriginType m_originType{OriginType::LeftTop};
+
+    // Control ID (from CCtrlWnd::m_nCtrlId)
+    std::uint32_t m_nCtrlId{0};
 
     // Parent-child hierarchy (CWnd style)
     UIElement* m_pParent{nullptr};  // Not owned
