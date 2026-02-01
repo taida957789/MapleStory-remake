@@ -198,7 +198,20 @@ public:
     // ========== Layer Access ==========
 
     [[nodiscard]] auto GetLayer() const noexcept -> std::shared_ptr<WzGr2DLayer> { return m_pLayer; }
-    void SetLayer(std::shared_ptr<WzGr2DLayer> layer) { m_pLayer = std::move(layer); }
+    void SetLayer(std::shared_ptr<WzGr2DLayer> layer);
+
+    // ========== Debug ==========
+
+#ifdef MS_DEBUG_CANVAS
+    /**
+     * @brief Get debug type name for this element
+     * @return Friendly type name (e.g., "UIButton", "UIEdit")
+     *
+     * Override in derived classes to provide meaningful names.
+     * Default implementation uses typeid.
+     */
+    [[nodiscard]] virtual auto GetDebugTypeName() const -> std::string;
+#endif
 
 protected:
     void InvokeClick();

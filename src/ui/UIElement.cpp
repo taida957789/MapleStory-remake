@@ -1,14 +1,24 @@
 #include "UIElement.h"
 #include "graphics/WzGr2DLayer.h"
 
+#ifdef MS_DEBUG_CANVAS
+#include "debug/DebugOverlay.h"
+#endif
+
 #include <algorithm>
+#include <typeinfo>
 
 namespace ms
 {
 
 UIElement::UIElement() = default;
 
-UIElement::~UIElement() = default;
+UIElement::~UIElement()
+{
+#ifdef MS_DEBUG_CANVAS
+    DebugOverlay::GetInstance().UnregisterUIElement(this);
+#endif
+}
 
 // ========== Parent-Child Hierarchy (CWnd style) ==========
 
@@ -321,5 +331,52 @@ void UIElement::InvokeClick()
         m_clickCallback();
     }
 }
+
+void UIElement::SetLayer(std::shared_ptr<WzGr2DLayer> layer)
+{
+    m_pLayer = std::move(layer);
+
+#ifdef MS_DEBUG_CANVAS
+    if (m_pLayer)
+    {
+        auto typeName = GetDebugTypeName();
+        DebugOverlay::GetInstance().RegisterUIElement(
+            this, m_pLayer, typeName + " Main Layer"
+        );
+    }
+#endif
+}
+
+#ifdef MS_DEBUG_CANVAS
+auto UIElement::GetDebugTypeName() const -> std::string
+{
+    // Default implementation using typeid
+    // Derived classes should override for friendly names
+    const char* name = typeid(*this).name();
+
+    // Try to demangle C++ type names
+    // For GCC/Clang, names are mangled (e.g., "N2ms9UIButtonE")
+    // For MSVC, names are readable (e.g., "class ms::UIButton")
+    std::string result(name);
+
+    // Simple demangling for common patterns
+    // Look for "UIButton", "UIEdit", etc. in the mangled name
+    std::size_t pos = result.find("UI");
+    if (pos != std::string::npos)
+    {
+        // Found "UI" prefix, extract until non-alphanumeric
+        std::size_t end = pos;
+        while (end < result.length() &&
+               (std::isalnum(result[end]) || result[end] == '_'))
+        {
+            ++end;
+        }
+        return result.substr(pos, end - pos);
+    }
+
+    // Fallback: return raw typeid name
+    return result;
+}
+#endif
 
 } // namespace ms

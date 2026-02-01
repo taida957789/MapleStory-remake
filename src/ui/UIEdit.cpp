@@ -5,6 +5,10 @@
 #include "text/TextRenderer.h"
 #include "wz/WzCanvas.h"
 
+#ifdef MS_DEBUG_CANVAS
+#include "debug/DebugOverlay.h"
+#endif
+
 #include <SDL3/SDL.h>
 #include <algorithm>
 
@@ -375,6 +379,22 @@ void UIEdit::CreateLayer(WzGr2D& gr, std::int32_t z, bool screenSpace)
     {
         m_pTextLayer->SetScreenSpace(screenSpace);
     }
+
+#ifdef MS_DEBUG_CANVAS
+    // Register all layers for debug
+    if (m_pLayer)
+    {
+        DebugOverlay::GetInstance().RegisterUIElement(this, m_pLayer, "UIEdit Background");
+    }
+    if (m_pTextLayer)
+    {
+        DebugOverlay::GetInstance().RegisterUIElement(this, m_pTextLayer, "UIEdit Text");
+    }
+    if (m_pCaretLayer)
+    {
+        DebugOverlay::GetInstance().RegisterUIElement(this, m_pCaretLayer, "UIEdit Caret");
+    }
+#endif
 }
 
 void UIEdit::SetBackgroundCanvas(std::shared_ptr<WzCanvas> canvas)

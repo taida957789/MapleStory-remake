@@ -103,6 +103,10 @@ public:
     // Background canvas (for the input box frame)
     void SetBackgroundCanvas(std::shared_ptr<WzCanvas> canvas);
 
+#ifdef MS_DEBUG_CANVAS
+    [[nodiscard]] auto GetDebugTypeName() const -> std::string override { return "UIEdit"; }
+#endif
+
 private:
     void UpdateCaretPosition();
     void InsertCharacter(char c);

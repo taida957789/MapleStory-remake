@@ -118,6 +118,10 @@ public:
      */
     void CreateLayer(WzGr2D& gr, std::int32_t z);
 
+#ifdef MS_DEBUG_CANVAS
+    [[nodiscard]] auto GetDebugTypeName() const -> std::string override { return "UIChannelSelect"; }
+#endif
+
 private:
     UIChannelSelect();
 

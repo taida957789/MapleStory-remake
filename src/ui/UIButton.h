@@ -121,6 +121,10 @@ public:
      */
     void SetState(UIState state) noexcept { m_state = state; }
 
+#ifdef MS_DEBUG_CANVAS
+    [[nodiscard]] auto GetDebugTypeName() const -> std::string override { return "UIButton"; }
+#endif
+
 private:
     void UpdateLayerCanvas();
 
