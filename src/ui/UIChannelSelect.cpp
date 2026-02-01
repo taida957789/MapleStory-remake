@@ -215,11 +215,7 @@ void UIChannelSelect::ResetInfo(std::int32_t worldIndex, bool bRedraw)
     constexpr int kDialogX = 203;
     constexpr int kDialogY = 194;
 
-    // Channel buttons start at approximately (10, 55) RELATIVE to dialog
-    // Original uses WZ layout manager; we use hardcoded offsets
-    // Now using relative coordinates since buttons are children of UIChannelSelect
-    const int startX = 10;      // Relative to dialog
-    int channelY = 55;          // Relative to dialog
+    // Channel buttons are now created by LayoutMan::AutoBuild
 
     // Load gauge canvas for channel load indicator
     // From docs: UI/Login.img/WorldSelect/BtChannel/test/gauge
@@ -289,42 +285,38 @@ void UIChannelSelect::ResetInfo(std::int32_t worldIndex, bool bRedraw)
         }
     }
 
+    // 從 LayoutMan 獲取按鈕並設置回調
+    // AutoBuild 已經創建了按鈕，現在設置它們的點擊回調
     bool bSelected = false;
-
-    // Create button for each channel
-    const int channelsPerRow = 5;
-    const int btnSpacingX = 65;
-    const int btnSpacingY = 30;
-
     for (size_t i = 0; i < world.aChannelLoad.size(); ++i)
     {
         const int load = world.aChannelLoad[i];
-        const int row = static_cast<int>(i) / channelsPerRow;
-        const int col = static_cast<int>(i) % channelsPerRow;
-        const int btnX = startX + col * btnSpacingX;
-        const int btnY = channelY + row * btnSpacingY;
 
-        auto btn = CreateChannelButton(static_cast<std::int32_t>(i), load, btnX, btnY);
-        if (btn)
+        // 從 LayoutMan 獲取按鈕（按鈕名稱是 "0", "1", "2" 等）
+        if (m_pLayoutMan)
         {
-            // Set parent-child relationship (matches original CLayoutMan behavior)
-            btn->SetParent(this);
-
-            const size_t channelIndex = i;
-            btn->SetClickCallback([this, channelIndex]() {
-                OnButtonClicked(static_cast<std::uint32_t>(channelIndex));
-            });
-
-            m_pUIManager->AddElement("channel" + std::to_string(i), btn);
-            m_vBtChannel.push_back(btn);
-
-            // Auto-select first channel with load < 73% (from original)
-            if (!bSelected && load < 73)
+            auto btn = m_pLayoutMan->ABGetButton(std::to_wstring(i));
+            if (btn)
             {
-                m_nSelect = static_cast<std::int32_t>(i);
-                bSelected = true;
-                LOG_DEBUG("Auto-selected channel {} with load {}%", i + 1, load);
+                const size_t channelIndex = i;
+                btn->SetClickCallback([this, channelIndex]() {
+                    OnButtonClicked(static_cast<std::uint32_t>(channelIndex));
+                });
+                m_vBtChannel.push_back(btn);
+                LOG_DEBUG("UIChannelSelect: Set callback for channel {} button", i);
             }
+            else
+            {
+                LOG_WARN("UIChannelSelect: Channel {} button not found in LayoutMan", i);
+            }
+        }
+
+        // Auto-select first channel with load < 73% (from original)
+        if (!bSelected && load < 73)
+        {
+            m_nSelect = static_cast<std::int32_t>(i);
+            bSelected = true;
+            LOG_DEBUG("Auto-selected channel {} with load {}%", i + 1, load);
         }
     }
 
@@ -335,102 +327,24 @@ void UIChannelSelect::ResetInfo(std::int32_t worldIndex, bool bRedraw)
         LOG_DEBUG("Default selected channel 1");
     }
 
-    // Calculate GoWorld button position (below channel buttons)
-    // Using relative coordinates since it's a child of UIChannelSelect
-    const int numRows = (static_cast<int>(world.aChannelLoad.size()) + channelsPerRow - 1) / channelsPerRow;
-    const int goWorldY = channelY + numRows * btnSpacingY + 10;
-    const int goBtnX = 50;  // Relative to dialog
-
-    // Create GoWorld button
-    // From docs: Loaded by CLayoutMan::AutoBuild as "GoWorld" button
-    // Try loading from base UOL path first
-    bool btGoworldLoaded = false;
-
-    // Try from BtChannel/test/GoWorld (CLayoutMan path)
-    std::shared_ptr<WzProperty> btGoworldProp;
-    if (m_pChannelSelectProp)
+    // 從 LayoutMan 獲取 GoWorld 按鈕
+    // AutoBuild 已經從 WZ 創建了 GoWorld 按鈕
+    if (m_pLayoutMan)
     {
-        btGoworldProp = m_pChannelSelectProp->GetChild("GoWorld");
-        if (!btGoworldProp)
+        m_pBtnGoWorld = m_pLayoutMan->ABGetButton(L"GoWorld");
+        if (m_pBtnGoWorld)
         {
-            // Try test sub-path
-            auto testProp = m_pChannelSelectProp->GetChild("test");
-            if (testProp)
-            {
-                btGoworldProp = testProp->GetChild("GoWorld");
-            }
-        }
-    }
-
-    // Fallback: try old path UI/Login.img/WorldSelect/BtGoworld
-    if (!btGoworldProp)
-    {
-        auto& resMan = WzResMan::GetInstance();
-        auto loginImgProp = resMan.GetProperty("UI/Login.img");
-        if (loginImgProp)
-        {
-            auto worldSelectProp = loginImgProp->GetChild("WorldSelect");
-            if (worldSelectProp)
-            {
-                btGoworldProp = worldSelectProp->GetChild("BtGoworld");
-            }
-        }
-    }
-
-    if (btGoworldProp)
-    {
-        m_pBtnGoWorld = std::make_shared<UIButton>();
-        if (m_pBtnGoWorld->LoadFromProperty(btGoworldProp))
-        {
-            m_pBtnGoWorld->SetParent(this);  // Set parent-child relationship
-            m_pBtnGoWorld->SetPosition(goBtnX, goWorldY);
-            m_pBtnGoWorld->CreateLayer(*m_pGr, 160);
-            btGoworldLoaded = true;
-            LOG_DEBUG("UIChannelSelect: GoWorld button loaded from WZ at ({}, {})", goBtnX, goWorldY);
+            m_pBtnGoWorld->SetClickCallback([this]() {
+                EnterChannel();
+            });
+            m_pUIManager->AddElement("btnGoWorld_channel", m_pBtnGoWorld);
+            LOG_DEBUG("UIChannelSelect: GoWorld button retrieved from LayoutMan");
         }
         else
         {
-            m_pBtnGoWorld.reset();
+            LOG_WARN("UIChannelSelect: GoWorld button not found in LayoutMan");
         }
     }
-
-    // Create placeholder if WZ not loaded
-    if (!btGoworldLoaded)
-    {
-        const int goBtnWidth = 100;
-        const int goBtnHeight = 35;
-
-        m_pBtnGoWorld = std::make_shared<UIButton>();
-
-        // Create green gradient button for "Enter Channel"
-        auto canvas = std::make_shared<WzCanvas>(goBtnWidth, goBtnHeight);
-        std::vector<std::uint8_t> pixels(static_cast<size_t>(goBtnWidth * goBtnHeight * 4));
-        for (int y = 0; y < goBtnHeight; ++y)
-        {
-            for (int x = 0; x < goBtnWidth; ++x)
-            {
-                auto idx = static_cast<size_t>((y * goBtnWidth + x) * 4);
-                float t = static_cast<float>(y) / static_cast<float>(goBtnHeight);
-                // Green gradient
-                pixels[idx + 0] = static_cast<std::uint8_t>(60 + 20 * t);
-                pixels[idx + 1] = static_cast<std::uint8_t>(180 - 60 * t);
-                pixels[idx + 2] = static_cast<std::uint8_t>(80 + 20 * t);
-                pixels[idx + 3] = 255;
-            }
-        }
-        canvas->SetPixelData(std::move(pixels));
-        m_pBtnGoWorld->SetStateCanvas(UIState::Normal, canvas);
-        m_pBtnGoWorld->SetSize(goBtnWidth, goBtnHeight);
-        m_pBtnGoWorld->SetParent(this);  // Set parent-child relationship
-        m_pBtnGoWorld->SetPosition(goBtnX, goWorldY);
-        m_pBtnGoWorld->CreateLayer(*m_pGr, 160);
-        LOG_DEBUG("UIChannelSelect: Placeholder BtGoworld at ({}, {})", goBtnX, goWorldY);
-    }
-
-    m_pBtnGoWorld->SetClickCallback([this]() {
-        EnterChannel();
-    });
-    m_pUIManager->AddElement("btnGoWorld_channel", m_pBtnGoWorld);
 
     if (bRedraw)
     {
@@ -822,45 +736,9 @@ void UIChannelSelect::CreatePlaceholderUI()
     // Set UIChannelSelect position
     SetPosition(kDialogX, kDialogY);
 
-    // Use relative coordinates for children
-    const int startX = 10;   // Relative to dialog
-    int channelY = 55;       // Relative to dialog
-
-    // Create placeholder channel buttons (20 channels)
-    const int channelsPerRow = 5;
-    const int btnSpacingX = 65;
-    const int btnSpacingY = 30;
-
-    for (int i = 0; i < 20; ++i)
-    {
-        const int row = i / channelsPerRow;
-        const int col = i % channelsPerRow;
-        const int btnX = startX + col * btnSpacingX;
-        const int btnY = channelY + row * btnSpacingY;
-
-        // Random load for placeholder
-        const int load = 30 + (i * 3) % 50;
-
-        auto btn = CreateChannelButton(i, load, btnX, btnY);
-        if (btn)
-        {
-            const int channelIndex = i;
-            btn->SetClickCallback([this, channelIndex]() {
-                m_nSelect = channelIndex;
-                LOG_DEBUG("Placeholder channel {} selected", channelIndex + 1);
-            });
-
-            m_pUIManager->AddElement("channel" + std::to_string(i), btn);
-            m_vBtChannel.push_back(btn);
-        }
-    }
-
+    // TODO: Placeholder UI - 應該由 LayoutMan::AutoBuild 處理
     // Select first channel
     m_nSelect = 0;
-
-    // Calculate GoWorld button position (relative coordinates)
-    const int numRows = 4;  // 20 channels / 5 per row
-    const int goWorldY = channelY + numRows * btnSpacingY + 10;
 
     // Create GoWorld button
     {
@@ -888,6 +766,7 @@ void UIChannelSelect::CreatePlaceholderUI()
         m_pBtnGoWorld->SetStateCanvas(UIState::Normal, canvas);
         m_pBtnGoWorld->SetSize(goBtnWidth, goBtnHeight);
         m_pBtnGoWorld->SetParent(this);  // Set parent-child relationship
+        const int goWorldY = 180;  // Placeholder position
         m_pBtnGoWorld->SetPosition(goBtnX, goWorldY);
         m_pBtnGoWorld->CreateLayer(*m_pGr, 160);
         m_pBtnGoWorld->SetClickCallback([this]() {
@@ -901,126 +780,7 @@ void UIChannelSelect::CreatePlaceholderUI()
     }
 }
 
-auto UIChannelSelect::CreateChannelButton(std::int32_t channelIndex, std::int32_t load,
-                                           std::int32_t x, std::int32_t y)
-    -> std::shared_ptr<UIButton>
-{
-    if (!m_pGr)
-    {
-        return nullptr;
-    }
-
-    auto btn = std::make_shared<UIButton>();
-    bool wzLoaded = false;
-
-    // Try to load from WZ
-    // From docs: CLayoutMan::ABGetButton accesses buttons by index string ("0", "1", etc.)
-    // Path: UI/Login.img/WorldSelect/BtChannel/test/{index}
-    if (m_pChannelSelectProp)
-    {
-        // Get button by index string (matches CLayoutMan behavior)
-        auto buttonProp = m_pChannelSelectProp->GetChild(std::to_string(channelIndex));
-        if (!buttonProp)
-        {
-            // Try test sub-path
-            auto testProp = m_pChannelSelectProp->GetChild("test");
-            if (testProp)
-            {
-                buttonProp = testProp->GetChild(std::to_string(channelIndex));
-            }
-        }
-
-        if (buttonProp)
-        {
-            // Try loading button directly
-            if (btn->LoadFromProperty(buttonProp))
-            {
-                btn->SetPosition(x, y);
-                btn->CreateLayer(*m_pGr, 160);
-                wzLoaded = true;
-                LOG_DEBUG("UIChannelSelect: Channel {} button loaded from WZ at ({}, {})",
-                          channelIndex, x, y);
-            }
-        }
-    }
-
-    // Create placeholder if WZ not loaded
-    if (!wzLoaded)
-    {
-        const int btnWidth = 60;
-        const int btnHeight = 25;
-
-        // Create button canvas with load indicator color
-        auto canvas = std::make_shared<WzCanvas>(btnWidth, btnHeight);
-        std::vector<std::uint8_t> pixels(static_cast<size_t>(btnWidth * btnHeight * 4));
-
-        // Color based on load: green (low) -> yellow (medium) -> red (high)
-        std::uint8_t r, g, b;
-        if (load < 40)
-        {
-            // Green for low load
-            r = 60;
-            g = 160;
-            b = 80;
-        }
-        else if (load < 70)
-        {
-            // Yellow for medium load
-            r = 180;
-            g = 160;
-            b = 60;
-        }
-        else
-        {
-            // Red for high load
-            r = 180;
-            g = 80;
-            b = 60;
-        }
-
-        for (int py = 0; py < btnHeight; ++py)
-        {
-            for (int px = 0; px < btnWidth; ++px)
-            {
-                auto idx = static_cast<size_t>((py * btnWidth + px) * 4);
-                float t = static_cast<float>(py) / static_cast<float>(btnHeight);
-                pixels[idx + 0] = static_cast<std::uint8_t>(r + 20 * t);
-                pixels[idx + 1] = static_cast<std::uint8_t>(g - 30 * t);
-                pixels[idx + 2] = static_cast<std::uint8_t>(b + 10 * t);
-                pixels[idx + 3] = 230;
-            }
-        }
-        canvas->SetPixelData(std::move(pixels));
-        btn->SetStateCanvas(UIState::Normal, canvas);
-
-        // Create hover state (brighter)
-        auto hoverCanvas = std::make_shared<WzCanvas>(btnWidth, btnHeight);
-        std::vector<std::uint8_t> hoverPixels(static_cast<size_t>(btnWidth * btnHeight * 4));
-        for (int py = 0; py < btnHeight; ++py)
-        {
-            for (int px = 0; px < btnWidth; ++px)
-            {
-                auto idx = static_cast<size_t>((py * btnWidth + px) * 4);
-                float t = static_cast<float>(py) / static_cast<float>(btnHeight);
-                hoverPixels[idx + 0] = static_cast<std::uint8_t>(std::min(255, r + 40 + static_cast<int>(20 * t)));
-                hoverPixels[idx + 1] = static_cast<std::uint8_t>(std::min(255, g + 20 - static_cast<int>(30 * t)));
-                hoverPixels[idx + 2] = static_cast<std::uint8_t>(std::min(255, b + 30 + static_cast<int>(10 * t)));
-                hoverPixels[idx + 3] = 255;
-            }
-        }
-        hoverCanvas->SetPixelData(std::move(hoverPixels));
-        btn->SetStateCanvas(UIState::MouseOver, hoverCanvas);
-
-        btn->SetSize(btnWidth, btnHeight);
-        btn->SetPosition(x, y);
-        btn->CreateLayer(*m_pGr, 160);
-
-        LOG_DEBUG("UIChannelSelect: Placeholder channel {} button at ({}, {}) load {}%",
-                  channelIndex + 1, x, y, load);
-    }
-
-    return btn;
-}
+// CreateChannelButton 函數已移除 - 現在由 LayoutMan::AutoBuild 處理按鈕創建
 
 void UIChannelSelect::CreatePlaceholderBackground(WzGr2D& gr, std::int32_t x, std::int32_t y)
 {

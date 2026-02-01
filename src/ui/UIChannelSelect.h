@@ -165,12 +165,7 @@ private:
      */
     void CreatePlaceholderBackground(WzGr2D& gr, std::int32_t x, std::int32_t y);
 
-    /**
-     * @brief Create a channel button
-     */
-    [[nodiscard]] auto CreateChannelButton(std::int32_t channelIndex, std::int32_t load,
-                                            std::int32_t x, std::int32_t y)
-        -> std::shared_ptr<UIButton>;
+    // CreateChannelButton 已移除 - 現在由 LayoutMan::AutoBuild 處理
 
     // Reference to Login stage (not owned) - from original m_pLogin
     Login* m_pLogin{nullptr};
