@@ -160,6 +160,24 @@ private:
     std::vector<std::shared_ptr<WzCanvas>> m_logoFrames;
     std::vector<std::shared_ptr<WzCanvas>> m_gradeFrames;
     std::vector<std::shared_ptr<WzCanvas>> m_messageFrames;
+
+    // Loading mode state
+    bool m_bLoadingMode{false};              // Whether in loading mode
+    std::int32_t m_nLoadingStep{0};          // Current loading step (0-based)
+    std::int32_t m_nLoadingStepCount{0};     // Total number of steps
+    std::uint8_t m_loadingAlpha{255};        // Loading screen alpha (for fade out)
+
+    // Loading layers
+    std::shared_ptr<WzGr2DLayer> m_pLayerLoadingBg;     // Background layer
+    std::shared_ptr<WzGr2DLayer> m_pLayerLoadingAnim;   // Animation layer
+    std::shared_ptr<WzGr2DLayer> m_pLayerLoadingStep;   // Progress step layer
+
+    // Loading frames
+    std::shared_ptr<WzCanvas> m_pLoadingBgCanvas;                      // Selected random background
+    std::vector<std::vector<std::shared_ptr<WzCanvas>>> m_repeatAnims; // repeat animations [n][frame]
+    std::vector<std::shared_ptr<WzCanvas>> m_stepFrames;               // step progress images
+    std::int32_t m_nCurrentRepeat{0};       // Current repeat animation index
+    std::int32_t m_nCurrentRepeatFrame{0};  // Current frame within repeat animation
 };
 
 } // namespace ms
