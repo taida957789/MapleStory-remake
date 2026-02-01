@@ -45,22 +45,53 @@ auto LayoutMan::ABGetButton(const std::wstring& sName) -> std::shared_ptr<UIButt
 
 void LayoutMan::ABSetButtonShowAll(bool bShow)
 {
-    // TODO: Task 3
+    // IDA: 遍歷 m_mButtons 映射表
+    for (auto& [name, pButton] : m_mButtons)
+    {
+        if (pButton)
+        {
+            pButton->SetVisible(bShow);
+        }
+    }
 }
 
 void LayoutMan::ABSetButtonEnableAll(bool bEnable)
 {
-    // TODO: Task 3
+    // IDA: 遍歷 m_mButtons 映射表
+    for (auto& [name, pButton] : m_mButtons)
+    {
+        if (pButton)
+        {
+            pButton->SetEnabled(bEnable);
+        }
+    }
 }
 
 void LayoutMan::ABSetButtonEnable(const std::wstring& sName, bool bEnable)
 {
-    // TODO: Task 3
+    // IDA: 先查找按鈕
+    auto pButton = ABGetButton(sName);
+    if (pButton)
+    {
+        pButton->SetEnabled(bEnable);
+    }
 }
 
 void LayoutMan::RegisterLayer(std::shared_ptr<WzGr2DLayer> pLayer, const std::wstring& sName)
 {
-    // TODO: Task 3
+    if (!pLayer)
+    {
+        return;
+    }
+
+    // IDA: 添加到圖層陣列
+    m_aLayer.push_back(pLayer);
+
+    // IDA: 如果提供名稱，註冊到映射表
+    if (!sName.empty())
+    {
+        m_mLayers[sName] = pLayer;
+    }
 }
 
 auto LayoutMan::ABGetLayer(const std::wstring& sName) -> std::shared_ptr<WzGr2DLayer>
@@ -78,12 +109,24 @@ auto LayoutMan::ABGetLayer(const std::wstring& sName) -> std::shared_ptr<WzGr2DL
 
 void LayoutMan::ABSetLayerVisible(const std::wstring& sName, bool bVisible)
 {
-    // TODO: Task 3
+    // IDA: 先查找圖層
+    auto pLayer = ABGetLayer(sName);
+    if (pLayer)
+    {
+        pLayer->SetVisible(bVisible);
+    }
 }
 
 void LayoutMan::ABSetLayerVisibleAll(bool bVisible)
 {
-    // TODO: Task 3
+    // IDA: 遍歷 m_mLayers 映射表
+    for (auto& [name, pLayer] : m_mLayers)
+    {
+        if (pLayer)
+        {
+            pLayer->SetVisible(bVisible);
+        }
+    }
 }
 
 auto LayoutMan::AddButton(
