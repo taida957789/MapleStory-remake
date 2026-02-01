@@ -32,7 +32,14 @@ void LayoutMan::AutoBuild(
 
 auto LayoutMan::ABGetButton(const std::wstring& sName) -> std::shared_ptr<UIButton>
 {
-    // TODO: Task 2
+    // IDA: ZMap::GetPos
+    auto it = m_mButtons.find(sName);
+    if (it != m_mButtons.end())
+    {
+        return it->second;
+    }
+
+    // IDA: 返回 static empty reference
     return nullptr;
 }
 
@@ -58,7 +65,14 @@ void LayoutMan::RegisterLayer(std::shared_ptr<WzGr2DLayer> pLayer, const std::ws
 
 auto LayoutMan::ABGetLayer(const std::wstring& sName) -> std::shared_ptr<WzGr2DLayer>
 {
-    // TODO: Task 2
+    // IDA: ZMap::GetPos
+    auto it = m_mLayers.find(sName);
+    if (it != m_mLayers.end())
+    {
+        return it->second;
+    }
+
+    // IDA: 返回 static empty reference
     return nullptr;
 }
 
