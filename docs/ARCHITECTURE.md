@@ -160,6 +160,19 @@ Packet format (little-endian):
 
 Encryption: AES with rolling IV.
 
+### 7. UI System (src/ui/)
+
+#### LayoutMan
+
+UI 自動化構建和管理系統。負責：
+- 從 WZ 資源自動創建 UI 元素
+- 按名稱管理按鈕和圖層
+- 提供批量操作接口
+
+使用映射表 (std::map) 管理控件，支持 `type:name` 格式的 WZ 屬性解析。
+
+詳見：`docs/LayoutMan.md`
+
 ## Class Hierarchy
 
 ```
