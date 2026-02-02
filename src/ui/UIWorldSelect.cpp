@@ -20,108 +20,89 @@ UIWorldSelect::~UIWorldSelect()
     Destroy();
 }
 
-void UIWorldSelect::OnCreate(Login* pLogin, WzGr2D& gr, UIManager& uiManager)
+auto UIWorldSelect::OnCreate(std::any params) -> Result<void>
 {
-    // Based on CUIWorldSelect::OnCreate (0xbc54f0)
-    m_pLogin = pLogin;
-    m_pGr = &gr;
-    m_pUIManager = &uiManager;
-    m_nBalloonCount = 0;
-    m_nKeyFocus = -1;
-
-    // Clear existing balloon layers
-    for (auto& layer : m_apLayerBalloon)
+    // 1. Extract and validate parameters
+    auto* createParams = std::any_cast<CreateParams>(&params);
+    if (!createParams)
     {
-        if (layer)
+        return Result<void>::Error("Invalid params type for UIWorldSelect");
+    }
+
+    if (!createParams->IsValid())
+    {
+        return Result<void>::Error("UIWorldSelect CreateParams validation failed");
+    }
+
+    // 2. Store references
+    m_pLogin = createParams->login;
+    m_pGr = createParams->gr;
+    m_pUIManager = createParams->uiManager;
+
+    // 3. Create LayoutMan and initialize (using current API - will be updated in Task 6)
+    m_pLayoutMan = std::make_unique<LayoutMan>();
+    m_pLayoutMan->Init(this, 0, 0);
+
+    // 4. Build UI from WZ (using current API - will be updated in Task 6)
+    std::wstring sLayoutUOL = L"UI/Login.img/WorldSelect/BtWorld/release";
+    m_pLayoutMan->AutoBuild(sLayoutUOL, 0, 0, 0, true, false);
+    m_pLayoutMan->CreateLayers(*m_pGr, 140, true);
+
+    // 5. Create background layer
+    if (m_pGr)
+    {
+        m_pLayerBg = m_pGr->CreateLayer(652, 37,
+                                        m_pGr->GetWidth(), m_pGr->GetHeight(),
+                                        10);
+        if (!m_pLayerBg)
         {
-            gr.RemoveLayer(layer);
+            return Result<void>::Error("Failed to create background layer");
         }
+        m_pLayerBg->SetVisible(true);
     }
-    m_apLayerBalloon.clear();
 
-    auto& resMan = WzResMan::GetInstance();
+    // 6. Initialize world buttons
+    InitWorldButtons();
 
-    // 1. 讀取顯示世界數量 (BtWorld/release/index/count)
-    auto indexProp = resMan.GetProperty("UI/Login.img/WorldSelect/BtWorld/release/index");
-    int nDisplayCount = 10;  // 默認值
-    if (indexProp)
+    return Result<void>::Success();
+}
+
+void UIWorldSelect::OnDestroy() noexcept
+{
+    try
     {
-        auto countProp = indexProp->GetChild("count");
-        if (countProp)
+        // 1. Clear world buttons (shared_ptr RAII)
+        m_vBtWorld.clear();
+        m_pBtnGoWorld.reset();
+
+        // 2. Clear world state layers
+        m_apLayerWorldState.clear();
+
+        // 3. Clear balloon layers
+        m_apLayerBalloon.clear();
+
+        // 4. Clear background layer
+        if (m_pLayerBg && m_pGr)
         {
-            nDisplayCount = countProp->GetInt(10);
-            LOG_DEBUG("UIWorldSelect: Display count = {}", nDisplayCount);
+            m_pGr->RemoveLayer(m_pLayerBg);
         }
-    }
+        m_pLayerBg.reset();
 
-    // 2. 讀取對應的佈局配置 (../release/{count}/)
-    std::string sLayoutPath = "UI/Login.img/WorldSelect/BtWorld/release/" + std::to_string(nDisplayCount);
-    auto layoutProp = resMan.GetProperty(sLayoutPath);
-    if (!layoutProp)
+        // 5. Clear LayoutMan
+        m_pLayoutMan.reset();
+
+        // 6. Clear cached WZ property
+        m_pWorldSelectProp.reset();
+
+        // 7. Clear references (non-owning)
+        m_pLogin = nullptr;
+        m_pGr = nullptr;
+        m_pUIManager = nullptr;
+    }
+    catch (const std::exception& e)
     {
-        LOG_WARN("UIWorldSelect: Layout property not found: {}", sLayoutPath);
-        return;
+        LOG_ERROR("Exception in UIWorldSelect::OnDestroy: {}", e.what());
     }
-
-    // 3. 讀取 UIWorldSelect 視窗位置 (pos)
-    auto posProp = layoutProp->GetChild("pos");
-    if (posProp)
-    {
-        auto posVec = posProp->GetVector();
-        SetPosition(posVec.x, posVec.y);
-        LOG_DEBUG("UIWorldSelect: Window position set to ({}, {})", posVec.x, posVec.y);
-    }
-
-    // 4. 讀取背景 (layer:bg)
-    auto bgProp = layoutProp->GetChild("layer:bg");
-    if (bgProp)
-    {
-        auto bgCanvas = bgProp->GetCanvas();
-        if (bgCanvas)
-        {
-            auto origin = bgCanvas->GetOrigin();
-            auto bgLayer = gr.CreateLayer(
-                origin.x, origin.y,
-                bgCanvas->GetWidth(), bgCanvas->GetHeight(),
-                100  // z-order
-            );
-            if (bgLayer)
-            {
-                bgLayer->SetScreenSpace(true);
-                bgLayer->InsertCanvas(bgCanvas, 0, 255, 255);
-                m_pLayer = bgLayer;
-                LOG_DEBUG("UIWorldSelect: Background layer created at ({}, {})", origin.x, origin.y);
-            }
-        }
-    }
-
-    // 5. 創建 LayoutMan 並使用 AutoBuild 自動創建按鈕
-    if (!m_pLayoutMan)
-    {
-        m_pLayoutMan = std::make_unique<LayoutMan>();
-        m_pLayoutMan->Init(this, 0, 0);
-
-        // 使用 AutoBuild 從 WZ 自動創建按鈕
-        // 路徑: UI/Login.img/WorldSelect/BtWorld/release/
-        std::wstring sLayoutUOL = L"UI/Login.img/WorldSelect/BtWorld/release";
-        m_pLayoutMan->AutoBuild(sLayoutUOL, 0, 0, 0, true, false);
-        LOG_DEBUG("UIWorldSelect: AutoBuild completed for BtWorld/release");
-
-        // 創建圖層 (如果 AutoBuild 創建了 layer)
-        m_pLayoutMan->CreateLayers(*m_pGr, 140, true);
-    }
-
-    // 6. 從 LayoutMan 獲取按鈕並設置
-    InitWorldButtons(nDisplayCount, layoutProp);
-
-    // Load WorldSelect WZ property for future use
-    auto loginImgProp = resMan.GetProperty("UI/Login.img");
-    if (loginImgProp)
-    {
-        m_pWorldSelectProp = loginImgProp->GetChild("WorldSelect");
-    }
-
-    LOG_DEBUG("UIWorldSelect::OnCreate completed");
 }
 
 void UIWorldSelect::SetRet(std::int32_t ret)
@@ -420,79 +401,8 @@ auto UIWorldSelect::HitTest(std::int32_t x, std::int32_t y) const -> bool
 
 void UIWorldSelect::Destroy()
 {
-    if (!m_pGr)
-    {
-        return;
-    }
-
-    // Destroy channel select first
-    UIChannelSelect::GetInstance().Destroy();
-
-    // Clean up enter button
-    if (m_pBtnGoWorld)
-    {
-        if (m_pUIManager)
-        {
-            m_pUIManager->RemoveElement("btnGoWorld");
-        }
-        if (m_pBtnGoWorld->GetLayer())
-        {
-            m_pGr->RemoveLayer(m_pBtnGoWorld->GetLayer());
-        }
-        m_pBtnGoWorld.reset();
-    }
-
-    // Clean up world buttons
-    for (size_t i = 0; i < m_vBtWorld.size(); ++i)
-    {
-        if (m_vBtWorld[i])
-        {
-            if (m_pUIManager && i < m_aButtonName.size())
-            {
-                m_pUIManager->RemoveElement("world" + m_aButtonName[i]);
-            }
-            if (m_vBtWorld[i]->GetLayer())
-            {
-                m_pGr->RemoveLayer(m_vBtWorld[i]->GetLayer());
-            }
-        }
-    }
-    m_vBtWorld.clear();
-    m_aButtonName.clear();
-
-    // Clean up world state layers
-    for (auto& layer : m_apLayerWorldState)
-    {
-        if (layer)
-        {
-            m_pGr->RemoveLayer(layer);
-        }
-    }
-    m_apLayerWorldState.clear();
-
-    // Clean up balloon layers
-    for (auto& layer : m_apLayerBalloon)
-    {
-        if (layer)
-        {
-            m_pGr->RemoveLayer(layer);
-        }
-    }
-    m_apLayerBalloon.clear();
-
-    // Clean up background layer
-    if (m_pLayerBg)
-    {
-        m_pGr->RemoveLayer(m_pLayerBg);
-        m_pLayerBg.reset();
-    }
-
-    m_pLogin = nullptr;
-    m_pGr = nullptr;
-    m_pUIManager = nullptr;
-    m_pWorldSelectProp.reset();
-
-    LOG_DEBUG("UIWorldSelect destroyed");
+    // Call base class Destroy which calls OnDestroy
+    UIElement::Destroy();
 }
 
 void UIWorldSelect::Update()

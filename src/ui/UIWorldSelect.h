@@ -51,20 +51,26 @@ class UIManager;
  * Dialog position: (652, 37) with Origin_LT
  * Base UOL: "UI/Login.img/WorldSelect/BtWorld/test"
  */
-class UIWorldSelect final : public UIElement, public Singleton<UIWorldSelect>
+class UIWorldSelect final : public UIElement
 {
-    friend class Singleton<UIWorldSelect>;
-
 public:
+    UIWorldSelect();
     ~UIWorldSelect() override;
 
     /**
-     * @brief Initialize the world select UI (matches CUIWorldSelect::OnCreate)
-     * @param pLogin Pointer to the Login stage
-     * @param gr Graphics engine reference
-     * @param uiManager UI manager reference
+     * @brief Creation parameters for UIWorldSelect
      */
-    void OnCreate(Login* pLogin, WzGr2D& gr, UIManager& uiManager);
+    struct CreateParams
+    {
+        Login* login{nullptr};
+        WzGr2D* gr{nullptr};
+        UIManager* uiManager{nullptr};
+
+        [[nodiscard]] auto IsValid() const noexcept -> bool
+        {
+            return login != nullptr && gr != nullptr && uiManager != nullptr;
+        }
+    };
 
     /**
      * @brief Set return value (matches CUIWorldSelect::SetRet)
@@ -149,9 +155,11 @@ public:
      */
     void CreateLayer(WzGr2D& gr, std::int32_t z);
 
-private:
-    UIWorldSelect();
+protected:
+    auto OnCreate(std::any params) -> Result<void> override;
+    void OnDestroy() noexcept override;
 
+private:
     /**
      * @brief Set keyboard focus (matches CUIWorldSelect::SetKeyFocus)
      */
