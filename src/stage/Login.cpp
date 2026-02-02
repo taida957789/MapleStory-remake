@@ -807,9 +807,25 @@ void Login::SetupStep1UI()
     m_sSPW.clear();
     m_sGoToStarPlanetSPW.clear();
 
-    // Create UIWorldSelect singleton and initialize
-    auto& worldSelect = UIWorldSelect::GetInstance();
-    worldSelect.OnCreate(this, gr, m_uiManager);
+    // Create UIWorldSelect and initialize with new lifecycle pattern
+    m_worldSelectUI = std::make_unique<UIWorldSelect>();
+
+    // Create params
+    UIWorldSelect::CreateParams params;
+    params.login = this;
+    params.gr = &gr;
+    params.uiManager = &m_uiManager;
+
+    // Call Create() and check result
+    auto result = m_worldSelectUI->Create(params);
+    if (!result)
+    {
+        LOG_ERROR("Failed to create UIWorldSelect: {}", result.error());
+        m_worldSelectUI.reset();
+        return;
+    }
+
+    LOG_DEBUG("UIWorldSelect created successfully");
 }
 
 void Login::SetupStep2UI()
@@ -944,9 +960,13 @@ void Login::ClearStepUI()
     m_pCanvasCheck1.reset();
 
     // Clean up Step 1 UI (UIWorldSelect and UIChannelSelect)
-    if (UIWorldSelect::IsInstantiated())
+    if (m_worldSelectUI)
     {
-        UIWorldSelect::GetInstance().Destroy();
+        if (m_worldSelectUI->IsCreated())
+        {
+            m_worldSelectUI->Destroy();
+        }
+        m_worldSelectUI.reset();
     }
     if (UIChannelSelect::IsInstantiated())
     {

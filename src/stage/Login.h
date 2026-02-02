@@ -444,6 +444,9 @@ private:
     std::shared_ptr<Avatar> m_pNewAvatar;
     std::shared_ptr<Avatar> m_pNewDummyAvatar;
 
+    // UIWorldSelect - owned via unique_ptr, uses Create/Destroy pattern
+    std::unique_ptr<UIWorldSelect> m_worldSelectUI;
+
     // UI Buttons (based on CUITitle::OnCreate from v1029)
     std::shared_ptr<UIButton> m_pBtnLogin;      // (178, 41) - Login button
     std::shared_ptr<UIButton> m_pBtnQuit;       // (159, 117) - Quit button
