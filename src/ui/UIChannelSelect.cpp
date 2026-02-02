@@ -19,25 +19,35 @@ UIChannelSelect::~UIChannelSelect()
     Destroy();
 }
 
-void UIChannelSelect::OnCreate(Login* pLogin, WzGr2D& gr, UIManager& uiManager,
-                                std::int32_t worldIndex)
+auto UIChannelSelect::OnCreate(std::any params) -> Result<void>
 {
-    // Based on CUIChannelSelect::OnCreate (0xbc4780)
-    m_pLogin = pLogin;
-    m_pGr = &gr;
-    m_pUIManager = &uiManager;
-    m_nWorldIndex = worldIndex;
+    // 1. Extract and validate parameters
+    auto* createParams = std::any_cast<CreateParams>(&params);
+    if (!createParams)
+    {
+        return Result<void>::Error("Invalid params type for UIChannelSelect");
+    }
+
+    if (!createParams->IsValid())
+    {
+        return Result<void>::Error("UIChannelSelect CreateParams validation failed");
+    }
+
+    // 2. Store references
+    m_pLogin = createParams->login;
+    m_pGr = createParams->gr;
+    m_pUIManager = createParams->uiManager;
+    m_nWorldIndex = createParams->worldIndex;
     m_bSelectWorld = false;
     m_nSelect = 0;
 
+    // 3. Set UIChannelSelect position
     // CUIChannelSelect dialog position from IDA: (203, 194) with Origin_LT
     constexpr int kDialogX = 203;
     constexpr int kDialogY = 194;
-
-    // Set UIChannelSelect position (parent container position)
     SetPosition(kDialogX, kDialogY);
 
-    // Load WorldSelect WZ properties
+    // 4. Load WorldSelect WZ properties
     // Based on docs: Base UOL is UI/Login.img/WorldSelect/BtChannel/test
     auto& resMan = WzResMan::GetInstance();
     auto loginImgProp = resMan.GetProperty("UI/Login.img");
@@ -77,7 +87,7 @@ void UIChannelSelect::OnCreate(Login* pLogin, WzGr2D& gr, UIManager& uiManager,
                     int layerX = kDialogX + origin.x;
                     int layerY = kDialogY + origin.y;
 
-                    m_pLayerBg = gr.CreateLayer(layerX, layerY,
+                    m_pLayerBg = m_pGr->CreateLayer(layerX, layerY,
                                                  static_cast<std::uint32_t>(canvas->GetWidth()),
                                                  static_cast<std::uint32_t>(canvas->GetHeight()), 140);
                     if (m_pLayerBg)
@@ -103,7 +113,7 @@ void UIChannelSelect::OnCreate(Login* pLogin, WzGr2D& gr, UIManager& uiManager,
                             int layerX = kDialogX + origin.x;
                             int layerY = kDialogY + origin.y;
 
-                            m_pLayerBg = gr.CreateLayer(layerX, layerY,
+                            m_pLayerBg = m_pGr->CreateLayer(layerX, layerY,
                                                          static_cast<std::uint32_t>(canvas->GetWidth()),
                                                          static_cast<std::uint32_t>(canvas->GetHeight()), 140);
                             if (m_pLayerBg)
@@ -123,16 +133,17 @@ void UIChannelSelect::OnCreate(Login* pLogin, WzGr2D& gr, UIManager& uiManager,
         }
     }
 
-    // Create placeholder background if WZ chBackgrn not loaded
+    // 5. Create placeholder background if WZ chBackgrn not loaded
     if (!m_pLayerBg)
     {
-        CreatePlaceholderBackground(gr, kDialogX, kDialogY);
+        CreatePlaceholderBackground(*m_pGr, kDialogX, kDialogY);
     }
 
-    // Reset info for the selected world
-    ResetInfo(worldIndex, false);
+    // 6. Reset info for the selected world
+    ResetInfo(m_nWorldIndex, false);
 
-    LOG_DEBUG("UIChannelSelect::OnCreate completed for world {}", worldIndex);
+    LOG_DEBUG("UIChannelSelect::OnCreate completed for world {}", m_nWorldIndex);
+    return Result<void>::Success();
 }
 
 void UIChannelSelect::ResetInfo(std::int32_t worldIndex, bool bRedraw)
@@ -486,70 +497,67 @@ void UIChannelSelect::RemoveNoticeConnecting()
     }
 }
 
-void UIChannelSelect::Destroy()
+void UIChannelSelect::OnDestroy() noexcept
 {
-    if (!m_pGr)
+    try
     {
-        return;
-    }
-
-    // Clean up GoWorld button
-    if (m_pBtnGoWorld)
-    {
-        if (m_pUIManager)
+        // 1. Clear GoWorld button (shared_ptr RAII)
+        if (m_pBtnGoWorld && m_pUIManager)
         {
             m_pUIManager->RemoveElement("btnGoWorld_channel");
         }
-        if (m_pBtnGoWorld->GetLayer())
-        {
-            m_pGr->RemoveLayer(m_pBtnGoWorld->GetLayer());
-        }
         m_pBtnGoWorld.reset();
-    }
 
-    // Clean up channel buttons
-    for (size_t i = 0; i < m_vBtChannel.size(); ++i)
-    {
-        if (m_vBtChannel[i])
+        // 2. Clear channel buttons
+        for (size_t i = 0; i < m_vBtChannel.size(); ++i)
         {
-            if (m_pUIManager)
+            if (m_vBtChannel[i] && m_pUIManager)
             {
                 m_pUIManager->RemoveElement("channel" + std::to_string(i));
             }
-            if (m_vBtChannel[i]->GetLayer())
-            {
-                m_pGr->RemoveLayer(m_vBtChannel[i]->GetLayer());
-            }
         }
-    }
-    m_vBtChannel.clear();
+        m_vBtChannel.clear();
 
-    // Clean up layers
-    if (m_pLayerBg)
-    {
-        m_pGr->RemoveLayer(m_pLayerBg);
+        // 3. Clear layers
+        if (m_pLayerBg && m_pGr)
+        {
+            m_pGr->RemoveLayer(m_pLayerBg);
+        }
         m_pLayerBg.reset();
-    }
 
-    if (m_pLayerGauge)
-    {
-        m_pGr->RemoveLayer(m_pLayerGauge);
+        if (m_pLayerGauge && m_pGr)
+        {
+            m_pGr->RemoveLayer(m_pLayerGauge);
+        }
         m_pLayerGauge.reset();
-    }
 
-    if (m_pLayerEventDesc)
-    {
-        m_pGr->RemoveLayer(m_pLayerEventDesc);
+        if (m_pLayerEventDesc && m_pGr)
+        {
+            m_pGr->RemoveLayer(m_pLayerEventDesc);
+        }
         m_pLayerEventDesc.reset();
+
+        // 4. Clear LayoutMan
+        m_pLayoutMan.reset();
+
+        // 5. Clear cached WZ property
+        m_pChannelSelectProp.reset();
+        m_pCanvasGauge.reset();
+
+        // 6. Clear references (non-owning)
+        m_pLogin = nullptr;
+        m_pGr = nullptr;
+        m_pUIManager = nullptr;
     }
+    catch (const std::exception& e)
+    {
+        LOG_ERROR("Exception in UIChannelSelect::OnDestroy: {}", e.what());
+    }
+}
 
-    m_pLogin = nullptr;
-    m_pGr = nullptr;
-    m_pUIManager = nullptr;
-    m_pChannelSelectProp.reset();
-    m_pCanvasGauge.reset();
-
-    LOG_DEBUG("UIChannelSelect destroyed");
+void UIChannelSelect::Destroy()
+{
+    UIElement::Destroy();
 }
 
 void UIChannelSelect::Update()

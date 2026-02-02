@@ -1,7 +1,6 @@
 #pragma once
 
 #include "UIElement.h"
-#include "util/Singleton.h"
 #include "LayoutMan.h"
 
 #include <cstdint>
@@ -44,21 +43,27 @@ class UIManager;
  * Dialog position: (203, 194) with Origin_LT
  * Base UOL: "UI/Login.img/WorldSelect/BtChannel/test"
  */
-class UIChannelSelect final : public UIElement, public Singleton<UIChannelSelect>
+class UIChannelSelect final : public UIElement
 {
-    friend class Singleton<UIChannelSelect>;
-
 public:
+    UIChannelSelect();
     ~UIChannelSelect() override;
 
     /**
-     * @brief Initialize the channel select UI (matches CUIChannelSelect::OnCreate)
-     * @param pLogin Pointer to the Login stage
-     * @param gr Graphics engine reference
-     * @param uiManager UI manager reference
-     * @param worldIndex World index to show channels for
+     * @brief Creation parameters for UIChannelSelect
      */
-    void OnCreate(Login* pLogin, WzGr2D& gr, UIManager& uiManager, std::int32_t worldIndex);
+    struct CreateParams
+    {
+        Login* login{nullptr};
+        WzGr2D* gr{nullptr};
+        UIManager* uiManager{nullptr};
+        std::int32_t worldIndex{-1};
+
+        [[nodiscard]] auto IsValid() const noexcept -> bool
+        {
+            return login != nullptr && gr != nullptr && uiManager != nullptr && worldIndex >= 0;
+        }
+    };
 
     /**
      * @brief Reset channel info for a world (matches CUIChannelSelect::ResetInfo)
@@ -123,8 +128,11 @@ public:
     [[nodiscard]] auto GetDebugTypeName() const -> std::string override { return "UIChannelSelect"; }
 #endif
 
+protected:
+    auto OnCreate(std::any params) -> Result<void> override;
+    void OnDestroy() noexcept override;
+
 private:
-    UIChannelSelect();
 
     /**
      * @brief Check if request is valid (matches CUIChannelSelect::IsRequestValid)
