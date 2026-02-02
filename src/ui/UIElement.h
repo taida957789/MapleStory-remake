@@ -15,6 +15,51 @@ class WzGr2DLayer;
 class WzProperty;
 
 /**
+ * @brief UI lifecycle states for two-phase construction pattern
+ *
+ * State machine:
+ *   Constructed -> Created -> Destroyed
+ *
+ * Prevents calling methods in invalid states (e.g., Update before OnCreate).
+ */
+enum class LifecycleState : std::uint8_t
+{
+    Constructed,  // Object created, OnCreate not yet called
+    Created,      // OnCreate complete, ready to use
+    Destroyed     // OnDestroy called, resources released
+};
+
+/**
+ * @brief Convert lifecycle state to string for debugging
+ */
+constexpr auto to_string(LifecycleState state) noexcept -> std::string_view
+{
+    using enum LifecycleState;
+    switch (state)
+    {
+        case Constructed: return "Constructed";
+        case Created: return "Created";
+        case Destroyed: return "Destroyed";
+    }
+    return "Unknown";
+}
+
+/**
+ * @brief Validate state transition
+ */
+constexpr bool is_valid_transition(LifecycleState from, LifecycleState to) noexcept
+{
+    using enum LifecycleState;
+    switch (from)
+    {
+        case Constructed: return to == Created;
+        case Created: return to == Destroyed;
+        case Destroyed: return false;  // Terminal state
+    }
+    return false;
+}
+
+/**
  * @brief UI Element state for buttons and interactive elements
  */
 enum class UIState : std::int32_t
