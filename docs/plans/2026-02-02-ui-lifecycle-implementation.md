@@ -958,18 +958,25 @@ Add to end of design document:
 
 ## Implementation Status
 
-### ✅ Completed
+### ✅ Completed (Extended Implementation)
 - [x] Result<T> error handling type
 - [x] LifecycleState enum and state machine
 - [x] UIElement Create/Destroy lifecycle methods
 - [x] UIWorldSelect OnCreate/OnDestroy implementation
+- [x] UISelectChar OnCreate/OnDestroy implementation
+- [x] UINewCharRaceSelect OnCreate/OnDestroy implementation
+- [x] UIChannelSelect OnCreate/OnDestroy implementation
 - [x] Removed singleton pattern from UIWorldSelect
-- [x] Login owns UIWorldSelect via std::unique_ptr
+- [x] Removed singleton pattern from UISelectChar
+- [x] Removed singleton pattern from UINewCharRaceSelect
+- [x] Removed singleton pattern from UIChannelSelect
+- [x] Login and UIWorldSelect own all UI instances via std::unique_ptr
 - [x] LayoutMan returns Result<T>
+
+**Note:** The original plan covered UIWorldSelect only, but the implementation was extended to include all login flow UI classes (UISelectChar, UINewCharRaceSelect, UIChannelSelect) to ensure consistent lifecycle management across the entire login system.
 
 ### 🚧 In Progress
 - [ ] LayerHandle RAII wrapper (deferred)
-- [ ] Other UI classes lifecycle refactoring (UISelectChar, etc.)
 
 ### 📋 Planned
 - [ ] Stage lifecycle management
@@ -982,9 +989,10 @@ Add to end of design document:
 ## Migration Notes
 
 ### Breaking Changes
-- UIWorldSelect no longer uses GetInstance()
+- All login flow UI classes (UIWorldSelect, UISelectChar, UINewCharRaceSelect, UIChannelSelect) no longer use GetInstance()
 - Must call Create() after construction
 - Must call Destroy() before destruction
+- UI instances are now owned by Login and UIWorldSelect via std::unique_ptr
 
 ### Migration Example
 
@@ -1003,6 +1011,16 @@ if (!result) {
     LOG_ERROR("Failed: {}", result.error());
 }
 ```
+
+### Extended Implementation Details
+
+The refactoring was applied to all login flow UI classes:
+- **UIWorldSelect**: Refactored to use OnCreate/OnDestroy, owned by Login
+- **UISelectChar**: Refactored to use OnCreate/OnDestroy, owned by UIWorldSelect
+- **UINewCharRaceSelect**: Refactored to use OnCreate/OnDestroy, owned by UIWorldSelect
+- **UIChannelSelect**: Refactored to use OnCreate/OnDestroy, owned by UIWorldSelect
+
+This ensures consistent lifecycle management across the entire login system, from world selection through character selection to channel selection.
 ```
 
 **Step 2: Commit**
@@ -1036,7 +1054,7 @@ Each step includes:
 - Commit messages
 
 **Next Steps:**
-- Apply this pattern to UISelectChar, UINewCharRaceSelect
+- Apply this pattern to UISelectChar, UINewCharRaceSelect (✅ Completed)
 - Add RAII LayerHandle wrapper
 - Implement Stage lifecycle management
 - Add C++20 concepts for compile-time validation
@@ -1045,18 +1063,25 @@ Each step includes:
 
 ## Implementation Status
 
-### ✅ Completed
+### ✅ Completed (Extended Implementation - All 12 Tasks)
 - [x] Result<T> error handling type
 - [x] LifecycleState enum and state machine
 - [x] UIElement Create/Destroy lifecycle methods
 - [x] UIWorldSelect OnCreate/OnDestroy implementation
+- [x] UISelectChar OnCreate/OnDestroy implementation
+- [x] UINewCharRaceSelect OnCreate/OnDestroy implementation
+- [x] UIChannelSelect OnCreate/OnDestroy implementation
 - [x] Removed singleton pattern from UIWorldSelect
-- [x] Login owns UIWorldSelect via std::unique_ptr
+- [x] Removed singleton pattern from UISelectChar
+- [x] Removed singleton pattern from UINewCharRaceSelect
+- [x] Removed singleton pattern from UIChannelSelect
+- [x] Login and UIWorldSelect own all UI instances via std::unique_ptr
 - [x] LayoutMan returns Result<T>
+
+**Note:** The original plan covered UIWorldSelect only, but the implementation was extended to include all login flow UI classes (UISelectChar, UINewCharRaceSelect, UIChannelSelect) to ensure consistent lifecycle management across the entire login system.
 
 ### 🚧 In Progress
 - [ ] LayerHandle RAII wrapper (deferred)
-- [ ] Other UI classes lifecycle refactoring (UISelectChar, etc.)
 
 ### 📋 Planned
 - [ ] Stage lifecycle management
@@ -1069,9 +1094,10 @@ Each step includes:
 ## Migration Notes
 
 ### Breaking Changes
-- UIWorldSelect no longer uses GetInstance()
+- All login flow UI classes (UIWorldSelect, UISelectChar, UINewCharRaceSelect, UIChannelSelect) no longer use GetInstance()
 - Must call Create() after construction
 - Must call Destroy() before destruction
+- UI instances are now owned by Login and UIWorldSelect via std::unique_ptr
 
 ### Migration Example
 
@@ -1090,3 +1116,13 @@ if (!result) {
     LOG_ERROR("Failed: {}", result.error());
 }
 ```
+
+### Extended Implementation Details
+
+The refactoring was applied to all login flow UI classes:
+- **UIWorldSelect**: Refactored to use OnCreate/OnDestroy, owned by Login
+- **UISelectChar**: Refactored to use OnCreate/OnDestroy, owned by UIWorldSelect
+- **UINewCharRaceSelect**: Refactored to use OnCreate/OnDestroy, owned by UIWorldSelect
+- **UIChannelSelect**: Refactored to use OnCreate/OnDestroy, owned by UIWorldSelect
+
+This ensures consistent lifecycle management across the entire login system, from world selection through character selection to channel selection.
