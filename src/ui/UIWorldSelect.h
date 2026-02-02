@@ -14,6 +14,7 @@ namespace ms
 
 class Login;
 class UIButton;
+class UIChannelSelect;
 class WzCanvas;
 class WzGr2D;
 class WzGr2DLayer;
@@ -239,6 +240,9 @@ private:
 
     // LayoutMan for automated UI building (from original m_pLm)
     std::unique_ptr<LayoutMan> m_pLayoutMan;
+
+    // UIChannelSelect - owned via unique_ptr, uses Create/Destroy pattern
+    std::unique_ptr<UIChannelSelect> m_channelSelectUI;
 };
 
 } // namespace ms

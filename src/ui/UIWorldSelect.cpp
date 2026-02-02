@@ -96,13 +96,23 @@ void UIWorldSelect::OnDestroy() noexcept
         }
         m_pLayerBg.reset();
 
-        // 5. Clear LayoutMan
+        // 5. Clean up UIChannelSelect
+        if (m_channelSelectUI)
+        {
+            if (m_channelSelectUI->IsCreated())
+            {
+                m_channelSelectUI->Destroy();
+            }
+            m_channelSelectUI.reset();
+        }
+
+        // 6. Clear LayoutMan
         m_pLayoutMan.reset();
 
-        // 6. Clear cached WZ property
+        // 7. Clear cached WZ property
         m_pWorldSelectProp.reset();
 
-        // 7. Clear references (non-owning)
+        // 8. Clear references (non-owning)
         m_pLogin = nullptr;
         m_pGr = nullptr;
         m_pUIManager = nullptr;
@@ -298,9 +308,26 @@ void UIWorldSelect::OnButtonClicked(std::uint32_t nId)
               worldItems[static_cast<size_t>(worldIndex)].sName,
               worldItems[static_cast<size_t>(worldIndex)].nWorldID);
 
-    // Show channel selection for the selected world
-    auto& channelSelect = UIChannelSelect::GetInstance();
-    channelSelect.OnCreate(m_pLogin, *m_pGr, *m_pUIManager, worldIndex);
+    // Create UIChannelSelect and initialize with new lifecycle pattern
+    m_channelSelectUI = std::make_unique<UIChannelSelect>();
+
+    // Create params
+    UIChannelSelect::CreateParams params;
+    params.login = m_pLogin;
+    params.gr = m_pGr;
+    params.uiManager = m_pUIManager;
+    params.worldIndex = worldIndex;
+
+    // Call Create() and check result
+    auto result = m_channelSelectUI->Create(params);
+    if (!result)
+    {
+        LOG_ERROR("Failed to create UIChannelSelect: {}", result.error());
+        m_channelSelectUI.reset();
+        return;
+    }
+
+    LOG_DEBUG("UIChannelSelect created successfully for world {}", worldIndex);
 }
 
 void UIWorldSelect::EnableButtons(std::int32_t nId)
@@ -429,10 +456,10 @@ void UIWorldSelect::Update()
         m_pBtnGoWorld->Update();
     }
 
-    // Update channel select if a world is selected
-    if (m_nKeyFocus >= 0)
+    // Update channel select if created
+    if (m_channelSelectUI && m_channelSelectUI->IsCreated())
     {
-        UIChannelSelect::GetInstance().Update();
+        m_channelSelectUI->Update();
     }
 }
 
@@ -456,10 +483,10 @@ void UIWorldSelect::OnMouseMove(std::int32_t x, std::int32_t y)
         m_pBtnGoWorld->OnMouseMove(x, y);
     }
 
-    // Forward to channel select if active
-    if (m_nKeyFocus >= 0)
+    // Forward to channel select if created
+    if (m_channelSelectUI && m_channelSelectUI->IsCreated())
     {
-        UIChannelSelect::GetInstance().OnMouseMove(x, y);
+        m_channelSelectUI->OnMouseMove(x, y);
     }
 }
 
@@ -478,10 +505,10 @@ void UIWorldSelect::OnMouseDown(std::int32_t x, std::int32_t y, std::int32_t but
         m_pBtnGoWorld->OnMouseDown(x, y, button);
     }
 
-    // Forward to channel select if active
-    if (m_nKeyFocus >= 0)
+    // Forward to channel select if created
+    if (m_channelSelectUI && m_channelSelectUI->IsCreated())
     {
-        UIChannelSelect::GetInstance().OnMouseDown(x, y, button);
+        m_channelSelectUI->OnMouseDown(x, y, button);
     }
 }
 
@@ -500,10 +527,10 @@ void UIWorldSelect::OnMouseUp(std::int32_t x, std::int32_t y, std::int32_t butto
         m_pBtnGoWorld->OnMouseUp(x, y, button);
     }
 
-    // Forward to channel select if active
-    if (m_nKeyFocus >= 0)
+    // Forward to channel select if created
+    if (m_channelSelectUI && m_channelSelectUI->IsCreated())
     {
-        UIChannelSelect::GetInstance().OnMouseUp(x, y, button);
+        m_channelSelectUI->OnMouseUp(x, y, button);
     }
 }
 
@@ -517,10 +544,10 @@ void UIWorldSelect::OnKeyDown(std::int32_t keyCode)
         return;
     }
 
-    // If channel select is active, forward key events to it
-    if (m_nKeyFocus >= 0)
+    // If channel select is created, forward key events to it
+    if (m_channelSelectUI && m_channelSelectUI->IsCreated())
     {
-        UIChannelSelect::GetInstance().OnKeyDown(keyCode);
+        m_channelSelectUI->OnKeyDown(keyCode);
         return;
     }
 

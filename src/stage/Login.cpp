@@ -839,9 +839,25 @@ void Login::SetupStep2UI()
     m_nCurSelectedRace = 0;
     m_nCurSelectedSubJob = 0;
 
-    // Create UISelectChar singleton and initialize
-    auto& selectChar = UISelectChar::GetInstance();
-    selectChar.OnCreate(this, gr, m_uiManager);
+    // Create UISelectChar and initialize with new lifecycle pattern
+    m_selectCharUI = std::make_unique<UISelectChar>();
+
+    // Create params
+    UISelectChar::CreateParams params;
+    params.login = this;
+    params.gr = &gr;
+    params.uiManager = &m_uiManager;
+
+    // Call Create() and check result
+    auto result = m_selectCharUI->Create(params);
+    if (!result)
+    {
+        LOG_ERROR("Failed to create UISelectChar: {}", result.error());
+        m_selectCharUI.reset();
+        return;
+    }
+
+    LOG_DEBUG("UISelectChar created successfully");
 }
 
 void Login::SetupStep3UI()
@@ -855,9 +871,25 @@ void Login::SetupStep3UI()
     m_nCurSelectedRace = 0;
     m_nCurSelectedSubJob = 0;
 
-    // Create UINewCharRaceSelect singleton and initialize
-    auto& raceSelect = UINewCharRaceSelect::GetInstance();
-    raceSelect.OnCreate(this, gr, m_uiManager);
+    // Create UINewCharRaceSelect and initialize with new lifecycle pattern
+    m_raceSelectUI = std::make_unique<UINewCharRaceSelect>();
+
+    // Create params
+    UINewCharRaceSelect::CreateParams params;
+    params.login = this;
+    params.gr = &gr;
+    params.uiManager = &m_uiManager;
+
+    // Call Create() and check result
+    auto result = m_raceSelectUI->Create(params);
+    if (!result)
+    {
+        LOG_ERROR("Failed to create UINewCharRaceSelect: {}", result.error());
+        m_raceSelectUI.reset();
+        return;
+    }
+
+    LOG_DEBUG("UINewCharRaceSelect created successfully");
 }
 
 void Login::SetupStep4UI()
@@ -959,7 +991,7 @@ void Login::ClearStepUI()
     m_pCanvasCheck0.reset();
     m_pCanvasCheck1.reset();
 
-    // Clean up Step 1 UI (UIWorldSelect and UIChannelSelect)
+    // Clean up Step 1 UI (UIWorldSelect)
     if (m_worldSelectUI)
     {
         if (m_worldSelectUI->IsCreated())
@@ -968,21 +1000,25 @@ void Login::ClearStepUI()
         }
         m_worldSelectUI.reset();
     }
-    if (UIChannelSelect::IsInstantiated())
-    {
-        UIChannelSelect::GetInstance().Destroy();
-    }
 
     // Clean up Step 2 UI (UISelectChar)
-    if (UISelectChar::IsInstantiated())
+    if (m_selectCharUI)
     {
-        UISelectChar::GetInstance().Destroy();
+        if (m_selectCharUI->IsCreated())
+        {
+            m_selectCharUI->Destroy();
+        }
+        m_selectCharUI.reset();
     }
 
     // Clean up Step 3 UI (UINewCharRaceSelect)
-    if (UINewCharRaceSelect::IsInstantiated())
+    if (m_raceSelectUI)
     {
-        UINewCharRaceSelect::GetInstance().Destroy();
+        if (m_raceSelectUI->IsCreated())
+        {
+            m_raceSelectUI->Destroy();
+        }
+        m_raceSelectUI.reset();
     }
 }
 
