@@ -19,23 +19,37 @@ UISelectChar::~UISelectChar()
     Destroy();
 }
 
-void UISelectChar::OnCreate(Login* pLogin, WzGr2D& gr, UIManager& uiManager)
+auto UISelectChar::OnCreate(std::any params) -> Result<void>
 {
-    // Based on CUISelectChar::OnCreate (0xb7a4a0)
-    m_pLogin = pLogin;
-    m_pGr = &gr;
-    m_pUIManager = &uiManager;
+    // 1. Extract and validate parameters
+    auto* createParams = std::any_cast<CreateParams>(&params);
+    if (!createParams)
+    {
+        return Result<void>::Error("Invalid params type for UISelectChar");
+    }
+
+    if (!createParams->IsValid())
+    {
+        return Result<void>::Error("UISelectChar CreateParams validation failed");
+    }
+
+    // 2. Store references
+    m_pLogin = createParams->login;
+    m_pGr = createParams->gr;
+    m_pUIManager = createParams->uiManager;
+
+    // 3. Initialize state
     m_nSelectedIndex = -1;
     m_nPageIndex = 0;
 
-    // Get character count and slot count from Login
+    // 4. Get character count and slot count from Login
     if (m_pLogin)
     {
         m_nCharCount = m_pLogin->GetCharCount();
         m_nSlotCount = m_pLogin->GetSlotCount();
     }
 
-    // Load CharSelect WZ property
+    // 5. Load CharSelect WZ property
     auto& resMan = WzResMan::GetInstance();
     auto loginImgProp = resMan.GetProperty("UI/Login.img");
     if (loginImgProp)
@@ -47,11 +61,67 @@ void UISelectChar::OnCreate(Login* pLogin, WzGr2D& gr, UIManager& uiManager)
         }
     }
 
-    // Create character slots
+    // 6. Create character slots
     CreateCharacterSlots();
 
     LOG_DEBUG("UISelectChar::OnCreate completed (charCount={}, slotCount={})",
               m_nCharCount, m_nSlotCount);
+
+    return Result<void>::Success();
+}
+
+void UISelectChar::OnDestroy() noexcept
+{
+    try
+    {
+        // 1. Clear world button vectors
+        m_vBtCharacter.clear();
+
+        // 2. Clear button shared_ptrs
+        m_pBtnSelect.reset();
+        m_pBtnNew.reset();
+        m_pBtnDelete.reset();
+        m_pBtnPageL.reset();
+        m_pBtnPageR.reset();
+
+        // 3. Clear name tag layers
+        if (m_pGr)
+        {
+            for (auto& layer : m_vLayerNameTag)
+            {
+                if (layer)
+                {
+                    m_pGr->RemoveLayer(layer);
+                }
+            }
+        }
+        m_vLayerNameTag.clear();
+
+        // 4. Clear background layers
+        if (m_pLayerBg && m_pGr)
+        {
+            m_pGr->RemoveLayer(m_pLayerBg);
+        }
+        m_pLayerBg.reset();
+
+        if (m_pLayerSelectedWorld && m_pGr)
+        {
+            m_pGr->RemoveLayer(m_pLayerSelectedWorld);
+        }
+        m_pLayerSelectedWorld.reset();
+
+        // 5. Clear cached WZ property
+        m_pCharSelectProp.reset();
+
+        // 6. Clear references (non-owning)
+        m_pLogin = nullptr;
+        m_pGr = nullptr;
+        m_pUIManager = nullptr;
+    }
+    catch (const std::exception& e)
+    {
+        LOG_ERROR("Exception in UISelectChar::OnDestroy: {}", e.what());
+    }
 }
 
 void UISelectChar::CreateCharacterSlots()
@@ -374,98 +444,8 @@ void UISelectChar::OnButtonClicked(std::uint32_t nId)
 
 void UISelectChar::Destroy()
 {
-    if (!m_pGr)
-    {
-        return;
-    }
-
-    // Remove character slot layers
-    for (auto& btn : m_vBtCharacter)
-    {
-        if (btn)
-        {
-            if (btn->GetLayer())
-            {
-                m_pGr->RemoveLayer(btn->GetLayer());
-            }
-            if (m_pUIManager)
-            {
-                // Note: UIManager doesn't have RemoveElement by pointer,
-                // but the element map uses string keys
-            }
-        }
-    }
-    m_vBtCharacter.clear();
-
-    // Remove name tag layers
-    for (auto& layer : m_vLayerNameTag)
-    {
-        if (layer)
-        {
-            m_pGr->RemoveLayer(layer);
-        }
-    }
-    m_vLayerNameTag.clear();
-
-    // Remove button layers
-    if (m_pBtnSelect && m_pBtnSelect->GetLayer())
-    {
-        m_pGr->RemoveLayer(m_pBtnSelect->GetLayer());
-    }
-    if (m_pBtnNew && m_pBtnNew->GetLayer())
-    {
-        m_pGr->RemoveLayer(m_pBtnNew->GetLayer());
-    }
-    if (m_pBtnDelete && m_pBtnDelete->GetLayer())
-    {
-        m_pGr->RemoveLayer(m_pBtnDelete->GetLayer());
-    }
-    if (m_pBtnPageL && m_pBtnPageL->GetLayer())
-    {
-        m_pGr->RemoveLayer(m_pBtnPageL->GetLayer());
-    }
-    if (m_pBtnPageR && m_pBtnPageR->GetLayer())
-    {
-        m_pGr->RemoveLayer(m_pBtnPageR->GetLayer());
-    }
-
-    // Remove background layer
-    if (m_pLayerBg)
-    {
-        m_pGr->RemoveLayer(m_pLayerBg);
-    }
-    if (m_pLayerSelectedWorld)
-    {
-        m_pGr->RemoveLayer(m_pLayerSelectedWorld);
-    }
-
-    // Clear UI manager elements
-    if (m_pUIManager)
-    {
-        m_pUIManager->RemoveElement("btnSelect");
-        m_pUIManager->RemoveElement("btnNew");
-        m_pUIManager->RemoveElement("btnDelete");
-        for (int i = 0; i < 8; ++i)
-        {
-            m_pUIManager->RemoveElement("charSlot" + std::to_string(i));
-        }
-    }
-
-    // Reset pointers
-    m_pBtnSelect.reset();
-    m_pBtnNew.reset();
-    m_pBtnDelete.reset();
-    m_pBtnPageL.reset();
-    m_pBtnPageR.reset();
-    m_pLayerBg.reset();
-    m_pLayerSelectedWorld.reset();
-    m_pCharSelectProp.reset();
-
-    m_pLogin = nullptr;
-    m_pGr = nullptr;
-    m_pUIManager = nullptr;
-
-    LOG_DEBUG("UISelectChar destroyed");
+    // Call base class Destroy which calls OnDestroy
+    UIElement::Destroy();
 }
 
 void UISelectChar::Update()

@@ -1,7 +1,6 @@
 #pragma once
 
 #include "UIElement.h"
-#include "util/Singleton.h"
 
 #include <cstdint>
 #include <memory>
@@ -23,7 +22,7 @@ class UIManager;
  * @brief Character selection UI
  *
  * Based on CUISelectChar from the original MapleStory client (v1029).
- * Singleton class that handles character selection.
+ * Handles character selection.
  *
  * CUISelectChar inherits from CWnd.
  *
@@ -44,20 +43,27 @@ class UIManager;
  * Window: (30, 30) with size (750, 600)
  * Base UOL: "UI/Login.img/CharSelect"
  */
-class UISelectChar final : public UIElement, public Singleton<UISelectChar>
+class UISelectChar final : public UIElement
 {
-    friend class Singleton<UISelectChar>;
 
 public:
+    UISelectChar();
     ~UISelectChar() override;
 
     /**
-     * @brief Initialize the character select UI
-     * @param pLogin Pointer to the Login stage
-     * @param gr Graphics engine reference
-     * @param uiManager UI manager reference
+     * @brief Creation parameters for UISelectChar
      */
-    void OnCreate(Login* pLogin, WzGr2D& gr, UIManager& uiManager);
+    struct CreateParams
+    {
+        Login* login{nullptr};
+        WzGr2D* gr{nullptr};
+        UIManager* uiManager{nullptr};
+
+        [[nodiscard]] auto IsValid() const noexcept -> bool
+        {
+            return login != nullptr && gr != nullptr && uiManager != nullptr;
+        }
+    };
 
     /**
      * @brief Select a character by index
@@ -110,8 +116,11 @@ public:
      */
     void CreateLayer(WzGr2D& gr, std::int32_t z);
 
+protected:
+    auto OnCreate(std::any params) -> Result<void> override;
+    void OnDestroy() noexcept override;
+
 private:
-    UISelectChar();
 
     /**
      * @brief Create character slot buttons
