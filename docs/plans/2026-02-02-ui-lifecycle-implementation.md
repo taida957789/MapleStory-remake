@@ -1040,3 +1040,53 @@ Each step includes:
 - Add RAII LayerHandle wrapper
 - Implement Stage lifecycle management
 - Add C++20 concepts for compile-time validation
+
+---
+
+## Implementation Status
+
+### ✅ Completed
+- [x] Result<T> error handling type
+- [x] LifecycleState enum and state machine
+- [x] UIElement Create/Destroy lifecycle methods
+- [x] UIWorldSelect OnCreate/OnDestroy implementation
+- [x] Removed singleton pattern from UIWorldSelect
+- [x] Login owns UIWorldSelect via std::unique_ptr
+- [x] LayoutMan returns Result<T>
+
+### 🚧 In Progress
+- [ ] LayerHandle RAII wrapper (deferred)
+- [ ] Other UI classes lifecycle refactoring (UISelectChar, etc.)
+
+### 📋 Planned
+- [ ] Stage lifecycle management
+- [ ] Concepts for UIComponent validation (C++20)
+- [ ] Lifecycle observer pattern
+- [ ] Object pool optimization
+
+---
+
+## Migration Notes
+
+### Breaking Changes
+- UIWorldSelect no longer uses GetInstance()
+- Must call Create() after construction
+- Must call Destroy() before destruction
+
+### Migration Example
+
+**Before:**
+```cpp
+auto& worldSelect = UIWorldSelect::GetInstance();
+worldSelect.OnCreate(this, gr, m_uiManager);
+```
+
+**After:**
+```cpp
+m_worldSelectUI = std::make_unique<UIWorldSelect>();
+auto params = UIWorldSelect::CreateParams{this, &gr, &m_uiManager};
+auto result = m_worldSelectUI->Create(params);
+if (!result) {
+    LOG_ERROR("Failed: {}", result.error());
+}
+```
