@@ -1,11 +1,13 @@
 #include "UIElement.h"
 #include "graphics/WzGr2DLayer.h"
+#include "util/Logger.h"
 
 #ifdef MS_DEBUG_CANVAS
 #include "debug/DebugOverlay.h"
 #endif
 
 #include <algorithm>
+#include <stdexcept>
 #include <typeinfo>
 
 namespace ms
@@ -15,6 +17,13 @@ UIElement::UIElement() = default;
 
 UIElement::~UIElement()
 {
+    // Defensive: ensure Destroy was called
+    if (m_lifecycleState != LifecycleState::Destroyed)
+    {
+        LOG_WARN("UIElement destroyed without calling Destroy() - state: {}",
+                 to_string(m_lifecycleState));
+    }
+
 #ifdef MS_DEBUG_CANVAS
     DebugOverlay::GetInstance().UnregisterUIElement(this);
 #endif
@@ -378,5 +387,78 @@ auto UIElement::GetDebugTypeName() const -> std::string
     return result;
 }
 #endif
+
+// ========== Lifecycle Management ==========
+
+auto UIElement::Create(std::any params) -> Result<void>
+{
+    // Validate state transition
+    if (!is_valid_transition(m_lifecycleState, LifecycleState::Created))
+    {
+        return Result<void>::Error("Invalid state transition: {} -> Created",
+                                   to_string(m_lifecycleState));
+    }
+
+    // Call virtual OnCreate hook
+    if (auto result = OnCreate(std::move(params)); !result)
+    {
+        return result;
+    }
+
+    // Update state
+    m_lifecycleState = LifecycleState::Created;
+    return Result<void>::Success();
+}
+
+void UIElement::Destroy() noexcept
+{
+    // Prevent double-destroy
+    if (m_lifecycleState == LifecycleState::Destroyed)
+    {
+        return;
+    }
+
+    try
+    {
+        // 1. Call virtual OnDestroy (derived class cleanup)
+        OnDestroy();
+
+        // 2. Recursively destroy all children (reverse order, bottom-up)
+        for (auto it = m_aChildren.rbegin(); it != m_aChildren.rend(); ++it)
+        {
+            if (*it)
+            {
+                (*it)->Destroy();
+            }
+        }
+        m_aChildren.clear();
+
+        // 3. Clear layer (RAII via shared_ptr)
+        m_pLayer.reset();
+
+        // 4. Clear parent/focus pointers
+        m_pParent = nullptr;
+        m_pFocusChild = nullptr;
+
+        // 5. Update state
+        m_lifecycleState = LifecycleState::Destroyed;
+    }
+    catch (const std::exception& e)
+    {
+        LOG_ERROR("Exception in UIElement::Destroy: {}", e.what());
+        // Continue cleanup, don't rethrow (noexcept)
+    }
+}
+
+auto UIElement::OnCreate(std::any /*params*/) -> Result<void>
+{
+    // Base implementation: do nothing
+    return Result<void>::Success();
+}
+
+void UIElement::OnDestroy() noexcept
+{
+    // Base implementation: do nothing
+}
 
 } // namespace ms

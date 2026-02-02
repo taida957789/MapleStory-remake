@@ -1,10 +1,12 @@
 #pragma once
 
-#include <format>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
+
+// Use fmt library for formatting (included via spdlog)
+#include <spdlog/fmt/bundled/format.h>
 
 namespace ms
 {
@@ -35,9 +37,9 @@ public:
 
     // Error construction with formatting
     template<typename... Args>
-    static auto Error(std::format_string<Args...> fmt, Args&&... args) -> Result
+    static auto Error(fmt::format_string<Args...> fmt, Args&&... args) -> Result
     {
-        return Result(std::format(fmt, std::forward<Args>(args)...));
+        return Result(fmt::format(fmt, std::forward<Args>(args)...));
     }
 
     // Check if successful
@@ -88,9 +90,9 @@ public:
     static auto Success() -> Result { return Result(true); }
 
     template<typename... Args>
-    static auto Error(std::format_string<Args...> fmt, Args&&... args) -> Result
+    static auto Error(fmt::format_string<Args...> fmt, Args&&... args) -> Result
     {
-        return Result(std::format(fmt, std::forward<Args>(args)...));
+        return Result(fmt::format(fmt, std::forward<Args>(args)...));
     }
 
     [[nodiscard]] explicit operator bool() const noexcept { return m_success; }

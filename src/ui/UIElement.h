@@ -1,7 +1,9 @@
 #pragma once
 
 #include "util/Point.h"
+#include "util/Result.h"
 
+#include <any>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -113,6 +115,51 @@ public:
     auto operator=(const UIElement&) -> UIElement& = delete;
     UIElement(UIElement&&) noexcept = default;
     auto operator=(UIElement&&) noexcept -> UIElement& = default;
+
+    // ========== Lifecycle Management ==========
+
+    /**
+     * @brief Create UI with two-phase initialization
+     *
+     * Pattern from CWnd::OnCreate. Call after construction to initialize resources.
+     *
+     * @param params Creation parameters (type-safe via std::any)
+     * @return Result<void> indicating success or error message
+     */
+    [[nodiscard]] auto Create(std::any params) -> Result<void>;
+
+    /**
+     * @brief Destroy UI and cleanup resources
+     *
+     * Pattern from CWnd::Destroy (0x1a67630 in v1029).
+     * Calls OnDestroy, recursively destroys children, releases layers.
+     * Safe to call multiple times (idempotent).
+     */
+    void Destroy() noexcept;
+
+    /**
+     * @brief Check if lifecycle is in Created state
+     */
+    [[nodiscard]] auto IsCreated() const noexcept -> bool
+    {
+        return m_lifecycleState == LifecycleState::Created;
+    }
+
+    /**
+     * @brief Check if lifecycle is in Destroyed state
+     */
+    [[nodiscard]] auto IsDestroyed() const noexcept -> bool
+    {
+        return m_lifecycleState == LifecycleState::Destroyed;
+    }
+
+    /**
+     * @brief Get current lifecycle state
+     */
+    [[nodiscard]] auto GetLifecycleState() const noexcept -> LifecycleState
+    {
+        return m_lifecycleState;
+    }
 
     // ========== Parent-Child Hierarchy (CWnd style) ==========
 
@@ -273,6 +320,26 @@ public:
 #endif
 
 protected:
+    /**
+     * @brief Virtual hook: create UI resources
+     *
+     * Override in derived classes to load WZ data, create layers, etc.
+     * Base implementation does nothing and returns success.
+     *
+     * @param params Type-safe creation parameters via std::any
+     * @return Result indicating success or error
+     */
+    virtual auto OnCreate(std::any params) -> Result<void>;
+
+    /**
+     * @brief Virtual hook: destroy UI resources
+     *
+     * Override in derived classes to cleanup specific resources.
+     * Base implementation does nothing.
+     * Must be noexcept.
+     */
+    virtual void OnDestroy() noexcept;
+
     void InvokeClick();
 
     // Local position (relative to parent)
@@ -295,6 +362,9 @@ protected:
 
     std::shared_ptr<WzGr2DLayer> m_pLayer;
     ClickCallback m_clickCallback;
+
+    // Lifecycle state
+    LifecycleState m_lifecycleState{LifecycleState::Constructed};
 };
 
 } // namespace ms
