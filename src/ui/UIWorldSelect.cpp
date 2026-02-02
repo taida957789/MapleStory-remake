@@ -39,13 +39,21 @@ auto UIWorldSelect::OnCreate(std::any params) -> Result<void>
     m_pGr = createParams->gr;
     m_pUIManager = createParams->uiManager;
 
-    // 3. Create LayoutMan and initialize (using current API - will be updated in Task 6)
+    // 3. Create LayoutMan and initialize
     m_pLayoutMan = std::make_unique<LayoutMan>();
-    m_pLayoutMan->Init(this, 0, 0);
+    auto initResult = m_pLayoutMan->Init(this, 0, 0);
+    if (!initResult)
+    {
+        return Result<void>::Error("Failed to initialize LayoutMan: {}", initResult.error());
+    }
 
-    // 4. Build UI from WZ (using current API - will be updated in Task 6)
-    std::wstring sLayoutUOL = L"UI/Login.img/WorldSelect/BtWorld/release";
-    m_pLayoutMan->AutoBuild(sLayoutUOL, 0, 0, 0, true, false);
+    // 4. Build UI from WZ
+    std::string sLayoutUOL = "UI/Login.img/WorldSelect/BtWorld/release";
+    auto buildResult = m_pLayoutMan->AutoBuild(sLayoutUOL);
+    if (!buildResult)
+    {
+        return Result<void>::Error("Failed to build UI from WZ: {}", buildResult.error());
+    }
     m_pLayoutMan->CreateLayers(*m_pGr, 140, true);
 
     // 5. Create background layer

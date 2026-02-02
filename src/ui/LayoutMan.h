@@ -6,6 +6,8 @@
 #include <string>
 #include <vector>
 
+#include "util/Result.h"
+
 namespace ms
 {
 
@@ -40,27 +42,15 @@ public:
      *
      * IDA: CLayoutMan::Init
      */
-    void Init(UIElement* pParent, int nOffsetX = 0, int nOffsetY = 0);
+    [[nodiscard]] auto Init(UIElement* pParent, std::int32_t x, std::int32_t y) -> Result<void>;
 
     /**
      * @brief 從 WZ 資源自動構建 UI
-     * @param sRootUOL WZ 資源根路徑
-     * @param nIdBase 控件 ID 起始值
-     * @param nOffsetX X 偏移
-     * @param nOffsetY Y 偏移
-     * @param bSetTooltip 是否設置 tooltip
-     * @param bSameIDCtrl 允許相同 ID 控件
+     * @param sBaseUOL WZ 資源根路徑
      *
      * IDA: CLayoutMan::AutoBuild (0xb36170)
      */
-    void AutoBuild(
-        const std::wstring& sRootUOL,
-        int nIdBase,
-        int nOffsetX,
-        int nOffsetY,
-        bool bSetTooltip,
-        bool bSameIDCtrl
-    );
+    [[nodiscard]] auto AutoBuild(const std::string& sBaseUOL) -> Result<void>;
 
     // ========== 按鈕管理 ==========
 

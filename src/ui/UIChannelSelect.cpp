@@ -163,21 +163,41 @@ void UIChannelSelect::ResetInfo(std::int32_t worldIndex, bool bRedraw)
     if (!m_pLayoutMan)
     {
         m_pLayoutMan = std::make_unique<LayoutMan>();
-        m_pLayoutMan->Init(this, 0, 0);
+        auto initResult = m_pLayoutMan->Init(this, 0, 0);
+        if (!initResult)
+        {
+            LOG_ERROR("UIChannelSelect: Failed to initialize LayoutMan: {}", initResult.error());
+            CreatePlaceholderUI();
+            return;
+        }
 
         // 基於 IDA 分析 (CUIChannelSelect::OnCreate @ 0xbc4780)
         // 原始實作呼叫 AutoBuild 兩次:
 
         // 第一次 AutoBuild: 使用 base UOL (0xbc4823)
-        std::wstring sBaseUOL = L"UI/Login.img/WorldSelect/BtChannel/test";
-        m_pLayoutMan->AutoBuild(sBaseUOL, 0, 0, 0, true, false);
-        LOG_DEBUG("UIChannelSelect: First AutoBuild completed (base UOL)");
+        std::string sBaseUOL = "UI/Login.img/WorldSelect/BtChannel/test";
+        auto buildResult1 = m_pLayoutMan->AutoBuild(sBaseUOL);
+        if (!buildResult1)
+        {
+            LOG_ERROR("UIChannelSelect: First AutoBuild failed: {}", buildResult1.error());
+        }
+        else
+        {
+            LOG_DEBUG("UIChannelSelect: First AutoBuild completed (base UOL)");
+        }
 
         // 第二次 AutoBuild: 使用 base UOL + "/test" (0xbc48dc)
         // 原始碼: ZXString<char>::operator+(&this->m_sBaseUOL, &sWorldUOL, "/test");
-        std::wstring sWorldUOL = L"UI/Login.img/WorldSelect/BtChannel/test/test";
-        m_pLayoutMan->AutoBuild(sWorldUOL, 0, 0, 0, true, false);
-        LOG_DEBUG("UIChannelSelect: Second AutoBuild completed (base UOL + /test)");
+        std::string sWorldUOL = "UI/Login.img/WorldSelect/BtChannel/test/test";
+        auto buildResult2 = m_pLayoutMan->AutoBuild(sWorldUOL);
+        if (!buildResult2)
+        {
+            LOG_ERROR("UIChannelSelect: Second AutoBuild failed: {}", buildResult2.error());
+        }
+        else
+        {
+            LOG_DEBUG("UIChannelSelect: Second AutoBuild completed (base UOL + /test)");
+        }
 
         // 測試查找按鈕
         auto pGoWorldBtn = m_pLayoutMan->ABGetButton(L"GoWorld");

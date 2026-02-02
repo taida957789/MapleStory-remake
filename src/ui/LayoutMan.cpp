@@ -15,51 +15,55 @@ LayoutMan::LayoutMan() = default;
 
 LayoutMan::~LayoutMan() = default;
 
-void LayoutMan::Init(UIElement* pParent, int nOffsetX, int nOffsetY)
+auto LayoutMan::Init(UIElement* pParent, std::int32_t x, std::int32_t y) -> Result<void>
 {
+    if (!pParent)
+    {
+        return Result<void>::Error("LayoutMan::Init - pParent is null");
+    }
+
     m_pParent = pParent;
-    m_nOffsetX = nOffsetX;
-    m_nOffsetY = nOffsetY;
+    m_nOffsetX = x;
+    m_nOffsetY = y;
+
+    return Result<void>::Success();
 }
 
-void LayoutMan::AutoBuild(
-    const std::wstring& sRootUOL,
-    int nIdBase,
-    int nOffsetX,
-    int nOffsetY,
-    bool bSetTooltip,
-    bool bSameIDCtrl)
+auto LayoutMan::AutoBuild(const std::string& sBaseUOL) -> Result<void>
 {
+    if (!m_pParent)
+    {
+        return Result<void>::Error("LayoutMan::AutoBuild - not initialized (pParent is null)");
+    }
+
     // IDA: 從 WzResMan 獲取根屬性 (0xb362a7-0xb36330)
     auto& resMan = WzResMan::GetInstance();
 
-    // 轉換 wstring 到 string
-    std::string sRootPath;
-    sRootPath.reserve(sRootUOL.size());
-    for (wchar_t wc : sRootUOL)
-    {
-        if (wc > 127)
-        {
-            // 非 ASCII 字符
-            LOG_WARN("LayoutMan::AutoBuild - non-ASCII character in UOL");
-            return;
-        }
-        sRootPath.push_back(static_cast<char>(wc));
-    }
+    LOG_DEBUG("LayoutMan::AutoBuild - trying to load: {}", sBaseUOL);
 
-    LOG_DEBUG("LayoutMan::AutoBuild - trying to load: {}", sRootPath);
-
-    auto pRoot = resMan.GetProperty(sRootPath);
+    auto pRoot = resMan.GetProperty(sBaseUOL);
     if (!pRoot)
     {
-        LOG_WARN("LayoutMan::AutoBuild - property not found: {}", sRootPath);
-        return;
+        return Result<void>::Error("LayoutMan::AutoBuild - property not found: {}", sBaseUOL);
     }
 
     LOG_DEBUG("LayoutMan::AutoBuild - found root property with {} children", pRoot->GetChildren().size());
 
     // IDA: 枚舉所有子屬性 (0xb36435-0xb364d3)
     int currentId = 0;  // Start offset at 0
+    int nIdBase = 0;
+    int nOffsetX = 0;
+    int nOffsetY = 0;
+    bool bSetTooltip = true;
+    bool bSameIDCtrl = false;
+
+    // 轉換 string 到 wstring for ProcessChildProperty
+    std::wstring sRootUOL;
+    sRootUOL.reserve(sBaseUOL.size());
+    for (char c : sBaseUOL)
+    {
+        sRootUOL.push_back(static_cast<wchar_t>(c));
+    }
 
     for (auto& [name, pProp] : pRoot->GetChildren())
     {
@@ -73,10 +77,11 @@ void LayoutMan::AutoBuild(
 
         LOG_DEBUG("LayoutMan::AutoBuild - processing child: {}", name);
 
-        // TODO: 下一步處理
         ProcessChildProperty(wName, pProp, sRootUOL, nIdBase, currentId,
                            nOffsetX, nOffsetY, bSetTooltip, bSameIDCtrl);
     }
+
+    return Result<void>::Success();
 }
 
 void LayoutMan::ProcessChildProperty(
