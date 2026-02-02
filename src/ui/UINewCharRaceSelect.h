@@ -1,7 +1,6 @@
 #pragma once
 
 #include "UIElement.h"
-#include "util/Singleton.h"
 
 #include <cstdint>
 #include <memory>
@@ -23,7 +22,7 @@ class UIManager;
  * @brief Race/job selection UI for new character creation
  *
  * Based on CUINewCharRaceSelect_Ex from the original MapleStory client (v1029).
- * Singleton class that handles race/job selection for new characters.
+ * Handles race/job selection for new characters.
  *
  * Original methods (from IDA):
  * - Constructor: CUINewCharRaceSelect_Ex(CLogin*) @ 0xba96f0
@@ -36,11 +35,28 @@ class UIManager;
  *
  * Base UOL: "UI/Login.img/RaceSelect_new"
  */
-class UINewCharRaceSelect final : public UIElement, public Singleton<UINewCharRaceSelect>
+class UINewCharRaceSelect final : public UIElement
 {
-    friend class Singleton<UINewCharRaceSelect>;
 
 public:
+    UINewCharRaceSelect();
+    ~UINewCharRaceSelect() override;
+
+    /**
+     * @brief Creation parameters for UINewCharRaceSelect
+     */
+    struct CreateParams
+    {
+        Login* login{nullptr};
+        WzGr2D* gr{nullptr};
+        UIManager* uiManager{nullptr};
+
+        [[nodiscard]] auto IsValid() const noexcept -> bool
+        {
+            return login != nullptr && gr != nullptr && uiManager != nullptr;
+        }
+    };
+
     // Button layout constants from original client (LoadButton @ 0xbac760)
     // X = 126 * i + 92, Y = 427, where i = 0..4
     static constexpr std::int32_t kButtonStartX = 92;
@@ -54,16 +70,6 @@ public:
     static constexpr std::uint32_t kRightArrowId = 10000;
     static constexpr std::uint32_t kConfirmId = 10002;
     static constexpr std::uint32_t kCancelId = 10003;
-
-    ~UINewCharRaceSelect() override;
-
-    /**
-     * @brief Initialize the race select UI
-     * @param pLogin Pointer to the Login stage
-     * @param gr Graphics engine reference
-     * @param uiManager UI manager reference
-     */
-    void OnCreate(Login* pLogin, WzGr2D& gr, UIManager& uiManager);
 
     /**
      * @brief Set the selected race
@@ -103,8 +109,11 @@ public:
     void OnMouseUp(std::int32_t x, std::int32_t y, std::int32_t button) override;
     void OnKeyDown(std::int32_t keyCode) override;
 
+protected:
+    auto OnCreate(std::any params) -> Result<void> override;
+    void OnDestroy() noexcept override;
+
 private:
-    UINewCharRaceSelect();
 
     /**
      * @brief Load race buttons for current page (from LoadButton @ 0xbac760)

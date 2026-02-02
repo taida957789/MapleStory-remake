@@ -19,13 +19,26 @@ UINewCharRaceSelect::~UINewCharRaceSelect()
     Destroy();
 }
 
-void UINewCharRaceSelect::OnCreate(Login* pLogin, WzGr2D& gr, UIManager& uiManager)
+auto UINewCharRaceSelect::OnCreate(std::any params) -> Result<void>
 {
-    m_pLogin = pLogin;
-    m_pGr = &gr;
-    m_pUIManager = &uiManager;
+    // 1. Extract and validate parameters
+    auto* createParams = std::any_cast<CreateParams>(&params);
+    if (!createParams)
+    {
+        return Result<void>::Error("Invalid params type for UINewCharRaceSelect");
+    }
 
-    // Initialize state (from constructor @ 0xba96f0)
+    if (!createParams->IsValid())
+    {
+        return Result<void>::Error("UINewCharRaceSelect CreateParams validation failed");
+    }
+
+    // 2. Store references
+    m_pLogin = createParams->login;
+    m_pGr = createParams->gr;
+    m_pUIManager = createParams->uiManager;
+
+    // 3. Initialize state (from constructor @ 0xba96f0)
     m_nSelectedRace = 1;  // Default to race 1 (original uses 1)
     m_nSelectedSubJob = 0;
     m_nSelectedBtnIdx = 0;
@@ -33,13 +46,13 @@ void UINewCharRaceSelect::OnCreate(Login* pLogin, WzGr2D& gr, UIManager& uiManag
     m_nBtRaceCount = 19;
     m_nSelectFirstBtnIdx = -1;
 
-    // Initialize race ordering (default sequential)
+    // 4. Initialize race ordering (default sequential)
     for (int i = 0; i < kMaxRaceCount; ++i)
     {
         m_anOrderRace[i] = static_cast<std::int16_t>(i);
     }
 
-    // Load RaceSelect_new WZ property
+    // 5. Load RaceSelect_new WZ property
     auto& resMan = WzResMan::GetInstance();
     auto loginImgProp = resMan.GetProperty("UI/Login.img");
     if (loginImgProp)
@@ -59,7 +72,7 @@ void UINewCharRaceSelect::OnCreate(Login* pLogin, WzGr2D& gr, UIManager& uiManag
         LOG_DEBUG("UINewCharRaceSelect: Login.img NOT found");
     }
 
-    // Load New/Hot indicator canvases from WZ
+    // 6. Load New/Hot indicator canvases from WZ
     auto newProp = resMan.GetProperty("UI/Login.img/RaceSelect_new/new");
     if (newProp)
     {
@@ -96,7 +109,7 @@ void UINewCharRaceSelect::OnCreate(Login* pLogin, WzGr2D& gr, UIManager& uiManag
         }
     }
 
-    // Initialize test flags for demonstration (races 0, 5, 10 are "new", races 2, 7 are "hot")
+    // 7. Initialize test flags for demonstration (races 0, 5, 10 are "new", races 2, 7 are "hot")
     // In actual implementation, these would come from server or WZ data
     m_abNewRace[0] = true;
     m_abNewRace[5] = true;
@@ -104,10 +117,12 @@ void UINewCharRaceSelect::OnCreate(Login* pLogin, WzGr2D& gr, UIManager& uiManag
     m_abHotRace[2] = true;
     m_abHotRace[7] = true;
 
-    // Load race buttons (5 at a time with pagination)
+    // 8. Load race buttons (5 at a time with pagination)
     LoadButton();
 
     LOG_DEBUG("UINewCharRaceSelect::OnCreate completed");
+
+    return Result<void>::Success();
 }
 
 void UINewCharRaceSelect::LoadButton()
@@ -915,112 +930,110 @@ auto UINewCharRaceSelect::IsEnabledRace(std::int32_t race) const -> bool
     return true;
 }
 
-void UINewCharRaceSelect::Destroy()
+void UINewCharRaceSelect::OnDestroy() noexcept
 {
-    if (!m_pGr)
+    try
     {
-        return;
-    }
-
-    // Remove race button layers
-    for (int i = 0; i < kButtonsPerPage; ++i)
-    {
-        if (m_apButton[i] && m_apButton[i]->GetLayer())
-        {
-            m_pGr->RemoveLayer(m_apButton[i]->GetLayer());
-        }
-        m_apButton[i].reset();
-    }
-
-    // Remove navigation buttons
-    if (m_pLeftButton && m_pLeftButton->GetLayer())
-    {
-        m_pGr->RemoveLayer(m_pLeftButton->GetLayer());
-    }
-    if (m_pRightButton && m_pRightButton->GetLayer())
-    {
-        m_pGr->RemoveLayer(m_pRightButton->GetLayer());
-    }
-    if (m_pCreateButton && m_pCreateButton->GetLayer())
-    {
-        m_pGr->RemoveLayer(m_pCreateButton->GetLayer());
-    }
-    if (m_pCancelButton && m_pCancelButton->GetLayer())
-    {
-        m_pGr->RemoveLayer(m_pCancelButton->GetLayer());
-    }
-
-    // Remove preview and info layers
-    if (m_pLayerCharPreview)
-    {
-        m_pGr->RemoveLayer(m_pLayerCharPreview);
-    }
-    if (m_pLayerRaceInfo)
-    {
-        m_pGr->RemoveLayer(m_pLayerRaceInfo);
-    }
-
-    // Remove New/Hot indicator layers
-    for (int i = 0; i < kButtonsPerPage; ++i)
-    {
-        if (m_apNewIndicator[i])
-        {
-            m_pGr->RemoveLayer(m_apNewIndicator[i]);
-            m_apNewIndicator[i].reset();
-        }
-        if (m_apHotIndicator[i])
-        {
-            m_pGr->RemoveLayer(m_apHotIndicator[i]);
-            m_apHotIndicator[i].reset();
-        }
-    }
-
-    // Remove background layers
-    if (m_pLayerBackGround)
-    {
-        m_pGr->RemoveLayer(m_pLayerBackGround);
-    }
-    if (m_pLayerBackGround1)
-    {
-        m_pGr->RemoveLayer(m_pLayerBackGround1);
-    }
-    if (m_pLayerBackGround2)
-    {
-        m_pGr->RemoveLayer(m_pLayerBackGround2);
-    }
-
-    // Clear UI manager elements
-    if (m_pUIManager)
-    {
+        // 1. Clear race button arrays
         for (int i = 0; i < kButtonsPerPage; ++i)
         {
-            m_pUIManager->RemoveElement("raceBtn" + std::to_string(i));
+            m_apButton[i].reset();
         }
-        m_pUIManager->RemoveElement("leftArrow");
-        m_pUIManager->RemoveElement("rightArrow");
-        m_pUIManager->RemoveElement("makeButton");
-        m_pUIManager->RemoveElement("cancelButton");
+
+        // 2. Clear navigation buttons
+        m_pLeftButton.reset();
+        m_pRightButton.reset();
+        m_pCreateButton.reset();
+        m_pCancelButton.reset();
+
+        // 3. Remove preview and info layers
+        if (m_pGr)
+        {
+            if (m_pLayerCharPreview)
+            {
+                m_pGr->RemoveLayer(m_pLayerCharPreview);
+            }
+            if (m_pLayerRaceInfo)
+            {
+                m_pGr->RemoveLayer(m_pLayerRaceInfo);
+            }
+
+            // 4. Remove New/Hot indicator layers
+            for (int i = 0; i < kButtonsPerPage; ++i)
+            {
+                if (m_apNewIndicator[i])
+                {
+                    m_pGr->RemoveLayer(m_apNewIndicator[i]);
+                }
+                if (m_apHotIndicator[i])
+                {
+                    m_pGr->RemoveLayer(m_apHotIndicator[i]);
+                }
+            }
+
+            // 5. Remove background layers
+            if (m_pLayerBackGround)
+            {
+                m_pGr->RemoveLayer(m_pLayerBackGround);
+            }
+            if (m_pLayerBackGround1)
+            {
+                m_pGr->RemoveLayer(m_pLayerBackGround1);
+            }
+            if (m_pLayerBackGround2)
+            {
+                m_pGr->RemoveLayer(m_pLayerBackGround2);
+            }
+        }
+
+        // 6. Clear New/Hot indicator arrays
+        for (int i = 0; i < kButtonsPerPage; ++i)
+        {
+            m_apNewIndicator[i].reset();
+            m_apHotIndicator[i].reset();
+        }
+
+        // 7. Clear layer pointers
+        m_pLayerBackGround.reset();
+        m_pLayerBackGround1.reset();
+        m_pLayerBackGround2.reset();
+        m_pLayerCharPreview.reset();
+        m_pLayerRaceInfo.reset();
+
+        // 8. Clear WZ property pointers
+        m_pRaceSelectProp.reset();
+        m_pNewCanvas.reset();
+        m_pHotCanvas.reset();
+
+        // 9. Clear UI manager elements
+        if (m_pUIManager)
+        {
+            for (int i = 0; i < kButtonsPerPage; ++i)
+            {
+                m_pUIManager->RemoveElement("raceBtn" + std::to_string(i));
+            }
+            m_pUIManager->RemoveElement("leftArrow");
+            m_pUIManager->RemoveElement("rightArrow");
+            m_pUIManager->RemoveElement("makeButton");
+            m_pUIManager->RemoveElement("cancelButton");
+        }
+
+        // 10. Clear references (nullify pointers)
+        m_pLogin = nullptr;
+        m_pGr = nullptr;
+        m_pUIManager = nullptr;
+
+        LOG_DEBUG("UINewCharRaceSelect destroyed");
     }
+    catch (...)
+    {
+        // Suppress all exceptions in destructor
+    }
+}
 
-    // Reset pointers
-    m_pLeftButton.reset();
-    m_pRightButton.reset();
-    m_pCreateButton.reset();
-    m_pCancelButton.reset();
-    m_pLayerBackGround.reset();
-    m_pLayerBackGround1.reset();
-    m_pLayerBackGround2.reset();
-    m_pLayerCharPreview.reset();
-    m_pLayerRaceInfo.reset();
-    m_pRaceSelectProp.reset();
-    m_pNewCanvas.reset();
-    m_pHotCanvas.reset();
-
-    m_pLogin = nullptr;
-    m_pGr = nullptr;
-    m_pUIManager = nullptr;
-
-    LOG_DEBUG("UINewCharRaceSelect destroyed");
+void UINewCharRaceSelect::Destroy()
+{
+    UIElement::Destroy();
 }
 
 void UINewCharRaceSelect::Update()
