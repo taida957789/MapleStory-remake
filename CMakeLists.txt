@@ -101,6 +101,7 @@ set(SOURCES
     src/util/Logger.cpp
     src/debug/DebugOverlay.cpp
     src/text/TextRenderer.cpp
+    src/animation/AnimationDisplayer.cpp
 )
 
 # Header files
@@ -150,6 +151,7 @@ set(HEADERS
     src/util/Logger.h
     src/debug/DebugOverlay.h
     src/text/TextRenderer.h
+    src/animation/AnimationDisplayer.h
 )
 
 add_executable(${PROJECT_NAME} ${SOURCES} ${HEADERS})
