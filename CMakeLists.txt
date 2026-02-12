@@ -63,6 +63,7 @@ set(SOURCES
     src/stage/Stage.cpp
     src/stage/MapLoadable.cpp
     src/stage/Logo.cpp
+    src/stage/Loading.cpp
     src/stage/Login.cpp
     src/ui/UIElement.cpp
     src/ui/UIButton.cpp
@@ -80,8 +81,16 @@ set(SOURCES
     src/wz/WzFile.cpp
     src/wz/WzReader.cpp
     src/wz/WzCrypto.cpp
+    src/wz/WzDirectory.cpp
+    src/wz/WzFormatDetector.cpp
+    src/wz/WzImage.cpp
+    src/wz/WzNode.cpp
+    src/wz/WzPackage.cpp
+    src/wz/WzSourceFactory.cpp
     src/graphics/WzGr2D.cpp
     src/graphics/WzGr2DLayer.cpp
+    src/graphics/WzGr2DCanvas.cpp
+    src/graphics/Gr2DVector.cpp
     src/input/InputSystem.cpp
     src/audio/SoundSystem.cpp
     src/network/ClientSocket.cpp
@@ -102,6 +111,7 @@ set(HEADERS
     src/stage/Stage.h
     src/stage/MapLoadable.h
     src/stage/Logo.h
+    src/stage/Loading.h
     src/stage/Login.h
     src/ui/UIElement.h
     src/ui/UIButton.h
@@ -117,9 +127,18 @@ set(HEADERS
     src/wz/WzReader.h
     src/wz/WzCrypto.h
     src/wz/WzTypes.h
+    src/wz/WzDirectory.h
+    src/wz/WzFormatDetector.h
+    src/wz/WzImage.h
+    src/wz/WzNode.h
+    src/wz/WzPackage.h
+    src/wz/WzSourceFactory.h
+    src/wz/IWzSource.h
     src/graphics/WzGr2D.h
     src/graphics/WzGr2DLayer.h
     src/graphics/WzGr2DTypes.h
+    src/graphics/WzGr2DCanvas.h
+    src/graphics/Gr2DVector.h
     src/input/InputSystem.h
     src/audio/SoundSystem.h
     src/network/ClientSocket.h
@@ -139,6 +158,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/3rdparty/freetype/include
     ${CMAKE_SOURCE_DIR}/3rdparty/minimp3
+    ${CMAKE_SOURCE_DIR}/3rdparty/mio/include
 )
 
 # Link SDL3, zlib, spdlog, and FreeType
@@ -153,10 +173,10 @@ if(WIN32)
     target_link_libraries(${PROJECT_NAME} PRIVATE ws2_32)
 endif()
 
-# Copy resources
+# Symlink resources (avoid copying 77GB+ of WZ data on every build)
 if(EXISTS ${CMAKE_SOURCE_DIR}/resources)
     add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_directory
+        COMMAND ${CMAKE_COMMAND} -E create_symlink
         ${CMAKE_SOURCE_DIR}/resources $<TARGET_FILE_DIR:${PROJECT_NAME}>/resources
     )
 endif()
