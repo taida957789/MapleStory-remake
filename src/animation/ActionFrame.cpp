@@ -80,4 +80,74 @@ void ActionFrame::LoadMappers()
     s_pSMapper = resMan.GetProperty(s_sSMapImg);
 }
 
+// === ExtractMap (from decompiled CActionFrame::ExtractMap) ===
+// Reads the "map" sub-property of a sprite frame property.
+// Each child is a named attachment point (e.g., "navel", "neck", "hand")
+// with a vector value. Original uses IWzShape2D bounds center;
+// for vector entries (common case) center == the vector itself.
+auto ActionFrame::ExtractMap(
+    const std::shared_ptr<WzGr2DCanvas>& pRawSprite,
+    const std::shared_ptr<WzProperty>& pProperty
+) -> std::shared_ptr<std::vector<MapInfo>>
+{
+    auto pList = std::make_shared<std::vector<MapInfo>>();
+
+    if (!pRawSprite)
+        return pList;
+
+    // Get the property to examine.
+    // Original: if pProperty is null, uses IWzCanvas::Getproperty(pRawSprite).
+    // In our code, the canvas doesn't store a property back-reference,
+    // so the caller must provide pProperty.
+    if (!pProperty)
+        return pList;
+
+    // Look up "map" child (original: s_sMap static string)
+    auto mapProp = pProperty->GetChild("map");
+    if (!mapProp)
+        return pList;
+
+    // Enumerate map entries
+    for (const auto& [name, child] : mapProp->GetChildren())
+    {
+        // Original QIs for IWzShape2D and reads bounds:
+        //   pt.x = (left + right) / 2
+        //   pt.y = (top + bottom) / 2
+        // For vector entries (the common case), bounds == point itself.
+        auto vec = child->GetVector();
+
+        MapInfo info;
+        info.sName = name;
+        info.pt = {vec.x, vec.y};
+        pList->push_back(std::move(info));
+    }
+
+    return pList;
+}
+
+// === FindGroup (from decompiled CActionFrame::FindGroup) ===
+// Searches m_lGroups for a group (not pMIL itself) that shares any
+// MapInfo::sName with pMIL. Returns the first matching group, or nullptr.
+auto ActionFrame::FindGroup(const std::shared_ptr<std::vector<MapInfo>>& pMIL)
+    -> std::shared_ptr<std::vector<MapInfo>>
+{
+    for (auto& group : m_lGroups)
+    {
+        if (group.get() == pMIL.get())
+            continue; // skip self
+        if (!group || group->empty())
+            continue;
+
+        for (const auto& groupEntry : *group)
+        {
+            for (const auto& targetEntry : *pMIL)
+            {
+                if (groupEntry.sName == targetEntry.sName)
+                    return group;
+            }
+        }
+    }
+    return nullptr;
+}
+
 } // namespace ms

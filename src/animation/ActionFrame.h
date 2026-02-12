@@ -11,6 +11,7 @@ namespace ms
 {
 
 class SpriteInstance;
+class WzGr2DCanvas;
 class WzProperty;
 
 /**
@@ -55,6 +56,21 @@ public:
         -> std::int32_t { return s_nCharacterStartZ; }
     [[nodiscard]] static auto GetCharacterEndZ() noexcept
         -> std::int32_t { return s_nCharacterEndZ; }
+
+    /// Extract attachment point map from a sprite's "map" sub-property.
+    /// For each named child in "map", reads the vector and stores {name, point}.
+    /// Returns empty list if pRawSprite is null or "map" child doesn't exist.
+    /// Original reads IWzShape2D bounds and computes center; for vector entries
+    /// (the common case) this equals the vector point itself.
+    [[nodiscard]] static auto ExtractMap(
+        const std::shared_ptr<WzGr2DCanvas>& pRawSprite,
+        const std::shared_ptr<WzProperty>& pProperty
+    ) -> std::shared_ptr<std::vector<MapInfo>>;
+
+    /// Find a group in m_lGroups (other than pMIL) that shares any
+    /// MapInfo name with pMIL. Returns nullptr if no match found.
+    [[nodiscard]] auto FindGroup(const std::shared_ptr<std::vector<MapInfo>>& pMIL)
+        -> std::shared_ptr<std::vector<MapInfo>>;
 
     // === Instance members ===
 
