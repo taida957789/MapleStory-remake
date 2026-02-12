@@ -119,7 +119,41 @@ auto AnimationDisplayer::LoadLayer(
     return layer;
 }
 
-// InsertLayer (from decompiled CAnimationDisplayer::InsertLayer)
+// InsertLayer UOL string overload (from decompiled CAnimationDisplayer::InsertLayer)
+// If pLayer is null, delegates to LoadLayer(UOL).
+// If pLayer exists, resolves UOL to property and delegates to property-based InsertLayer.
+auto AnimationDisplayer::InsertLayer(
+    std::shared_ptr<WzGr2DLayer>& pLayer,
+    const std::string& layerUOL,
+    std::int32_t flip,
+    Point2D origin,
+    std::int32_t rx, std::int32_t ry,
+    std::shared_ptr<WzGr2DLayer> pOverlay,
+    std::int32_t z,
+    std::int32_t alpha,
+    std::int32_t magLevel
+) -> std::shared_ptr<WzGr2DLayer>
+{
+    if (!pLayer)
+    {
+        // No existing layer — create via UOL LoadLayer
+        pLayer = LoadLayer(layerUOL, flip, origin, rx, ry,
+                           std::move(pOverlay), z, alpha, magLevel,
+                           nullptr, 0, 0, false);
+        return pLayer;
+    }
+
+    // Existing layer — resolve UOL to property, then delegate
+    auto& resMan = WzResMan::GetInstance();
+    auto prop = resMan.GetProperty(layerUOL);
+    if (!prop || !prop->HasChildren())
+        return nullptr;
+
+    return InsertLayer(pLayer, prop, flip, origin, rx, ry,
+                       std::move(pOverlay), z, alpha, magLevel);
+}
+
+// InsertLayer property-based overload (from decompiled CAnimationDisplayer::InsertLayer)
 // If pLayer is null, creates a new layer via LoadLayer.
 // If pLayer exists, appends numbered frame children from prop to the existing layer.
 auto AnimationDisplayer::InsertLayer(

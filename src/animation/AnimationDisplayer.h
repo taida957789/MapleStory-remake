@@ -61,7 +61,22 @@ public:
         bool bPostRender
     ) -> std::shared_ptr<WzGr2DLayer>;
 
-    /// Insert frames into an existing layer, or create a new one if pLayer is null.
+    /// Overload 1: UOL string path - resolves property, delegates to overload 2
+    /// When pLayer is null, delegates to LoadLayer(UOL).
+    /// When pLayer exists, resolves UOL to property and delegates.
+    static auto InsertLayer(
+        std::shared_ptr<WzGr2DLayer>& pLayer,
+        const std::string& layerUOL,
+        std::int32_t flip,
+        Point2D origin,
+        std::int32_t rx, std::int32_t ry,
+        std::shared_ptr<WzGr2DLayer> pOverlay,
+        std::int32_t z,
+        std::int32_t alpha,
+        std::int32_t magLevel
+    ) -> std::shared_ptr<WzGr2DLayer>;
+
+    /// Overload 2: Property-based - inserts frames or creates layer.
     /// When pLayer is null, delegates to LoadLayer.
     /// When pLayer exists, appends numbered frame children from prop.
     static auto InsertLayer(
