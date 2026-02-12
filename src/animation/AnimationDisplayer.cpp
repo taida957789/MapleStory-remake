@@ -119,6 +119,48 @@ auto AnimationDisplayer::LoadLayer(
     return layer;
 }
 
+// InsertLayer (from decompiled CAnimationDisplayer::InsertLayer)
+// If pLayer is null, creates a new layer via LoadLayer.
+// If pLayer exists, appends numbered frame children from prop to the existing layer.
+auto AnimationDisplayer::InsertLayer(
+    std::shared_ptr<WzGr2DLayer>& pLayer,
+    const std::shared_ptr<WzProperty>& prop,
+    std::int32_t flip,
+    Point2D origin,
+    std::int32_t rx, std::int32_t ry,
+    std::shared_ptr<WzGr2DLayer> pOverlay,
+    std::int32_t z,
+    std::int32_t alpha,
+    std::int32_t magLevel
+) -> std::shared_ptr<WzGr2DLayer>
+{
+    if (!pLayer)
+    {
+        // No existing layer — create one via LoadLayer with default zoom/postRender
+        pLayer = LoadLayer(prop, flip, origin, rx, ry,
+                           std::move(pOverlay), z, alpha, magLevel,
+                           nullptr, 0, 0, false);
+        return pLayer;
+    }
+
+    // Existing layer — append frames from prop's numbered children
+    int i = 0;
+    while (auto frameProp = prop->GetChild(std::to_string(i)))
+    {
+        auto wzCanvas = frameProp->GetCanvas();
+        if (!wzCanvas)
+            break;
+
+        // TODO: original calls IWzCanvas::put_mag(magLevel) when magLevel > 0
+        // WzGr2DCanvas does not yet support magnification
+
+        LoadCanvas(pLayer, frameProp, nullptr, 0, 0, nullptr);
+        ++i;
+    }
+
+    return pLayer;
+}
+
 // LoadCanvas helper (from decompiled CAnimationDisplayer::LoadCanvas)
 void AnimationDisplayer::LoadCanvas(
     const std::shared_ptr<WzGr2DLayer>& layer,

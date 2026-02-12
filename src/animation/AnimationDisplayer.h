@@ -61,6 +61,21 @@ public:
         bool bPostRender
     ) -> std::shared_ptr<WzGr2DLayer>;
 
+    /// Insert frames into an existing layer, or create a new one if pLayer is null.
+    /// When pLayer is null, delegates to LoadLayer.
+    /// When pLayer exists, appends numbered frame children from prop.
+    static auto InsertLayer(
+        std::shared_ptr<WzGr2DLayer>& pLayer,
+        const std::shared_ptr<WzProperty>& prop,
+        std::int32_t flip,
+        Point2D origin,
+        std::int32_t rx, std::int32_t ry,
+        std::shared_ptr<WzGr2DLayer> pOverlay,
+        std::int32_t z,
+        std::int32_t alpha,
+        std::int32_t magLevel
+    ) -> std::shared_ptr<WzGr2DLayer>;
+
 private:
     /// Insert a single canvas frame into a layer (from decompiled LoadCanvas)
     static void LoadCanvas(
