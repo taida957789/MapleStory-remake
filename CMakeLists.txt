@@ -102,6 +102,7 @@ set(SOURCES
     src/debug/DebugOverlay.cpp
     src/text/TextRenderer.cpp
     src/animation/AnimationDisplayer.cpp
+    src/animation/ActionFrame.cpp
 )
 
 # Header files
@@ -152,6 +153,8 @@ set(HEADERS
     src/debug/DebugOverlay.h
     src/text/TextRenderer.h
     src/animation/AnimationDisplayer.h
+    src/animation/ActionFrame.h
+    src/animation/SpriteInstance.h
 )
 
 add_executable(${PROJECT_NAME} ${SOURCES} ${HEADERS})
