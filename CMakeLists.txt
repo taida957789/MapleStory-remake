@@ -124,6 +124,9 @@ set(SOURCES
     src/constants/WeaponConstants.cpp
     src/templates/morph/MorphTemplate.cpp
     src/templates/item/ItemInfo.cpp
+    src/models/GW_ItemSlotBase.cpp
+    src/models/GW_ItemSlotEquip.cpp
+    src/models/GW_ItemSlotPet.cpp
 )
 
 # Header files
@@ -199,8 +202,46 @@ set(HEADERS
     src/constants/FieldConstants.h
     src/constants/JobConstants.h
     src/templates/morph/MorphTemplate.h
+    src/templates/item/Addition.h
+    src/templates/item/AreaBuffItem.h
+    src/templates/item/BagInfo.h
+    src/templates/item/BitsCaseItem.h
+    src/templates/item/BridleItem.h
+    src/templates/item/BundleItem.h
+    src/templates/item/CoreItem.h
+    src/templates/item/CoupleChairItem.h
+    src/templates/item/DayOfWeekItemStat.h
+    src/templates/item/DecomposerInstallItem.h
+    src/templates/item/DressUpClothesItem.h
+    src/templates/item/DyeingItem.h
+    src/templates/item/EquipItem.h
+    src/templates/item/EquipSlotLevelMinusItem.h
+    src/templates/item/ExpiredProtectingItem.h
+    src/templates/item/ExtendExpireDateItem.h
+    src/templates/item/FixedOption.h
+    src/templates/item/GachaponAggScope.h
+    src/templates/item/GachaponItemInfo.h
+    src/templates/item/GatheringToolItem.h
+    src/templates/item/GroupEffectInfo.h
+    src/templates/item/GrowthOption.h
     src/templates/item/ItemInfo.h
     src/templates/item/ItemInfoTypes.h
+    src/templates/item/ItemName.h
+    src/templates/item/ItemPotCreateItem.h
+    src/templates/item/ItemPotCureItem.h
+    src/templates/item/ItemSkill.h
+    src/templates/item/KarmaScissorsItem.h
+    src/templates/item/ParamEquipStat.h
+    src/templates/item/PetFoodItem.h
+    src/templates/item/PieceItemInfo.h
+    src/templates/item/ProtectOnDieItem.h
+    src/templates/item/RecipeOpenItem.h
+    src/templates/item/SetAction.h
+    src/templates/item/SetEffect.h
+    src/templates/item/SetItemInfo.h
+    src/templates/item/SetTowerChair.h
+    src/templates/item/TextEquipParam.h
+    src/templates/item/VariableStat.h
     src/constants/WeaponConstants.h
 )
 
