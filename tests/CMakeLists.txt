@@ -19,6 +19,9 @@ set(TEST_SOURCES
     test_point.cpp
     test_wz.cpp
     test_canvas.cpp
+    test_gr2d_vector.cpp
+    test_layer_interpolation.cpp
+    test_secure_tear.cpp
 )
 
 # Find zlib for WZ decompression
@@ -35,13 +38,25 @@ add_executable(maplestory_tests
     ../src/wz/WzReader.cpp
     ../src/wz/WzCrypto.cpp
     ../src/wz/WzResMan.cpp
+    ../src/wz/WzDirectory.cpp
+    ../src/wz/WzFormatDetector.cpp
+    ../src/wz/WzImage.cpp
+    ../src/wz/WzNode.cpp
+    ../src/wz/WzPackage.cpp
+    ../src/wz/WzSourceFactory.cpp
+    ../src/util/Rand32.cpp
     ../src/util/ZXString.cpp
     ../src/util/Singleton.cpp
     ../src/util/Logger.cpp
+    ../src/graphics/Gr2DVector.cpp
+    ../src/graphics/WzGr2DLayer.cpp
+    ../src/graphics/WzGr2DCanvas.cpp
 )
 
 target_include_directories(maplestory_tests PRIVATE
     ../src
+    ../3rdparty/mio/include
+    ../3rdparty/minimp3
 )
 
 # Link SDL3, zlib, spdlog, and Google Test

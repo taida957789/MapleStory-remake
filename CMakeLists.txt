@@ -97,12 +97,27 @@ set(SOURCES
     src/network/InPacket.cpp
     src/network/OutPacket.cpp
     src/util/Singleton.cpp
+    src/util/Rand32.cpp
     src/util/ZXString.cpp
     src/util/Logger.cpp
     src/debug/DebugOverlay.cpp
     src/text/TextRenderer.cpp
     src/animation/AnimationDisplayer.cpp
     src/animation/ActionFrame.cpp
+    src/animation/ActionData.cpp
+    src/animation/ActionMan.cpp
+    src/animation/LoadItemAction.cpp
+    src/animation/LoadCharacterAction.cpp
+    src/animation/SpriteInstance.cpp
+    src/user/avatar/Avatar.cpp
+    src/user/UserLocal.cpp
+    src/constants/ActionConstants.cpp
+    src/constants/ActionHelpers.cpp
+    src/constants/EquipDataPath.cpp
+    src/constants/FieldConstants.cpp
+    src/constants/JobConstants.cpp
+    src/constants/WeaponConstants.cpp
+    src/templates/morph/MorphTemplate.cpp
 )
 
 # Header files
@@ -146,15 +161,35 @@ set(HEADERS
     src/network/ClientSocket.h
     src/network/InPacket.h
     src/network/OutPacket.h
+    src/util/Rand32.h
     src/util/Singleton.h
     src/util/ZXString.h
     src/util/Point.h
     src/util/Logger.h
+    src/util/security/TSecType.h
+    src/util/security/ZtlSecureTear.h
     src/debug/DebugOverlay.h
     src/text/TextRenderer.h
     src/animation/AnimationDisplayer.h
     src/animation/ActionFrame.h
+    src/animation/ActionData.h
+    src/animation/ActionMan.h
+    src/animation/CharacterImgEntry.h
+    src/animation/LoadItemAction.h
+    src/animation/LoadCharacterAction.h
     src/animation/SpriteInstance.h
+    src/user/avatar/Avatar.h
+    src/user/UserLocal.h
+    src/enums/BodyPart.h
+    src/enums/CharacterAction.h
+    src/enums/MoveActionType.h
+    src/constants/ActionHelpers.h
+    src/constants/ActionConstants.h
+    src/constants/EquipDataPath.h
+    src/constants/FieldConstants.h
+    src/constants/JobConstants.h
+    src/templates/morph/MorphTemplate.h
+    src/constants/WeaponConstants.h
 )
 
 add_executable(${PROJECT_NAME} ${SOURCES} ${HEADERS})
