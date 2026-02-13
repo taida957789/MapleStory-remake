@@ -11,6 +11,7 @@ namespace ms
 class WzCanvas;
 class WzGr2D;
 class WzGr2DLayer;
+class WzGr2DCanvas;
 
 /**
  * @brief Text input UI element
@@ -58,7 +59,7 @@ public:
     void Clear();
 
     // Placeholder
-    void SetPlaceholderCanvas(std::shared_ptr<WzCanvas> canvas);
+    void SetPlaceholderCanvas(std::shared_ptr<WzGr2DCanvas> canvas);
     void SetGuideText(const std::string& text) { m_sGuideText = text; }
 
     // Selection
@@ -101,7 +102,7 @@ public:
     void CreateLayer(WzGr2D& gr, std::int32_t z, bool screenSpace = true);
 
     // Background canvas (for the input box frame)
-    void SetBackgroundCanvas(std::shared_ptr<WzCanvas> canvas);
+    void SetBackgroundCanvas(std::shared_ptr<WzGr2DCanvas> canvas);
 
 #ifdef MS_DEBUG_CANVAS
     [[nodiscard]] auto GetDebugTypeName() const -> std::string override { return "UIEdit"; }
@@ -140,8 +141,8 @@ private:
     bool m_bFocused{false};
 
     // Visual elements
-    std::shared_ptr<WzCanvas> m_pBackgroundCanvas;
-    std::shared_ptr<WzCanvas> m_pPlaceholderCanvas;
+    std::shared_ptr<WzGr2DCanvas> m_pBackgroundCanvas;
+    std::shared_ptr<WzGr2DCanvas> m_pPlaceholderCanvas;
     std::shared_ptr<WzGr2DLayer> m_pCaretLayer;
     std::shared_ptr<WzGr2DLayer> m_pTextLayer;  // Layer for rendered text
     std::string m_sLastRenderedText;             // Track last rendered text

@@ -15,6 +15,7 @@ class Login;
 class UIButton;
 class WzCanvas;
 class WzGr2D;
+class WzGr2DCanvas;
 class WzGr2DLayer;
 class WzProperty;
 class UIManager;
@@ -204,7 +205,7 @@ private:
     std::shared_ptr<WzGr2DLayer> m_pLayerEventDesc;       // Event description layer
 
     // Gauge canvas
-    std::shared_ptr<WzCanvas> m_pCanvasGauge;
+    std::shared_ptr<WzGr2DCanvas> m_pCanvasGauge;
 
     // Cached WZ property
     std::shared_ptr<WzProperty> m_pChannelSelectProp;

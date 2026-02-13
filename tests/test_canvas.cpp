@@ -17,7 +17,7 @@ protected:
     void SetUp() override
     {
         // Load UI.wz file
-        std::ifstream file("resources/old/UI.wz", std::ios::binary);
+        std::ifstream file("resources/new/UI.wz", std::ios::binary);
         if (file)
         {
             file.seekg(0, std::ios::end);

@@ -3,6 +3,7 @@
 #include "graphics/WzGr2D.h"
 #include "graphics/WzGr2DLayer.h"
 #include "util/Logger.h"
+#include "graphics/WzGr2DCanvas.h"
 #include "wz/WzCanvas.h"
 #include "wz/WzProperty.h"
 #include "wz/WzResMan.h"
@@ -308,7 +309,7 @@ void MapLoadable::SetObjectAnimation(const std::string& name, Gr2DAnimationType 
     auto layer = GetObjectLayer(name);
     if (layer)
     {
-        if (type == Gr2DAnimationType::None || type == Gr2DAnimationType::Loop)
+        if (type == Gr2DAnimationType::None || type == Gr2DAnimationType::Repeat)
         {
             // Reset to first frame before starting animation
             layer->SetCurrentFrame(0);
@@ -322,7 +323,7 @@ void MapLoadable::SetTaggedObjectAnimation(const std::string& tag, Gr2DAnimation
     auto it = m_mTaggedLayer.find(tag);
     if (it != m_mTaggedLayer.end() && it->second)
     {
-        if (type == Gr2DAnimationType::None || type == Gr2DAnimationType::Loop)
+        if (type == Gr2DAnimationType::None || type == Gr2DAnimationType::Repeat)
         {
             it->second->SetCurrentFrame(0);
         }
@@ -476,11 +477,13 @@ auto MapLoadable::LoadAnimatedLayer(const std::shared_ptr<WzGr2DLayer>& layer,
         }
 
         // Get canvas from frame property
-        auto canvas = frameProp->GetCanvas();
+        auto wzCanvas = frameProp->GetCanvas();
+        auto canvas = wzCanvas ? std::make_shared<WzGr2DCanvas>(wzCanvas) : nullptr;
         if (!canvas)
         {
             // Frame might be the canvas itself
-            canvas = prop->GetChild(std::to_string(i))->GetCanvas();
+            auto frameWzCanvas = prop->GetChild(std::to_string(i))->GetCanvas();
+            canvas = frameWzCanvas ? std::make_shared<WzGr2DCanvas>(frameWzCanvas) : nullptr;
             if (!canvas)
             {
                 continue; // Skip frames without canvas
@@ -542,7 +545,8 @@ auto MapLoadable::LoadStaticLayer(const std::shared_ptr<WzGr2DLayer>& layer,
     LOG_DEBUG("LoadStaticLayer: Loading from property '{}'", prop->GetName());
 
     // Try to get canvas directly
-    auto canvas = prop->GetCanvas();
+    auto wzCanvas = prop->GetCanvas();
+    auto canvas = wzCanvas ? std::make_shared<WzGr2DCanvas>(wzCanvas) : nullptr;
     if (!canvas)
     {
         LOG_DEBUG("LoadStaticLayer: No direct canvas, trying child '0'");
@@ -550,7 +554,8 @@ auto MapLoadable::LoadStaticLayer(const std::shared_ptr<WzGr2DLayer>& layer,
         auto firstChild = prop->GetChild("0");
         if (firstChild)
         {
-            canvas = firstChild->GetCanvas();
+            auto childWzCanvas = firstChild->GetCanvas();
+            canvas = childWzCanvas ? std::make_shared<WzGr2DCanvas>(childWzCanvas) : nullptr;
             if (canvas)
             {
                 LOG_DEBUG("LoadStaticLayer: Found canvas in child '0'");
@@ -951,7 +956,7 @@ void MapLoadable::MakeBack(std::int32_t nPageIdx, const std::shared_ptr<WzProper
         frameCount = LoadAnimatedLayer(layer, spriteProp);
         if (frameCount > 1)
         {
-            layer->Animate(Gr2DAnimationType::Loop);
+            layer->Animate(Gr2DAnimationType::Repeat);
         }
     }
     else
@@ -984,18 +989,11 @@ void MapLoadable::MakeBack(std::int32_t nPageIdx, const std::shared_ptr<WzProper
     }
 
     // Handle background type-specific tiling and movement (based on IDA decompilation)
-    // Type meanings:
-    // 0: NORMAL - no tiling, parallax with rx/ry
-    // 1: HTILED - horizontal tiling, parallax with rx/ry
-    // 2: VTILED - vertical tiling, parallax with rx/ry
-    // 3: TILED - both H+V tiling, parallax with rx/ry
-    // 4: HMOVEA - animated H movement (rx), then H-tiling
-    // 5: VMOVEA - animated V movement (ry), then V-tiling
-    // 6: HMOVEB - animated H movement (rx), then both tiling
-    // 7: VMOVEB - animated V movement (ry), then both tiling
+    // See BackgroundType enum for type meanings
 
     // Check if this is an animated movement type
-    bool isAnimatedType = (type >= 4 && type <= 7);
+    bool isAnimatedType = (type >= static_cast<std::int32_t>(BackgroundType::HMoveA) &&
+                           type <= static_cast<std::int32_t>(BackgroundType::VMoveB));
     std::int32_t moveRel = 0;      // Movement parameter (rx or ry)
     std::int32_t moveOffsetX = 0;  // Animated X offset
     std::int32_t moveOffsetY = 0;  // Animated Y offset
@@ -1005,46 +1003,59 @@ void MapLoadable::MakeBack(std::int32_t nPageIdx, const std::shared_ptr<WzProper
     bool hTile = false;
     bool vTile = false;
 
-    switch (type)
+    switch (static_cast<BackgroundType>(type))
     {
-    case 0: // NORMAL - no tiling
+    case BackgroundType::Normal:
+        // No tiling
         break;
-    case 1: // HTILED - horizontal tiling only
+
+    case BackgroundType::HTiled:
         hTile = true;
         break;
-    case 2: // VTILED - vertical tiling only
+
+    case BackgroundType::VTiled:
         vTile = true;
         break;
-    case 3: // TILED - both H+V tiling
+
+    case BackgroundType::Tiled:
         hTile = true;
         vTile = true;
         break;
-    case 4: // HMOVEA - animated H movement (rx), then H-tiling
+
+    case BackgroundType::HMoveA:
+        // Animated H movement, then H-tiling
         moveRel = rx;
         moveOffsetX = rx > 0 ? -rx : -rx;  // Movement direction based on sign
-        effectiveType = 1;
+        effectiveType = static_cast<std::int32_t>(BackgroundType::HTiled);
         hTile = true;
         break;
-    case 5: // VMOVEA - animated V movement (ry), then V-tiling
+
+    case BackgroundType::VMoveA:
+        // Animated V movement, then V-tiling
         moveRel = ry;
         moveOffsetY = ry > 0 ? -ry : -ry;  // Movement direction based on sign
-        effectiveType = 2;
+        effectiveType = static_cast<std::int32_t>(BackgroundType::VTiled);
         vTile = true;
         break;
-    case 6: // HMOVEB - animated H movement (rx), then both tiling
+
+    case BackgroundType::HMoveB:
+        // Animated H movement, then both tiling
         moveRel = rx;
         moveOffsetX = rx > 0 ? -rx : -rx;
-        effectiveType = 3;
+        effectiveType = static_cast<std::int32_t>(BackgroundType::Tiled);
         hTile = true;
         vTile = true;
         break;
-    case 7: // VMOVEB - animated V movement (ry), then both tiling
+
+    case BackgroundType::VMoveB:
+        // Animated V movement, then both tiling
         moveRel = ry;
         moveOffsetY = ry > 0 ? -ry : -ry;
-        effectiveType = 3;
+        effectiveType = static_cast<std::int32_t>(BackgroundType::Tiled);
         hTile = true;
         vTile = true;
         break;
+
     default:
         LOG_WARN("MakeBack[{}]: Unknown type {}", nPageIdx, type);
         break;
@@ -1656,7 +1667,8 @@ void MapLoadable::MakeCloud()
             continue;
         }
 
-        auto canvas = cloudChild->GetCanvas();
+        auto wzCanvas = cloudChild->GetCanvas();
+        auto canvas = wzCanvas ? std::make_shared<WzGr2DCanvas>(wzCanvas) : nullptr;
         if (!canvas)
         {
             continue;
@@ -1728,7 +1740,7 @@ void MapLoadable::AddLetterBox(std::int32_t w, std::int32_t h, std::int32_t l, s
                                 static_cast<std::uint32_t>(w),
                                 static_cast<std::uint32_t>(h),
                                 -1073343174,
-                                canvas);
+                                canvas ? std::make_shared<WzGr2DCanvas>(canvas) : nullptr);
     if (!layer)
     {
         LOG_WARN("AddLetterBox: Failed to create layer");
@@ -1737,8 +1749,6 @@ void MapLoadable::AddLetterBox(std::int32_t w, std::int32_t h, std::int32_t l, s
 
     // Position relative to screen center
     layer->SetPosition(l, t);
-    layer->SetScreenSpace(true);
-    layer->SetCenterBased(true);
     layer->SetColor(0xFFFFFFFF);
 
     m_lpLayerLetterBox.push_back(layer);
@@ -1784,7 +1794,8 @@ void MapLoadable::MakeTile(std::int32_t nPageIdx,
         return;
     }
 
-    auto canvas = tileProp->GetCanvas();
+    auto wzCanvas = tileProp->GetCanvas();
+    auto canvas = wzCanvas ? std::make_shared<WzGr2DCanvas>(wzCanvas) : nullptr;
     if (!canvas)
     {
         LOG_DEBUG("MakeTile[{}]: No canvas in tile: {}", nPageIdx, propPath);
@@ -1987,7 +1998,7 @@ void MapLoadable::MakeObj(std::int32_t nPageIdx,
     // Start animation if more than one frame
     if (frameCount > 1)
     {
-        layer->Animate(Gr2DAnimationType::Loop);
+        layer->Animate(Gr2DAnimationType::Repeat);
     }
 
     // Add to object layer list

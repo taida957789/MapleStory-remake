@@ -1,6 +1,7 @@
 #pragma once
 
 #include "util/Singleton.h"
+#include "graphics/WzGr2DCanvas.h"
 #include "wz/WzCanvas.h"
 
 #include <cstdint>
@@ -54,7 +55,7 @@ public:
      * @return Canvas containing rendered text, or nullptr on failure
      */
     auto RenderText(const std::string& text, std::uint32_t color = 0xFF000000)
-        -> std::shared_ptr<WzCanvas>;
+        -> std::shared_ptr<WzGr2DCanvas>;
 
     /**
      * @brief Render text directly to SDL renderer

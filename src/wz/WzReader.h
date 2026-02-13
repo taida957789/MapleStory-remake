@@ -3,10 +3,10 @@
 #include "WzTypes.h"
 
 #include <cstdint>
-#include <fstream>
 #include <memory>
 #include <string>
 #include <vector>
+#include <mio/mmap.hpp>
 
 namespace ms
 {
@@ -142,8 +142,8 @@ private:
     std::size_t m_nSize{};
     std::size_t m_nCursor{};
 
-    // Memory-mapped file data
-    std::vector<std::uint8_t> m_fileData;
+    // Memory-mapped file (using mio)
+    mio::mmap_source m_mmap;
 
     // Encryption
     std::uint8_t m_iv[4]{};

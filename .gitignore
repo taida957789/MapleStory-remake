@@ -46,4 +46,5 @@ Thumbs.db
 # Git worktrees
 .worktrees/
 
-resources/*/*.wz
+resources/Data/
+resources/233/

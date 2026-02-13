@@ -1,6 +1,8 @@
 #include "Application.h"
 #include "Configuration.h"
 #include "WvsContext.h"
+#include "animation/ActionFrame.h"
+#include "animation/ActionMan.h"
 #include "audio/SoundSystem.h"
 #include "graphics/WzGr2D.h"
 #include "input/InputSystem.h"
@@ -107,6 +109,10 @@ auto Application::Initialize(int argc, char* argv[]) -> bool
     {
         LOG_WARN("Failed to initialize text renderer - text will not be displayed");
     }
+
+    // Initialize action frame mappers and action manager
+    ActionFrame::LoadMappers();
+    (void)ActionMan::GetInstance().Initialize();
 
     // Initialize WndMan (global window manager)
     WndMan::GetInstance().Initialize();
@@ -275,6 +281,11 @@ auto Application::GetTick() noexcept -> std::uint64_t
     return SDL_GetTicks();
 }
 
+auto Application::GetTimeGap() const noexcept -> std::int32_t
+{
+    return static_cast<std::int32_t>(m_tUpdateTime) - get_gr().GetCurrentTime();
+}
+
 auto Application::InitializeGraphics() -> bool
 {
     // Initialize WzGr2D graphics engine (mirrors IWzGr2D::Initialize)
@@ -312,49 +323,21 @@ auto Application::InitializeSound() -> bool
 
 auto Application::InitializeResMan() -> bool
 {
-    // Get WZ path from configuration (default: "resources/old")
     auto& config = Configuration::GetInstance();
     auto& resMan = WzResMan::GetInstance();
 
-    // Use configured WZ path
-    std::string wzPath = config.GetWzPath();
+    // Set WZ base path from configuration
+    resMan.SetBasePath(config.GetWzPath());
 
-    // Check if configured path exists, fall back to auto-detection if not
-    if (!std::filesystem::exists(wzPath))
+    // Initialize WzResMan - this will auto-discover and load all WZ files
+    // WZ files use lazy loading, so they're only parsed when actually accessed
+    if (!resMan.Initialize())
     {
-        LOG_WARN("Configured WZ path '{}' not found, searching...", wzPath);
-
-        // Try common WZ file locations
-        if (std::filesystem::exists("./UI.wz"))
-        {
-            wzPath = ".";
-        }
-        else if (std::filesystem::exists("../UI.wz"))
-        {
-            wzPath = "..";
-        }
-        else if (std::filesystem::exists("./data/UI.wz"))
-        {
-            wzPath = "./data";
-        }
-        else if (std::filesystem::exists("./resources/old/UI.wz"))
-        {
-            wzPath = "./resources/old";
-        }
-    }
-
-    LOG_INFO("Using WZ path: {}", wzPath);
-    resMan.SetBasePath(wzPath);
-
-    // Don't load all WZ files here - they will be loaded during Logo loading screen
-    // Only load UI.wz which is needed for Logo stage immediately
-    if (!resMan.LoadWzFile("UI"))
-    {
-        LOG_ERROR("Failed to load UI.wz - Logo stage will not work");
+        LOG_ERROR("Failed to initialize WzResMan from path: {}", config.GetWzPath());
         return false;
     }
 
-    LOG_INFO("Loaded UI.wz for Logo stage - other WZ files will load during loading screen");
+    LOG_INFO("WzResMan initialized from: {}", config.GetWzPath());
     return true;
 }
 

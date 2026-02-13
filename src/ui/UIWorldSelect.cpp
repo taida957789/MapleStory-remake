@@ -6,6 +6,7 @@
 #include "graphics/WzGr2DLayer.h"
 #include "stage/Login.h"
 #include "util/Logger.h"
+#include "graphics/WzGr2DCanvas.h"
 #include "wz/WzCanvas.h"
 #include "wz/WzProperty.h"
 #include "wz/WzResMan.h"
@@ -381,14 +382,15 @@ void UIWorldSelect::MakeWSBalloon(const std::string& message, std::int32_t x, st
 
     // Try to load balloon background from WZ
     auto& resMan = WzResMan::GetInstance();
-    std::shared_ptr<WzCanvas> balloonCanvas;
+    std::shared_ptr<WzGr2DCanvas> balloonCanvas;
 
     if (m_pWorldSelectProp)
     {
         auto balloonProp = m_pWorldSelectProp->GetChild("balloon");
         if (balloonProp)
         {
-            balloonCanvas = balloonProp->GetCanvas();
+            auto tmpWzCanvas_391 = balloonProp->GetCanvas();
+            balloonCanvas = tmpWzCanvas_391 ? std::make_shared<WzGr2DCanvas>(tmpWzCanvas_391) : nullptr;
         }
     }
 
@@ -406,8 +408,6 @@ void UIWorldSelect::MakeWSBalloon(const std::string& message, std::int32_t x, st
     auto layer = m_pGr->CreateLayer(x, y, balloonWidth, balloonHeight, 200);
     if (layer)
     {
-        layer->SetScreenSpace(true);
-        layer->SetCenterBased(true);
 
         if (balloonCanvas)
         {
@@ -716,7 +716,7 @@ void UIWorldSelect::CreatePlaceholderUI()
     m_pBtnGoWorld = std::make_shared<UIButton>();
 
     // Create orange gradient button
-    auto canvas = std::make_shared<WzCanvas>(btnWidth, btnHeight);
+    auto wzCanvas = std::make_shared<WzCanvas>(btnWidth, btnHeight);
     std::vector<std::uint8_t> pixels(static_cast<size_t>(btnWidth * btnHeight * 4));
     for (int y = 0; y < btnHeight; ++y)
     {
@@ -730,7 +730,8 @@ void UIWorldSelect::CreatePlaceholderUI()
             pixels[idx + 3] = 255;
         }
     }
-    canvas->SetPixelData(std::move(pixels));
+    wzCanvas->SetPixelData(std::move(pixels));
+    auto canvas = std::make_shared<WzGr2DCanvas>(wzCanvas);
     m_pBtnGoWorld->SetStateCanvas(UIState::Normal, canvas);
     m_pBtnGoWorld->SetSize(btnWidth, btnHeight);
     m_pBtnGoWorld->SetPosition(btnX, btnY);
@@ -764,7 +765,7 @@ auto UIWorldSelect::CreateWorldButton(const std::string& name, std::int32_t x, s
     auto btn = std::make_shared<UIButton>();
 
     // Create gradient button canvas
-    auto canvas = std::make_shared<WzCanvas>(btnWidth, btnHeight);
+    auto wzCanvas = std::make_shared<WzCanvas>(btnWidth, btnHeight);
     std::vector<std::uint8_t> pixels(static_cast<size_t>(btnWidth * btnHeight * 4));
 
     for (int py = 0; py < btnHeight; ++py)
@@ -780,11 +781,12 @@ auto UIWorldSelect::CreateWorldButton(const std::string& name, std::int32_t x, s
             pixels[idx + 3] = 230;
         }
     }
-    canvas->SetPixelData(std::move(pixels));
+    wzCanvas->SetPixelData(std::move(pixels));
+    auto canvas = std::make_shared<WzGr2DCanvas>(wzCanvas);
     btn->SetStateCanvas(UIState::Normal, canvas);
 
     // Create hover state
-    auto hoverCanvas = std::make_shared<WzCanvas>(btnWidth, btnHeight);
+    auto wzHoverCanvas = std::make_shared<WzCanvas>(btnWidth, btnHeight);
     std::vector<std::uint8_t> hoverPixels(static_cast<size_t>(btnWidth * btnHeight * 4));
     for (int py = 0; py < btnHeight; ++py)
     {
@@ -798,11 +800,12 @@ auto UIWorldSelect::CreateWorldButton(const std::string& name, std::int32_t x, s
             hoverPixels[idx + 3] = 255;
         }
     }
-    hoverCanvas->SetPixelData(std::move(hoverPixels));
+    wzHoverCanvas->SetPixelData(std::move(hoverPixels));
+    auto hoverCanvas = std::make_shared<WzGr2DCanvas>(wzHoverCanvas);
     btn->SetStateCanvas(UIState::MouseOver, hoverCanvas);
 
     // Create pressed state
-    auto pressedCanvas = std::make_shared<WzCanvas>(btnWidth, btnHeight);
+    auto wzPressedCanvas = std::make_shared<WzCanvas>(btnWidth, btnHeight);
     std::vector<std::uint8_t> pressedPixels(static_cast<size_t>(btnWidth * btnHeight * 4));
     for (int py = 0; py < btnHeight; ++py)
     {
@@ -817,7 +820,8 @@ auto UIWorldSelect::CreateWorldButton(const std::string& name, std::int32_t x, s
             pressedPixels[idx + 3] = 255;
         }
     }
-    pressedCanvas->SetPixelData(std::move(pressedPixels));
+    wzPressedCanvas->SetPixelData(std::move(pressedPixels));
+    auto pressedCanvas = std::make_shared<WzGr2DCanvas>(wzPressedCanvas);
     btn->SetStateCanvas(UIState::Pressed, pressedCanvas);
 
     btn->SetSize(btnWidth, btnHeight);

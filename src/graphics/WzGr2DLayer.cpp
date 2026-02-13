@@ -1,5 +1,5 @@
 #include "WzGr2DLayer.h"
-#include "wz/WzCanvas.h"
+#include "WzGr2DCanvas.h"
 
 #ifdef MS_DEBUG_CANVAS
 #include "util/Logger.h"
@@ -11,101 +11,763 @@
 namespace ms
 {
 
-WzGr2DLayer::WzGr2DLayer() = default;
+using namespace Gr2DConstants;
 
-WzGr2DLayer::WzGr2DLayer(std::int32_t left, std::int32_t top,
-                         std::uint32_t width, std::uint32_t height,
-                         std::int32_t z)
-    : m_nLeft(left)
-    , m_nTop(top)
-    , m_uWidth(width)
-    , m_uHeight(height)
-    , m_nZ(z)
+// ============================================================
+// Static members
+// ============================================================
+
+std::int32_t WzGr2DLayer::s_idCounter = 0;
+
+// ============================================================
+// ParticleEmitter
+// ============================================================
+
+void ParticleEmitter::reset()
 {
+    activeCount = 0;
+    frameAccumulator = 0.0F;
+    elapsedTime = 0.0F;
+    for (auto& p : particles)
+    {
+        p.timeRemaining = 0.0F;
+    }
 }
 
-WzGr2DLayer::~WzGr2DLayer() = default;
+void ParticleEmitter::update(float deltaTime, float /*param3*/, int /*param4*/, float param5)
+{
+    float dt = deltaTime * timeScale;
+    if (dt <= 0.0F)
+    {
+        return;
+    }
+
+    elapsedTime += dt;
+
+    if (maxLifetime > 0.0F && elapsedTime >= maxLifetime)
+    {
+        reset();
+        return;
+    }
+
+    // Emit new particles
+    if (emitInterval > 0.0F)
+    {
+        frameAccumulator += dt;
+        while (frameAccumulator >= emitInterval && activeCount < maxParticles)
+        {
+            int slot = -1;
+            for (int i = 0; i < static_cast<int>(particles.size()); ++i)
+            {
+                if (particles[i].timeRemaining <= 0.0F)
+                {
+                    slot = i;
+                    break;
+                }
+            }
+            if (slot < 0)
+            {
+                if (static_cast<int>(particles.size()) < maxParticles)
+                {
+                    particles.emplace_back();
+                    slot = static_cast<int>(particles.size()) - 1;
+                }
+                else
+                {
+                    break;
+                }
+            }
+
+            Particle& p = particles[slot];
+            p = Particle{};
+
+            if (positionType == 1 && animOrigin != nullptr)
+            {
+                p.posX = static_cast<float>(animOrigin->GetX() + originX);
+                p.posY = static_cast<float>(animOrigin->GetY() + originY);
+            }
+            else
+            {
+                p.posX = static_cast<float>(originX);
+                p.posY = static_cast<float>(originY);
+            }
+
+            p.baseVelX = velocityX;
+            p.baseVelY = velocityY;
+            p.colorR = p.startR;
+            p.colorG = p.startG;
+            p.colorB = p.startB;
+            p.colorA = p.startA;
+
+            if (p.totalLifetime <= 0.0F)
+            {
+                p.totalLifetime = 1.0F;
+            }
+            p.timeRemaining = p.totalLifetime;
+            p.forceScaleA = 1.0F;
+            p.forceScaleB = 1.0F;
+
+            activeCount++;
+            frameAccumulator -= emitInterval;
+        }
+    }
+
+    // Update alive particles
+    int newActiveCount = 0;
+    for (auto& p : particles)
+    {
+        if (p.timeRemaining <= 0.0F)
+        {
+            continue;
+        }
+
+        p.timeRemaining -= dt;
+        if (p.timeRemaining <= 0.0F)
+        {
+            p.timeRemaining = 0.0F;
+            continue;
+        }
+
+        newActiveCount++;
+
+        float progress = 1.0F - p.timeRemaining / p.totalLifetime;
+        p.colorR = p.startR + (p.endR - p.startR) * progress;
+        p.colorG = p.startG + (p.endG - p.startG) * progress;
+        p.colorB = p.startB + (p.endB - p.startB) * progress;
+        p.colorA = p.startA + (p.endA - p.startA) * progress;
+
+        p.sizeCurrent += p.sizeRate * dt;
+        p.rotationRate += p.rotationAccel * dt;
+        p.angularData[0] += p.rotationRate * dt;
+
+        if (usePhysics)
+        {
+            float totalForceX = (forceXA + forceXB) * p.forceScaleA;
+            float totalForceY = (forceYA + forceYB) * p.forceScaleB;
+
+            p.driftX += totalForceX * dt;
+            p.driftY += totalForceY * dt;
+
+            p.posX += (p.baseVelX + p.driftX) * dt;
+            p.posY += (p.baseVelY + p.driftY) * dt * static_cast<float>(mirrorDirection);
+
+            if (affectGravity)
+            {
+                p.baseVelY += 9.8F * dt;
+            }
+        }
+        else
+        {
+            p.posX += p.baseVelX * dt + param5;
+            p.posY += p.baseVelY * dt * static_cast<float>(mirrorDirection);
+        }
+
+        p.colorA *= opacityMultiplier;
+    }
+
+    activeCount = newActiveCount;
+}
+
+// ============================================================
+// SDL blend mode helpers
+// ============================================================
+
+namespace
+{
+
+auto ConvertToSDLBlendMode(std::int32_t blendType) -> SDL_BlendMode
+{
+    auto baseMode = blendType & 0x3F3;
+
+    if (baseMode & static_cast<std::int32_t>(LayerBlendType::Add))
+    {
+        return SDL_BLENDMODE_ADD;
+    }
+    if (baseMode & static_cast<std::int32_t>(LayerBlendType::Multiply))
+    {
+        return SDL_BLENDMODE_MUL;
+    }
+    if (baseMode & static_cast<std::int32_t>(LayerBlendType::LinearDodge))
+    {
+        return SDL_BLENDMODE_ADD;
+    }
+
+    return SDL_BLENDMODE_BLEND;
+}
+
+} // anonymous namespace
+
+// ============================================================
+// Constructor / Destructor
+// ============================================================
+
+WzGr2DLayer::WzGr2DLayer()
+{
+    m_uniqueId = ++s_idCounter;
+    m_hashTable.fill(nullptr);
+    ensureVectors();
+}
+
+WzGr2DLayer::WzGr2DLayer(std::int32_t left, std::int32_t top,
+                           std::uint32_t width, std::uint32_t height,
+                           std::int32_t z)
+    : m_width(static_cast<std::int32_t>(width))
+    , m_height(static_cast<std::int32_t>(height))
+    , m_zOrder(z)
+    , m_nLeft(left)
+    , m_nTop(top)
+{
+    m_uniqueId = ++s_idCounter;
+    m_hashTable.fill(nullptr);
+    ensureVectors();
+    if (m_positionVec)
+    {
+        m_positionVec->Move(left, top);
+    }
+}
+
+WzGr2DLayer::~WzGr2DLayer()
+{
+    clearFrames();
+}
 
 WzGr2DLayer::WzGr2DLayer(WzGr2DLayer&&) noexcept = default;
 auto WzGr2DLayer::operator=(WzGr2DLayer&&) noexcept -> WzGr2DLayer& = default;
 
-void WzGr2DLayer::SetPosition(std::int32_t left, std::int32_t top) noexcept
+// ============================================================
+// Initialization
+// ============================================================
+
+void WzGr2DLayer::SetVideoMode(std::int32_t screenW, std::int32_t screenH,
+                                std::int32_t viewW, std::int32_t viewH)
 {
-    m_nLeft = left;
-    m_nTop = top;
+    m_screenVec.reset();
+    m_alphaVec.reset();
+    m_colorRedVec.reset();
+    m_colorGBVec.reset();
+    m_positionVec.reset();
+    m_rbVec.reset();
+
+    m_screenVec = std::make_unique<Gr2DVector>(0, 0);
+    m_alphaVec = std::make_unique<Gr2DVector>(0, 0);
+    m_colorRedVec = std::make_unique<Gr2DVector>(0, 0);
+    m_colorGBVec = std::make_unique<Gr2DVector>(0, 0);
+    m_positionVec = std::make_unique<Gr2DVector>(0, 0);
+    m_rbVec = std::make_unique<Gr2DVector>(0, 0);
+
+    m_screenVec->RelMove(screenW, screenH, 0, 0);
+
+    m_positionVec->PutOrigin(m_screenVec.get());
+    m_positionVec->RelMove(viewW, viewH, 0, 0);
+
+    m_rbVec->PutOrigin(m_screenVec.get());
+    m_rbVec->RelMove(viewW, viewH, 0, 0);
+
+    m_width = viewW;
+    m_height = viewH;
+
+    put_color(0xFFFFFFFF);
 }
 
-auto WzGr2DLayer::InsertCanvas(std::shared_ptr<WzCanvas> canvas,
-                                std::int32_t delay,
-                                std::uint8_t alpha0,
-                                std::uint8_t alpha1,
-                                std::int32_t zoom0,
-                                std::int32_t zoom1) -> std::size_t
+void WzGr2DLayer::InitAnimation(std::int32_t baseTimestamp)
 {
-    CanvasEntry entry;
-    entry.canvas = std::move(canvas);
-    entry.frameInfo.nDelay = delay;
-    entry.frameInfo.nAlpha0 = alpha0;
-    entry.frameInfo.nAlpha1 = alpha1;
-    entry.frameInfo.nZoom0 = zoom0;
-    entry.frameInfo.nZoom1 = zoom1;
+    m_animOriginVec.reset();
+    m_animIntermediate.reset();
 
-    m_canvases.push_back(std::move(entry));
-    return m_canvases.size() - 1;
+    m_baseTimestamp = baseTimestamp;
+
+    m_animOriginVec = std::make_unique<Gr2DVector>(0, 0);
+    m_animOriginVec->RelMove(0, 0, 0, 0);
 }
 
-auto WzGr2DLayer::RemoveCanvas(std::size_t index) -> std::shared_ptr<WzCanvas>
+void WzGr2DLayer::SetAnimOrigin(Gr2DVector* origin)
 {
-    if (index >= m_canvases.size())
+    if (!m_animOriginVec)
+    {
+        return;
+    }
+
+    m_animIntermediate = std::make_unique<Gr2DVector>(0, 0);
+
+    m_animOriginVec->PutOrigin(m_animIntermediate.get());
+    m_animIntermediate->PutOrigin(origin);
+}
+
+// ============================================================
+// Frame hash table
+// ============================================================
+
+auto WzGr2DLayer::hashFrameId(std::int32_t id) -> std::uint32_t
+{
+    auto uid = static_cast<std::uint32_t>(id);
+    std::uint32_t ror = (uid >> 5) | (uid << 27);
+    return ror % HASH_BUCKETS;
+}
+
+void WzGr2DLayer::insertFrameHash(FrameNode* node)
+{
+    std::uint32_t bucket = hashFrameId(node->frameId);
+    node->hashNext = m_hashTable[bucket];
+    m_hashTable[bucket] = node;
+}
+
+void WzGr2DLayer::removeFrameHash(FrameNode* node)
+{
+    std::uint32_t bucket = hashFrameId(node->frameId);
+    FrameNode** pp = &m_hashTable[bucket];
+    while (*pp)
+    {
+        if (*pp == node)
+        {
+            *pp = node->hashNext;
+            node->hashNext = nullptr;
+            return;
+        }
+        pp = &(*pp)->hashNext;
+    }
+}
+
+auto WzGr2DLayer::findFrameById(std::int32_t id) const -> FrameNode*
+{
+    std::uint32_t bucket = hashFrameId(id);
+    FrameNode* node = m_hashTable[bucket];
+    while (node)
+    {
+        if (node->frameId == id)
+        {
+            return node;
+        }
+        node = node->hashNext;
+    }
+    return nullptr;
+}
+
+auto WzGr2DLayer::findFrameByIndex(int index) const -> FrameNode*
+{
+    if (index < 0 || index >= m_frameCount)
     {
         return nullptr;
     }
-
-    auto canvas = std::move(m_canvases[index].canvas);
-    m_canvases.erase(m_canvases.begin() + static_cast<std::ptrdiff_t>(index));
-
-    // Adjust current frame if needed
-    if (m_nCurrentFrame >= m_canvases.size() && !m_canvases.empty())
+    FrameNode* node = m_frameHead;
+    for (int i = 0; i < index && node; ++i)
     {
-        m_nCurrentFrame = m_canvases.size() - 1;
+        node = node->next;
+    }
+    return node;
+}
+
+// ============================================================
+// Frame management (source-matching)
+// ============================================================
+
+auto WzGr2DLayer::InsertCanvas(ICanvas* canvas, std::int32_t duration,
+                                std::int32_t alpha, std::int32_t colorMod,
+                                std::int32_t blendSrc, std::int32_t blendDst) -> int
+{
+    if (!canvas)
+    {
+        return -1;
     }
 
-    return canvas;
+    auto* node = new FrameNode();
+
+    do
+    {
+        node->frameId = m_frameIdCounter++;
+    } while (node->frameId == -1);
+
+    node->canvas = canvas;
+    node->duration = duration;
+    node->alphaA = alpha;
+    node->alphaB = colorMod;
+    node->blendSrc = blendSrc;
+    node->blendDst = blendDst;
+
+    // Append to linked list
+    node->prev = m_frameTail;
+    node->next = nullptr;
+    if (m_frameTail)
+    {
+        m_frameTail->next = node;
+    }
+    else
+    {
+        m_frameHead = node;
+    }
+    m_frameTail = node;
+
+    insertFrameHash(node);
+
+    m_frameCount++;
+    m_totalDuration += duration;
+
+    if (m_frameCount == 1)
+    {
+        m_currentFrame = node;
+    }
+
+    return node->frameId;
+}
+
+void WzGr2DLayer::RemoveCanvas(int index)
+{
+    FrameNode* node = findFrameByIndex(index);
+    if (!node)
+    {
+        return;
+    }
+
+    if (node->prev)
+    {
+        node->prev->next = node->next;
+    }
+    else
+    {
+        m_frameHead = node->next;
+    }
+
+    if (node->next)
+    {
+        node->next->prev = node->prev;
+    }
+    else
+    {
+        m_frameTail = node->prev;
+    }
+
+    removeFrameHash(node);
+
+    m_totalDuration -= node->duration;
+    m_frameCount--;
+
+    if (m_currentFrame == node)
+    {
+        m_currentFrame = m_frameHead;
+    }
+
+    delete node;
+}
+
+void WzGr2DLayer::InitCanvasOrder()
+{
+    m_currentFrame = m_frameHead;
+    m_animTimer = 0;
+}
+
+void WzGr2DLayer::ShiftCanvas(int index)
+{
+    if (m_frameCount == 0)
+    {
+        return;
+    }
+
+    int effective = index % m_frameCount;
+    if (effective < 0)
+    {
+        effective += m_frameCount;
+    }
+
+    FrameNode* node = findFrameByIndex(effective);
+    if (node)
+    {
+        m_currentFrame = node;
+    }
+}
+
+void WzGr2DLayer::SetFrameCanvas(int index, ICanvas* canvas)
+{
+    FrameNode* node = findFrameByIndex(index);
+    if (node)
+    {
+        node->canvas = canvas;
+    }
+}
+
+auto WzGr2DLayer::get_canvasCount() const -> int
+{
+    return m_frameCount;
+}
+
+auto WzGr2DLayer::get_canvas() const -> ICanvas*
+{
+    return m_currentFrame ? m_currentFrame->canvas : nullptr;
+}
+
+void WzGr2DLayer::clearFrames()
+{
+    FrameNode* node = m_frameHead;
+    while (node)
+    {
+        FrameNode* next = node->next;
+        delete node;
+        node = next;
+    }
+    m_frameHead = nullptr;
+    m_frameTail = nullptr;
+    m_currentFrame = nullptr;
+    m_frameCount = 0;
+    m_frameIdCounter = 0;
+    m_totalDuration = 0;
+    m_hashTable.fill(nullptr);
+    m_renderCommands.clear();
+}
+
+// ============================================================
+// Frame management (backward-compatible wrappers)
+// ============================================================
+
+auto WzGr2DLayer::InsertCanvas(std::shared_ptr<WzGr2DCanvas> canvas,
+                                std::int32_t delay,
+                                std::uint8_t alpha0,
+                                std::uint8_t alpha1,
+                                std::int32_t /*zoom0*/,
+                                std::int32_t /*zoom1*/) -> std::size_t
+{
+    if (!canvas)
+    {
+        return 0;
+    }
+
+    // Keep shared_ptr alive
+    m_ownedCanvases.push_back(canvas);
+
+    // Map alpha0 -> alphaA, alpha1 -> alphaB
+    std::int32_t frameAlpha = (alpha0 == 255) ? -1 : static_cast<std::int32_t>(alpha0);
+    std::int32_t frameColorMod = (alpha1 == 255) ? -1 : static_cast<std::int32_t>(alpha1);
+
+    InsertCanvas(static_cast<ICanvas*>(canvas.get()), delay, frameAlpha, frameColorMod);
+
+    return static_cast<std::size_t>(m_frameCount > 0 ? m_frameCount - 1 : 0);
 }
 
 void WzGr2DLayer::RemoveAllCanvases()
 {
-    m_canvases.clear();
-    m_nCurrentFrame = 0;
+    clearFrames();
+    m_ownedCanvases.clear();
     m_bAnimating = false;
 }
 
 auto WzGr2DLayer::GetCanvasCount() const noexcept -> std::size_t
 {
-    return m_canvases.size();
+    return static_cast<std::size_t>(m_frameCount);
 }
 
-auto WzGr2DLayer::GetCanvas(std::size_t index) const -> std::shared_ptr<WzCanvas>
+auto WzGr2DLayer::GetCanvas(std::size_t index) const -> std::shared_ptr<WzGr2DCanvas>
 {
-    if (index >= m_canvases.size())
+    if (index >= m_ownedCanvases.size())
     {
         return nullptr;
     }
-    return m_canvases[index].canvas;
+    return m_ownedCanvases[index];
 }
 
-auto WzGr2DLayer::GetCurrentCanvas() const -> std::shared_ptr<WzCanvas>
+auto WzGr2DLayer::GetCurrentCanvas() const -> std::shared_ptr<WzGr2DCanvas>
 {
-    return GetCanvas(m_nCurrentFrame);
+    // Find current frame index and return from owned canvases
+    if (!m_currentFrame || m_ownedCanvases.empty())
+    {
+        return nullptr;
+    }
+
+    int idx = 0;
+    for (FrameNode* node = m_frameHead; node; node = node->next, ++idx)
+    {
+        if (node == m_currentFrame)
+        {
+            if (static_cast<std::size_t>(idx) < m_ownedCanvases.size())
+            {
+                return m_ownedCanvases[static_cast<std::size_t>(idx)];
+            }
+            break;
+        }
+    }
+    return nullptr;
 }
+
+// ============================================================
+// Animation (source-matching)
+// ============================================================
+
+auto WzGr2DLayer::computeAlpha(std::int32_t frameAlpha) const -> std::int32_t
+{
+    if (!m_alphaVec)
+    {
+        return 255;
+    }
+
+    // Note: get_x() in source = GetX() in local, but for standalone vectors
+    // without parent chain, GetRX() (relative/local) is more appropriate
+    std::int32_t layerAlpha = m_alphaVec->GetX();
+
+    if (frameAlpha < 0)
+    {
+        return std::clamp(layerAlpha, 0, 255);
+    }
+
+    return std::clamp(static_cast<std::int32_t>(
+        static_cast<float>(layerAlpha * frameAlpha) / 255.0F + 0.5F), 0, 255);
+}
+
+auto WzGr2DLayer::Animate(std::uint32_t flags, std::int32_t timeDelta, int targetFrame) -> int
+{
+    // 0x10 and 0x20 are mutually exclusive
+    if ((flags & 0x30) == 0x30)
+    {
+        return -1;
+    }
+
+    m_renderCommands.clear();
+
+    if (m_frameCount == 0)
+    {
+        return 0;
+    }
+
+    // 0x200 flag: reset animation timer
+    if (flags & 0x200)
+    {
+        m_animTimer = 0;
+    }
+
+    // Determine traversal direction
+    bool reverse = (flags & 0x40) != 0 && ((flags >> 6) & 1);
+    FrameNode* cursor = reverse ? m_frameTail : m_frameHead;
+
+    // Determine target frame
+    FrameNode* targetNode = nullptr;
+    if (targetFrame >= 0)
+    {
+        targetNode = findFrameByIndex(targetFrame);
+    }
+    else
+    {
+        targetNode = m_currentFrame;
+    }
+
+    // Time-based mode: calculate playback position
+    std::int32_t totalDur = m_totalDuration;
+    std::int32_t timePos = 0;
+    if ((flags & 0x20) && totalDur > 0)
+    {
+        timePos = static_cast<std::int32_t>(
+            static_cast<std::int64_t>(timeDelta) * totalDur / 1000);
+    }
+
+    // Build render commands for each frame
+    std::int32_t accumTime = 0;
+    int frameIdx = 0;
+    while (cursor)
+    {
+        RenderCommand cmd{};
+        cmd.frameIndex = reverse ? (m_frameCount - 1 - frameIdx) : frameIdx;
+        cmd.timestamp = accumTime;
+        accumTime += cursor->duration;
+
+        if (cursor == targetNode)
+        {
+            cmd.currentFrameTime = timePos;
+        }
+        else
+        {
+            cmd.currentFrameTime = -1;
+        }
+
+        cmd.alpha = computeAlpha(cursor->alphaA);
+
+        if (cursor->alphaB >= 0 && m_alphaVec)
+        {
+            std::int32_t layerAlpha = m_alphaVec->GetX();
+            cmd.colorMod = std::clamp(static_cast<std::int32_t>(
+                static_cast<float>(layerAlpha * cursor->alphaB) / 255.0F + 0.5F), 0, 255);
+        }
+        else
+        {
+            cmd.colorMod = computeAlpha(-1);
+        }
+
+        cmd.blendSrc = cursor->blendSrc;
+        cmd.blendDst = cursor->blendDst;
+
+        ICanvas* canv = cursor->canvas;
+        if (canv && canv->isReady())
+        {
+            cmd.textureHandle = canv->getTextureHandle();
+            cmd.srcX = canv->getSrcX();
+            cmd.srcY = canv->getSrcY();
+            cmd.srcW = canv->getSrcW();
+            cmd.srcH = canv->getSrcH();
+            cmd.dstW = canv->getWidth();
+            cmd.dstH = canv->getHeight();
+        }
+
+        m_renderCommands.push_back(cmd);
+
+        frameIdx++;
+        cursor = reverse ? cursor->prev : cursor->next;
+    }
+
+    m_lastUpdateFlags = static_cast<std::int32_t>(flags);
+    m_animTimer += timeDelta;
+
+    // Time-based mode: update current frame based on playback position
+    if ((flags & 0x20) && totalDur > 0 && m_frameHead)
+    {
+        std::int32_t wrappedTime = timePos % totalDur;
+        if (wrappedTime < 0)
+        {
+            wrappedTime += totalDur;
+        }
+
+        std::int32_t accum = 0;
+        FrameNode* f = m_frameHead;
+        while (f)
+        {
+            accum += f->duration;
+            if (wrappedTime < accum)
+            {
+                m_currentFrame = f;
+                break;
+            }
+            f = f->next;
+        }
+    }
+
+    return static_cast<int>(m_renderCommands.size());
+}
+
+auto WzGr2DLayer::get_animationState() const -> int
+{
+    return m_lastUpdateFlags;
+}
+
+auto WzGr2DLayer::get_animationTime() const -> int
+{
+    return m_animTimer;
+}
+
+auto WzGr2DLayer::getRenderCommands() const -> const std::vector<RenderCommand>&
+{
+    return m_renderCommands;
+}
+
+// ============================================================
+// Animation (backward-compatible wrappers)
+// ============================================================
 
 auto WzGr2DLayer::Animate(Gr2DAnimationType type,
                            std::int32_t delayRate,
                            std::int32_t repeat) -> bool
 {
-    if (m_canvases.size() < 2)
+    if (m_frameCount < 2)
     {
-        // Nothing to animate with less than 2 frames
+        return false;
+    }
+
+    auto typeValue = static_cast<std::int32_t>(type);
+
+    // GA_FIRST and GA_REPEAT are mutually exclusive
+    if ((typeValue & 0x30) == 0x30)
+    {
         return false;
     }
 
@@ -113,22 +775,37 @@ auto WzGr2DLayer::Animate(Gr2DAnimationType type,
     m_nDelayRate = delayRate;
     m_nRepeatCount = repeat;
     m_nCurrentRepeat = 0;
+
+    if (typeValue == 0 || (typeValue & static_cast<std::int32_t>(Gr2DAnimationType::Wait)))
+    {
+        m_bAnimating = false;
+        return true;
+    }
+
     m_bAnimating = true;
-    m_animState = AnimationState::Forward;
-    m_bReverseDirection = (type == Gr2DAnimationType::Reverse ||
-                           type == Gr2DAnimationType::ReverseLoop);
+
+    m_bReverseDirection = (typeValue & static_cast<std::int32_t>(Gr2DAnimationType::Reverse)) != 0;
 
     if (m_bReverseDirection)
     {
-        m_nCurrentFrame = m_canvases.size() - 1;
-        m_animState = AnimationState::Backward;
+        if (typeValue & static_cast<std::int32_t>(Gr2DAnimationType::First))
+        {
+            m_currentFrame = m_frameHead;
+        }
+        else
+        {
+            m_currentFrame = m_frameTail;
+        }
     }
     else
     {
-        m_nCurrentFrame = 0;
+        if (typeValue & static_cast<std::int32_t>(Gr2DAnimationType::First))
+        {
+            m_currentFrame = m_frameHead;
+        }
     }
 
-    m_tLastFrameTime = 0; // Will be set on first update
+    m_tLastFrameTime = -1;
 
     return true;
 }
@@ -137,282 +814,475 @@ void WzGr2DLayer::StopAnimation()
 {
     m_bAnimating = false;
     m_animType = Gr2DAnimationType::None;
-    m_animState = AnimationState::Stopped;
+}
+
+auto WzGr2DLayer::GetCurrentFrame() const noexcept -> std::size_t
+{
+    if (!m_currentFrame)
+    {
+        return 0;
+    }
+
+    std::size_t idx = 0;
+    for (FrameNode* node = m_frameHead; node; node = node->next, ++idx)
+    {
+        if (node == m_currentFrame)
+        {
+            return idx;
+        }
+    }
+    return 0;
 }
 
 void WzGr2DLayer::SetCurrentFrame(std::size_t frame)
 {
-    if (frame < m_canvases.size())
+    FrameNode* node = findFrameByIndex(static_cast<int>(frame));
+    if (node)
     {
-        m_nCurrentFrame = frame;
+        m_currentFrame = node;
     }
 }
 
-void WzGr2DLayer::SetPostRenderCallback(PostRenderCallback callback)
+auto WzGr2DLayer::GetAnimationState() const noexcept -> AnimationState
 {
-    m_postRenderCallback = std::move(callback);
+    if (!m_bAnimating)
+    {
+        return AnimationState::Idle;
+    }
+    return m_bReverseDirection ? AnimationState::Backward : AnimationState::Forward;
 }
 
-void WzGr2DLayer::StartPositionAnimation(std::int32_t offsetX, std::int32_t offsetY,
-                                          std::int32_t duration, bool loop)
+void WzGr2DLayer::advanceFrame()
 {
-    // Store initial position if not already animating
-    if (!m_bPositionAnimating)
-    {
-        m_nInitialLeft = m_nLeft;
-        m_nInitialTop = m_nTop;
-    }
-
-    m_nAnimOffsetX = offsetX;
-    m_nAnimOffsetY = offsetY;
-    m_nAnimDuration = duration > 0 ? duration : 1000;
-    m_bAnimLoop = loop;
-    m_bPositionAnimating = true;
-    m_tAnimStart = 0;  // Will be set on first update
-}
-
-void WzGr2DLayer::StopPositionAnimation()
-{
-    if (m_bPositionAnimating)
-    {
-        // Restore initial position
-        m_nLeft = m_nInitialLeft;
-        m_nTop = m_nInitialTop;
-        m_bPositionAnimating = false;
-    }
-}
-
-void WzGr2DLayer::Update(std::int32_t tCur)
-{
-    // Update position animation (for background type 4-7)
-    if (m_bPositionAnimating)
-    {
-        // Initialize animation start time on first update
-        if (m_tAnimStart == 0)
-        {
-            m_tAnimStart = tCur;
-        }
-
-        // Calculate elapsed time
-        auto elapsed = tCur - m_tAnimStart;
-
-        if (m_bAnimLoop)
-        {
-            // Loop animation - use modulo to repeat
-            elapsed = elapsed % m_nAnimDuration;
-        }
-        else if (elapsed >= m_nAnimDuration)
-        {
-            // Non-looping animation finished
-            elapsed = m_nAnimDuration;
-            m_bPositionAnimating = false;
-        }
-
-        // Calculate interpolated position (ping-pong for looping, based on original RelMove behavior)
-        // Original: moves from initial → initial+offset → initial (loop)
-        float t = static_cast<float>(elapsed) / static_cast<float>(m_nAnimDuration);
-
-        if (m_bAnimLoop)
-        {
-            // Ping-pong: 0→1→0
-            if (t <= 0.5F)
-            {
-                t = t * 2.0F;  // 0→1 in first half
-            }
-            else
-            {
-                t = (1.0F - t) * 2.0F;  // 1→0 in second half
-            }
-        }
-
-        // Apply interpolated offset
-        m_nLeft = m_nInitialLeft + static_cast<std::int32_t>(static_cast<float>(m_nAnimOffsetX) * t);
-        m_nTop = m_nInitialTop + static_cast<std::int32_t>(static_cast<float>(m_nAnimOffsetY) * t);
-    }
-
-    // Update frame animation
-    if (!m_bAnimating || m_canvases.empty())
+    if (m_frameCount == 0 || !m_currentFrame)
     {
         return;
     }
 
-    // Initialize time on first update
-    if (m_tLastFrameTime == 0)
+    auto typeValue = static_cast<std::int32_t>(m_animType);
+    bool hasRepeat = (typeValue & static_cast<std::int32_t>(Gr2DAnimationType::Repeat)) != 0;
+    bool hasClear = (typeValue & static_cast<std::int32_t>(Gr2DAnimationType::Clear)) != 0;
+
+    if (m_bReverseDirection)
     {
-        m_tLastFrameTime = tCur;
-        return;
-    }
-
-    // Get current frame delay (using thousandths, matching original)
-    // Original: v34 = v62 * v33[3]; v64 += v34 / 0x3E8;
-    const auto& currentEntry = m_canvases[m_nCurrentFrame];
-    auto delay = (currentEntry.frameInfo.nDelay * m_nDelayRate) / 1000;
-
-    if (delay <= 0)
-    {
-        delay = 1;
-    }
-
-    // Update interpolation values
-    UpdateFrameInterpolation(tCur);
-
-    // Check if we should advance to next frame
-    if (tCur - m_tLastFrameTime >= delay)
-    {
-        AdvanceFrame();
-        m_tLastFrameTime = tCur;
-    }
-}
-
-void WzGr2DLayer::AdvanceFrame()
-{
-    if (m_canvases.empty())
-    {
-        return;
-    }
-
-    switch (m_animType)
-    {
-    case Gr2DAnimationType::Normal:
-        if (m_nCurrentFrame + 1 < m_canvases.size())
+        if (m_currentFrame->prev)
         {
-            ++m_nCurrentFrame;
+            m_currentFrame = m_currentFrame->prev;
         }
         else
         {
-            // Animation complete
-            m_bAnimating = false;
-        }
-        break;
+            // Reached beginning
+            if (hasRepeat)
+            {
+                // Check if this is ping-pong (Repeat + Reverse)
+                bool hasReverse = (typeValue & static_cast<std::int32_t>(Gr2DAnimationType::Reverse)) != 0;
+                if (hasReverse)
+                {
+                    // Ping-pong: switch direction
+                    m_bReverseDirection = false;
+                }
+                else
+                {
+                    m_currentFrame = m_frameTail;
+                }
 
-    case Gr2DAnimationType::Loop:
-        m_nCurrentFrame = (m_nCurrentFrame + 1) % m_canvases.size();
-        if (m_nCurrentFrame == 0 && m_nRepeatCount > 0)
-        {
-            ++m_nCurrentRepeat;
-            if (m_nCurrentRepeat >= m_nRepeatCount)
-            {
-                m_bAnimating = false;
-            }
-        }
-        break;
-
-    case Gr2DAnimationType::PingPong:
-        if (m_bReverseDirection)
-        {
-            if (m_nCurrentFrame > 0)
-            {
-                --m_nCurrentFrame;
-            }
-            else
-            {
-                m_bReverseDirection = false;
                 if (m_nRepeatCount > 0)
                 {
                     ++m_nCurrentRepeat;
                     if (m_nCurrentRepeat >= m_nRepeatCount)
                     {
                         m_bAnimating = false;
+                        if (hasClear)
+                        {
+                            RemoveAllCanvases();
+                        }
                     }
                 }
             }
-        }
-        else
-        {
-            if (m_nCurrentFrame + 1 < m_canvases.size())
-            {
-                ++m_nCurrentFrame;
-            }
             else
             {
-                m_bReverseDirection = true;
-            }
-        }
-        break;
-
-    case Gr2DAnimationType::Reverse:
-        if (m_nCurrentFrame > 0)
-        {
-            --m_nCurrentFrame;
-        }
-        else
-        {
-            m_bAnimating = false;
-        }
-        break;
-
-    case Gr2DAnimationType::ReverseLoop:
-        if (m_nCurrentFrame > 0)
-        {
-            --m_nCurrentFrame;
-        }
-        else
-        {
-            m_nCurrentFrame = m_canvases.size() - 1;
-            if (m_nRepeatCount > 0)
-            {
-                ++m_nCurrentRepeat;
-                if (m_nCurrentRepeat >= m_nRepeatCount)
+                m_bAnimating = false;
+                if (hasClear)
                 {
-                    m_bAnimating = false;
+                    RemoveAllCanvases();
                 }
             }
         }
-        break;
+    }
+    else
+    {
+        if (m_currentFrame->next)
+        {
+            m_currentFrame = m_currentFrame->next;
+        }
+        else
+        {
+            // Reached end
+            if (hasRepeat)
+            {
+                bool hasReverse = (typeValue & static_cast<std::int32_t>(Gr2DAnimationType::Reverse)) != 0;
+                if (hasReverse)
+                {
+                    // Ping-pong: switch direction
+                    m_bReverseDirection = true;
+                }
+                else
+                {
+                    m_currentFrame = m_frameHead;
+                }
 
-    default:
-        break;
+                if (m_nRepeatCount > 0)
+                {
+                    ++m_nCurrentRepeat;
+                    if (m_nCurrentRepeat >= m_nRepeatCount)
+                    {
+                        m_bAnimating = false;
+                        if (hasClear)
+                        {
+                            RemoveAllCanvases();
+                        }
+                    }
+                }
+            }
+            else
+            {
+                m_bAnimating = false;
+                if (hasClear)
+                {
+                    RemoveAllCanvases();
+                }
+            }
+        }
     }
 }
 
-void WzGr2DLayer::UpdateFrameInterpolation(std::int32_t tCur)
+// ============================================================
+// Position
+// ============================================================
+
+void WzGr2DLayer::SetPosition(std::int32_t left, std::int32_t top) noexcept
 {
-    if (m_canvases.empty())
+    m_nLeft = left;
+    m_nTop = top;
+}
+
+// ============================================================
+// Boundary vectors
+// ============================================================
+
+auto WzGr2DLayer::get_lt() const -> Gr2DVector*
+{
+    return m_positionVec.get();
+}
+
+auto WzGr2DLayer::get_rb() const -> Gr2DVector*
+{
+    return m_rbVec.get();
+}
+
+void WzGr2DLayer::InterlockedOffset(std::int32_t ltX, std::int32_t ltY,
+                                     std::int32_t rbX, std::int32_t rbY)
+{
+    if (m_positionVec)
+    {
+        m_positionVec->Offset(ltX, ltY);
+    }
+    if (m_rbVec)
+    {
+        m_rbVec->Offset(rbX, rbY);
+    }
+}
+
+// ============================================================
+// Position helpers (operate on positionVec origin)
+// ============================================================
+
+void WzGr2DLayer::MoveOrigin(std::int32_t x, std::int32_t y)
+{
+    if (!m_positionVec)
+    {
+        return;
+    }
+    IWzVector2D* origin = m_positionVec->GetOrigin();
+    if (origin)
+    {
+        origin->Move(x, y);
+    }
+}
+
+void WzGr2DLayer::OffsetOrigin(std::int32_t dx, std::int32_t dy)
+{
+    if (!m_positionVec)
+    {
+        return;
+    }
+    IWzVector2D* origin = m_positionVec->GetOrigin();
+    if (origin)
+    {
+        origin->Offset(dx, dy);
+    }
+}
+
+void WzGr2DLayer::ScaleOrigin(std::int32_t sx, std::int32_t divx,
+                                std::int32_t sy, std::int32_t divy,
+                                std::int32_t cx, std::int32_t cy)
+{
+    if (!m_positionVec)
+    {
+        return;
+    }
+    IWzVector2D* origin = m_positionVec->GetOrigin();
+    if (origin)
+    {
+        origin->Scale(sx, divx, sy, divy, cx, cy);
+    }
+}
+
+// ============================================================
+// Color (source-matching: 3 Gr2DVector channels)
+// ============================================================
+
+void WzGr2DLayer::put_color(std::uint32_t argb)
+{
+    auto a = static_cast<std::int32_t>((argb >> 24) & 0xFF);
+    auto r = static_cast<std::int32_t>((argb >> 16) & 0xFF);
+    auto g = static_cast<std::int32_t>((argb >> 8) & 0xFF);
+    auto b = static_cast<std::int32_t>(argb & 0xFF);
+
+    ensureVectors();
+
+    if (m_alphaVec)
+    {
+        m_alphaVec->Move(a, 0);
+    }
+    if (m_colorRedVec)
+    {
+        m_colorRedVec->Move(r, 0);
+    }
+    if (m_colorGBVec)
+    {
+        m_colorGBVec->Move(g, b);
+    }
+}
+
+auto WzGr2DLayer::get_color() const -> std::uint32_t
+{
+    std::int32_t a = 255, r = 255, g = 255, b = 255;
+
+    if (m_alphaVec)
+    {
+        a = std::clamp(m_alphaVec->GetX(), 0, 255);
+    }
+    if (m_colorRedVec)
+    {
+        r = std::clamp(m_colorRedVec->GetX(), 0, 255);
+    }
+    if (m_colorGBVec)
+    {
+        // Get both X (green) and Y (blue) from the vector
+        std::int32_t gx = 0, gy = 0;
+        std::int32_t rx = 0, ry = 0, ox = 0, oy = 0;
+        double aa = 0, ra = 0;
+        m_colorGBVec->GetSnapshot(&gx, &gy, &rx, &ry, &ox, &oy, &aa, &ra);
+        g = std::clamp(gx, 0, 255);
+        b = std::clamp(gy, 0, 255);
+    }
+
+    return (static_cast<std::uint32_t>(a) << 24) |
+           (static_cast<std::uint32_t>(r) << 16) |
+           (static_cast<std::uint32_t>(g) << 8) |
+           static_cast<std::uint32_t>(b);
+}
+
+auto WzGr2DLayer::get_alpha() const -> Gr2DVector*
+{
+    return m_alphaVec.get();
+}
+
+auto WzGr2DLayer::get_redTone() const -> Gr2DVector*
+{
+    return m_colorRedVec.get();
+}
+
+auto WzGr2DLayer::get_greenBlueTone() const -> Gr2DVector*
+{
+    return m_colorGBVec.get();
+}
+
+auto WzGr2DLayer::GetAlpha() const noexcept -> std::uint8_t
+{
+    if (m_alphaVec)
+    {
+        return static_cast<std::uint8_t>(std::clamp(m_alphaVec->GetX(), 0, 255));
+    }
+    return 255;
+}
+
+void WzGr2DLayer::SetAlpha(std::uint8_t alpha) noexcept
+{
+    ensureVectors();
+    if (m_alphaVec)
+    {
+        m_alphaVec->Move(static_cast<std::int32_t>(alpha), 0);
+    }
+}
+
+// ============================================================
+// Non-vtable helpers
+// ============================================================
+
+void WzGr2DLayer::setColorKey(std::uint8_t a, std::uint8_t r, std::uint8_t g, std::uint8_t b)
+{
+    m_colorKeyEnabled = true;
+    m_colorKey = (static_cast<std::uint32_t>(a) << 24) |
+                 (static_cast<std::uint32_t>(r) << 16) |
+                 (static_cast<std::uint32_t>(g) << 8) |
+                 static_cast<std::uint32_t>(b);
+}
+
+// ============================================================
+// Particle system
+// ============================================================
+
+auto WzGr2DLayer::getEmitter() -> ParticleEmitter*
+{
+    if (!m_emitter)
+    {
+        m_emitter = std::make_unique<ParticleEmitter>();
+    }
+    return m_emitter.get();
+}
+
+void WzGr2DLayer::UpdateParticles(float deltaTime)
+{
+    if (m_emitter)
+    {
+        m_emitter->update(deltaTime, 0.0F, 0, 0.0F);
+    }
+}
+
+// ============================================================
+// Animation origin
+// ============================================================
+
+auto WzGr2DLayer::getAnimOriginVector() const -> Gr2DVector*
+{
+    return m_animOriginVec.get();
+}
+
+// ============================================================
+// Position animation (backward-compatible)
+// ============================================================
+
+void WzGr2DLayer::StartPositionAnimation(std::int32_t offsetX, std::int32_t offsetY,
+                                          std::int32_t duration, bool loop)
+{
+    ensureVectors();
+    if (!m_positionVec)
     {
         return;
     }
 
-    const auto& currentEntry = m_canvases[m_nCurrentFrame];
-    const auto& frameInfo = currentEntry.frameInfo;
+    m_positionVec->Move(m_nLeft, m_nTop);
 
-    // Calculate delay using thousandths (matching original)
-    auto delay = (frameInfo.nDelay * m_nDelayRate) / 1000;
+    auto tCur = Gr2DTime::GetCurrentTime();
+    m_positionVec->RelMove(offsetX, offsetY, tCur, tCur + duration, false, loop);
+}
+
+void WzGr2DLayer::StopPositionAnimation()
+{
+    if (m_positionVec)
+    {
+        m_positionVec->Move(m_nLeft, m_nTop);
+    }
+}
+
+auto WzGr2DLayer::IsPositionAnimating() const noexcept -> bool
+{
+    return m_positionVec != nullptr;
+}
+
+// ============================================================
+// Internal helpers
+// ============================================================
+
+void WzGr2DLayer::ensureVectors()
+{
+    if (!m_alphaVec)
+    {
+        m_alphaVec = std::make_unique<Gr2DVector>(255, 0);
+        m_colorRedVec = std::make_unique<Gr2DVector>(255, 0);
+        m_colorGBVec = std::make_unique<Gr2DVector>(255, 255);
+    }
+    if (!m_positionVec)
+    {
+        m_positionVec = std::make_unique<Gr2DVector>(0, 0);
+    }
+    if (!m_rbVec)
+    {
+        m_rbVec = std::make_unique<Gr2DVector>(0, 0);
+    }
+}
+
+// ============================================================
+// Update and Render (SDL-specific)
+// ============================================================
+
+void WzGr2DLayer::Update(std::int32_t tCur)
+{
+    Gr2DTime::SetCurrentTime(tCur);
+
+    // Update position from Gr2DVector if present
+    if (m_positionVec)
+    {
+        m_nLeft = m_positionVec->GetX();
+        m_nTop = m_positionVec->GetY();
+    }
+
+    // Update frame animation
+    if (!m_bAnimating || m_frameCount < 2 || !m_currentFrame)
+    {
+        return;
+    }
+
+    // Initialize time on first update
+    if (m_tLastFrameTime < 0)
+    {
+        m_tLastFrameTime = tCur;
+        return;
+    }
+
+    // Get current frame delay scaled by delay rate
+    auto delay = (m_currentFrame->duration * m_nDelayRate) / DelayRateScaleFactor;
     if (delay <= 0)
     {
         delay = 1;
     }
 
-    // Calculate elapsed time and interpolation factor
-    auto elapsed = tCur - m_tLastFrameTime;
-    if (elapsed < 0)
+    if (tCur - m_tLastFrameTime >= delay)
     {
-        elapsed = 0;
+        advanceFrame();
+        m_tLastFrameTime = tCur;
     }
-    if (elapsed > delay)
-    {
-        elapsed = delay;
-    }
-
-    // Interpolate alpha (linear interpolation)
-    // alpha = alpha0 + (alpha1 - alpha0) * elapsed / delay
-    m_nCurrentAlpha = static_cast<std::uint8_t>(
-        frameInfo.nAlpha0 +
-        ((frameInfo.nAlpha1 - frameInfo.nAlpha0) * elapsed) / delay);
-
-    // Interpolate zoom (using thousandths, matching original)
-    // zoom = zoom0 + (zoom1 - zoom0) * elapsed / delay
-    m_nCurrentZoom = frameInfo.nZoom0 +
-        ((frameInfo.nZoom1 - frameInfo.nZoom0) * elapsed) / delay;
 }
 
 void WzGr2DLayer::Render(SDL_Renderer* renderer, std::int32_t offsetX, std::int32_t offsetY)
 {
-    if (!m_bVisible || m_canvases.empty() || renderer == nullptr)
+    if (!m_visible || m_frameCount == 0 || renderer == nullptr)
     {
         return;
     }
 
-    auto canvas = GetCurrentCanvas();
+    // Get current frame's canvas
+    if (!m_currentFrame || !m_currentFrame->canvas)
+    {
+        return;
+    }
+
+    ICanvas* icanvas = m_currentFrame->canvas;
+
+    // Try to cast to WzGr2DCanvas for SDL texture access
+    auto* canvas = dynamic_cast<WzGr2DCanvas*>(icanvas);
     if (!canvas)
     {
         return;
@@ -429,173 +1299,78 @@ void WzGr2DLayer::Render(SDL_Renderer* renderer, std::int32_t offsetX, std::int3
         }
     }
 
-    // Get canvas properties
+    auto canvasPos = canvas->GetPosition();
     auto canvasOrigin = canvas->GetOrigin();
     auto canvasWidth = static_cast<float>(canvas->GetWidth());
     auto canvasHeight = static_cast<float>(canvas->GetHeight());
 
-    // Calculate zoom factor from thousandths (matching original)
-    // Original: v5 = (float)v8 / 1000.0; (CGr2DLayer_ApplyScaleTransform @ 0x53211160)
-    auto zoomFactor = static_cast<float>(m_nCurrentZoom) / 1000.0F;
-
-    // Calculate the zoom center point (matching original)
-    // Original formula: v14 = (float)((int)a5 + v7[73]) + 0.5;
-    // Where a5 = canvas anchor X, v7[73] = layer offset (we use 0 for simplicity)
-    // The zoom center is the canvas origin/anchor point
-    auto zoomCenterX = static_cast<float>(canvasOrigin.x) + 0.5F;
-    auto zoomCenterY = static_cast<float>(canvasOrigin.y) + 0.5F;
-
-    // Calculate base render position (layer position + camera offset with parallax)
-    // MapleStory parallax system:
-    // - rx=-100: Layer follows camera 100% (appears at fixed world position)
-    // - rx=0: Layer doesn't follow camera (fixed on screen, position is screen-relative)
-    // - rx=100: Layer scrolls at full camera speed
-    // - Negative values: absolute value is the parallax, layer at world position
-    // The offset parameter contains: -cameraPos + screenCenter
+    // Calculate base render position with parallax
     float baseX, baseY;
 
-    // Screen-space layers have special positioning
-    if (m_bScreenSpace)
+    if (m_nParallaxRx <= 0)
     {
-        if (m_bCenterBased)
-        {
-            // Center-based: position is relative to screen center
-            // offsetX/offsetY contain screen center (passed by WzGr2D)
-            // So layer at (-400, -300) renders at (screenCenterX - 400, screenCenterY - 300)
-            baseX = static_cast<float>(m_nLeft + offsetX);
-            baseY = static_cast<float>(m_nTop + offsetY);
-
-// #ifdef MS_DEBUG_CANVAS
-//             static int debugCounter = 0;
-//             if (debugCounter++ % 60 == 0)  // Log every 60 frames
-//             {
-//                 LOG_DEBUG("Screen-space (center-based) layer: pos=({},{}), offset=({},{}), base=({},{})",
-//                           m_nLeft, m_nTop, offsetX, offsetY, baseX, baseY);
-//             }
-// #endif
-        }
-        else
-        {
-            // Standard screen-space: position is absolute screen coordinates (0,0 = top-left)
-            baseX = static_cast<float>(m_nLeft);
-            baseY = static_cast<float>(m_nTop);
-
-// #ifdef MS_DEBUG_CANVAS
-//             static int debugCounter2 = 0;
-//             if (debugCounter2++ % 60 == 0)  // Log every 60 frames
-//             {
-//                 LOG_DEBUG("Screen-space layer: pos=({},{}), base=({},{}), z={}",
-//                           m_nLeft, m_nTop, baseX, baseY, m_nZ);
-//             }
-// #endif
-        }
-    }
-    // Handle X parallax
-    else if (m_nParallaxRx <= 0)
-    {
-        // Negative or zero parallax: layer position is in world coordinates
-        // Apply full camera offset to convert to screen coordinates
-        // For rx=-100, use 100% camera follow; for rx=0, also use full offset
-        // This makes the layer appear at its world position
         baseX = static_cast<float>(m_nLeft + offsetX);
     }
     else
     {
-        // Positive parallax: scale the camera offset
-        // rx=100 means full camera follow, rx=50 means half speed, etc.
-        auto parallaxOffsetX = (offsetX * m_nParallaxRx) / 100;
+        auto parallaxOffsetX = (offsetX * m_nParallaxRx) / ParallaxScaleFactor;
         baseX = static_cast<float>(m_nLeft + parallaxOffsetX);
     }
 
-    // Handle Y parallax for non-screen-space layers
-    // (screen-space Y is already handled in the screen-space block above)
-    if (!m_bScreenSpace)
+    if (m_nParallaxRy <= 0)
     {
-        if (m_nParallaxRy <= 0)
-        {
-            baseY = static_cast<float>(m_nTop + offsetY);
-        }
-        else
-        {
-            auto parallaxOffsetY = (offsetY * m_nParallaxRy) / 100;
-            baseY = static_cast<float>(m_nTop + parallaxOffsetY);
-        }
-    }
-    // For screen-space layers, baseY was already set above
-
-    // Apply zoom transformation around canvas origin (matching original)
-    // Original: result = (int)(float)((float)((float)((float)(int)v20 - v14) * v23) + v14);
-    // This scales the position relative to the zoom center, then adds back the center
-    float renderX, renderY, renderWidth, renderHeight;
-    if (m_nCurrentZoom != 1000)
-    {
-        // Scale the canvas origin offset by the zoom factor
-        // The render position is: basePos - scaledOrigin
-        auto scaledOriginX = zoomCenterX * zoomFactor;
-        auto scaledOriginY = zoomCenterY * zoomFactor;
-
-        renderX = baseX - scaledOriginX;
-        renderY = baseY - scaledOriginY;
-        renderWidth = canvasWidth * zoomFactor;
-        renderHeight = canvasHeight * zoomFactor;
+        baseY = static_cast<float>(m_nTop + offsetY);
     }
     else
     {
-        // No scaling: standard origin offset
-        renderX = baseX - static_cast<float>(canvasOrigin.x);
-        renderY = baseY - static_cast<float>(canvasOrigin.y);
-        renderWidth = canvasWidth;
-        renderHeight = canvasHeight;
+        auto parallaxOffsetY = (offsetY * m_nParallaxRy) / ParallaxScaleFactor;
+        baseY = static_cast<float>(m_nTop + parallaxOffsetY);
     }
 
-// #ifdef MS_DEBUG_CANVAS
-//     if (m_bScreenSpace)
-//     {
-//         static int debugCounter3 = 0;
-//         if (debugCounter3++ % 60 == 0)  // Log every 60 frames
-//         {
-//             LOG_DEBUG("Screen-space render: base=({:.1f},{:.1f}), origin=({},{}), final=({:.1f},{:.1f}), z={}",
-//                       baseX, baseY, canvasOrigin.x, canvasOrigin.y, renderX, renderY, m_nZ);
-//         }
-//     }
-// #endif
+    // Render position: basePos + canvasPos - canvasOrigin
+    float renderX = baseX + static_cast<float>(canvasPos.x) - static_cast<float>(canvasOrigin.x);
+    float renderY = baseY + static_cast<float>(canvasPos.y) - static_cast<float>(canvasOrigin.y);
+    float renderWidth = canvasWidth;
+    float renderHeight = canvasHeight;
 
-    // Apply color modulation
-    auto alpha = static_cast<std::uint8_t>((m_dwColor >> 24) & 0xFF);
-    auto red = static_cast<std::uint8_t>((m_dwColor >> 16) & 0xFF);
-    auto green = static_cast<std::uint8_t>((m_dwColor >> 8) & 0xFF);
-    auto blue = static_cast<std::uint8_t>(m_dwColor & 0xFF);
+    // Apply color modulation from Gr2DVector channels
+    auto color = get_color();
+    auto alpha = static_cast<std::uint8_t>((color >> 24) & 0xFF);
+    auto red = static_cast<std::uint8_t>((color >> 16) & 0xFF);
+    auto green = static_cast<std::uint8_t>((color >> 8) & 0xFF);
+    auto blue = static_cast<std::uint8_t>(color & 0xFF);
 
-    // Combine layer alpha with frame interpolated alpha
+    // Combine layer alpha with per-frame alpha
+    auto frameAlpha = computeAlpha(m_currentFrame->alphaA);
     alpha = static_cast<std::uint8_t>(
-        (static_cast<int>(alpha) * static_cast<int>(m_nCurrentAlpha)) / 255);
+        std::clamp(static_cast<int>(alpha) * frameAlpha / 255, 0, 255));
 
     SDL_SetTextureColorMod(texture, red, green, blue);
     SDL_SetTextureAlphaMod(texture, alpha);
 
+    // Apply blend mode
+    auto sdlBlendMode = ConvertToSDLBlendMode(m_blendMode);
+    SDL_SetTextureBlendMode(texture, sdlBlendMode);
+
     // Handle flip
     SDL_FlipMode flipMode = SDL_FLIP_NONE;
-    if (m_flipState == LayerFlipState::Horizontal ||
-        m_flipState == LayerFlipState::Both)
+    if (m_flipMode & static_cast<std::int32_t>(LayerFlipState::Horizontal))
     {
         flipMode = static_cast<SDL_FlipMode>(flipMode | SDL_FLIP_HORIZONTAL);
     }
-    if (m_flipState == LayerFlipState::Vertical ||
-        m_flipState == LayerFlipState::Both)
+    if (m_flipMode & static_cast<std::int32_t>(LayerFlipState::Vertical))
     {
         flipMode = static_cast<SDL_FlipMode>(flipMode | SDL_FLIP_VERTICAL);
     }
 
-    // Get viewport size for tiling calculation
+    // Get viewport size for tiling
     int viewportW = 0;
     int viewportH = 0;
     SDL_GetRenderOutputSize(renderer, &viewportW, &viewportH);
 
-    // Calculate tile distances (use canvas dimensions if cx/cy is 0)
     auto tileCx = m_nTileCx > 0 ? static_cast<float>(m_nTileCx) : renderWidth;
     auto tileCy = m_nTileCy > 0 ? static_cast<float>(m_nTileCy) : renderHeight;
 
-    // Determine tiling range
     int tilesX = 1;
     int tilesY = 1;
     float startTileX = renderX;
@@ -603,19 +1378,15 @@ void WzGr2DLayer::Render(SDL_Renderer* renderer, std::int32_t offsetX, std::int3
 
     if (m_nTileCx > 0)
     {
-        // Calculate how many tiles needed to cover viewport horizontally
-        // Start from a position that ensures we cover the left edge
         while (startTileX > 0)
         {
             startTileX -= tileCx;
         }
-        // Count tiles needed to cover from startTileX to viewport right edge
         tilesX = static_cast<int>((static_cast<float>(viewportW) - startTileX) / tileCx) + 2;
     }
 
     if (m_nTileCy > 0)
     {
-        // Calculate how many tiles needed to cover viewport vertically
         while (startTileY > 0)
         {
             startTileY -= tileCy;
@@ -623,7 +1394,6 @@ void WzGr2DLayer::Render(SDL_Renderer* renderer, std::int32_t offsetX, std::int3
         tilesY = static_cast<int>((static_cast<float>(viewportH) - startTileY) / tileCy) + 2;
     }
 
-    // Render tiles
     for (int ty = 0; ty < tilesY; ++ty)
     {
         for (int tx = 0; tx < tilesX; ++tx)
@@ -631,7 +1401,6 @@ void WzGr2DLayer::Render(SDL_Renderer* renderer, std::int32_t offsetX, std::int3
             float tileX = startTileX + static_cast<float>(tx) * tileCx;
             float tileY = startTileY + static_cast<float>(ty) * tileCy;
 
-            // Skip tiles outside viewport
             if (tileX + renderWidth < 0 || tileX > static_cast<float>(viewportW) ||
                 tileY + renderHeight < 0 || tileY > static_cast<float>(viewportH))
             {
@@ -645,10 +1414,10 @@ void WzGr2DLayer::Render(SDL_Renderer* renderer, std::int32_t offsetX, std::int3
                 renderHeight
             };
 
-            if (flipMode != SDL_FLIP_NONE || m_nCurrentZoom != 1000)
+            if (flipMode != SDL_FLIP_NONE || m_fRotation != 0.0F)
             {
                 SDL_RenderTextureRotated(renderer, texture, nullptr, &dstRect,
-                                          0.0, nullptr, flipMode);
+                                          static_cast<double>(m_fRotation), nullptr, flipMode);
             }
             else
             {
@@ -656,12 +1425,204 @@ void WzGr2DLayer::Render(SDL_Renderer* renderer, std::int32_t offsetX, std::int3
             }
         }
     }
+}
 
-    // Post-render callback
-    if (m_postRenderCallback)
-    {
-        m_postRenderCallback(*this, m_tLastFrameTime);
-    }
+// =============================================================================
+// WzGr2DLayer — IWzVector2D delegation to m_positionVec
+// =============================================================================
+
+auto WzGr2DLayer::GetX() -> std::int32_t
+{
+    ensureVectors();
+    return m_positionVec->GetX();
+}
+
+auto WzGr2DLayer::GetY() -> std::int32_t
+{
+    ensureVectors();
+    return m_positionVec->GetY();
+}
+
+void WzGr2DLayer::PutX(std::int32_t x)
+{
+    ensureVectors();
+    m_positionVec->PutX(x);
+}
+
+void WzGr2DLayer::PutY(std::int32_t y)
+{
+    ensureVectors();
+    m_positionVec->PutY(y);
+}
+
+void WzGr2DLayer::Move(std::int32_t x, std::int32_t y)
+{
+    ensureVectors();
+    m_positionVec->Move(x, y);
+}
+
+void WzGr2DLayer::Offset(std::int32_t dx, std::int32_t dy)
+{
+    ensureVectors();
+    m_positionVec->Offset(dx, dy);
+}
+
+void WzGr2DLayer::Scale(std::int32_t sx, std::int32_t divx,
+                         std::int32_t sy, std::int32_t divy,
+                         std::int32_t cx, std::int32_t cy)
+{
+    ensureVectors();
+    m_positionVec->Scale(sx, divx, sy, divy, cx, cy);
+}
+
+void WzGr2DLayer::Init(std::int32_t x, std::int32_t y)
+{
+    ensureVectors();
+    m_positionVec->Init(x, y);
+}
+
+auto WzGr2DLayer::GetCurrentTime() -> std::int32_t
+{
+    return Gr2DTime::GetCurrentTime();
+}
+
+void WzGr2DLayer::PutCurrentTime(std::int32_t t)
+{
+    Gr2DTime::SetCurrentTime(t);
+}
+
+auto WzGr2DLayer::GetOrigin() const -> IWzVector2D*
+{
+    if (!m_positionVec) return nullptr;
+    return m_positionVec->GetOrigin();
+}
+
+void WzGr2DLayer::PutOrigin(IWzVector2D* parent)
+{
+    ensureVectors();
+    m_positionVec->PutOrigin(parent);
+}
+
+auto WzGr2DLayer::GetRX() -> std::int32_t
+{
+    ensureVectors();
+    return m_positionVec->GetRX();
+}
+
+void WzGr2DLayer::PutRX(std::int32_t x)
+{
+    ensureVectors();
+    m_positionVec->PutRX(x);
+}
+
+auto WzGr2DLayer::GetRY() -> std::int32_t
+{
+    ensureVectors();
+    return m_positionVec->GetRY();
+}
+
+void WzGr2DLayer::PutRY(std::int32_t y)
+{
+    ensureVectors();
+    m_positionVec->PutRY(y);
+}
+
+auto WzGr2DLayer::GetA() -> double
+{
+    ensureVectors();
+    return m_positionVec->GetA();
+}
+
+auto WzGr2DLayer::GetRA() -> double
+{
+    ensureVectors();
+    return m_positionVec->GetRA();
+}
+
+void WzGr2DLayer::PutRA(double a)
+{
+    ensureVectors();
+    m_positionVec->PutRA(a);
+}
+
+auto WzGr2DLayer::GetFlipX() -> bool
+{
+    ensureVectors();
+    return m_positionVec->GetFlipX();
+}
+
+void WzGr2DLayer::PutFlipX(std::int32_t f)
+{
+    ensureVectors();
+    m_positionVec->PutFlipX(f);
+}
+
+void WzGr2DLayer::GetSnapshot(std::int32_t* x, std::int32_t* y,
+                               std::int32_t* rx, std::int32_t* ry,
+                               std::int32_t* ox, std::int32_t* oy,
+                               double* a, double* ra,
+                               std::int32_t time)
+{
+    ensureVectors();
+    m_positionVec->GetSnapshot(x, y, rx, ry, ox, oy, a, ra, time);
+}
+
+void WzGr2DLayer::RelMove(std::int32_t x, std::int32_t y,
+                           std::int32_t startTime, std::int32_t endTime,
+                           bool bounce, bool pingpong, bool replace)
+{
+    ensureVectors();
+    m_positionVec->RelMove(x, y, startTime, endTime, bounce, pingpong, replace);
+}
+
+void WzGr2DLayer::RelOffset(std::int32_t dx, std::int32_t dy,
+                             std::int32_t startTime, std::int32_t endTime)
+{
+    ensureVectors();
+    m_positionVec->RelOffset(dx, dy, startTime, endTime);
+}
+
+void WzGr2DLayer::Ratio(IWzVector2D* target,
+                         std::int32_t denomX, std::int32_t denomY,
+                         std::int32_t scaleX, std::int32_t scaleY)
+{
+    ensureVectors();
+    m_positionVec->Ratio(target, denomX, denomY, scaleX, scaleY);
+}
+
+void WzGr2DLayer::WrapClip(IWzVector2D* bounds,
+                            std::int32_t x, std::int32_t y,
+                            std::int32_t w, std::int32_t h,
+                            bool clampMode)
+{
+    ensureVectors();
+    m_positionVec->WrapClip(bounds, x, y, w, h, clampMode);
+}
+
+void WzGr2DLayer::Rotate(double angle, std::int32_t period,
+                          std::int32_t easeFrames)
+{
+    ensureVectors();
+    m_positionVec->Rotate(angle, period, easeFrames);
+}
+
+auto WzGr2DLayer::GetLooseLevel() -> std::int32_t
+{
+    ensureVectors();
+    return m_positionVec->GetLooseLevel();
+}
+
+void WzGr2DLayer::PutLooseLevel(std::int32_t level)
+{
+    ensureVectors();
+    m_positionVec->PutLooseLevel(level);
+}
+
+void WzGr2DLayer::Fly(const std::vector<FlyKeyframe>& keyframes,
+                       IWzVector2D* completionTarget)
+{
+    ensureVectors();
+    m_positionVec->Fly(keyframes, completionTarget);
 }
 
 } // namespace ms

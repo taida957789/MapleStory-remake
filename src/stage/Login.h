@@ -13,8 +13,10 @@ namespace ms
 {
 
 class WzCanvas;
+class WzGr2DCanvas;
 class WzGr2DLayer;
 class WzProperty;
+class WzImage;
 class UIButton;
 class UIEdit;
 
@@ -201,7 +203,6 @@ private:
     // Step transition
     void ChangeStepImmediate();
     void OnStepChanged();
-    void ChangeStepBGM();
 
     // World info
     void SendWorldInfoForShiningRequest();
@@ -220,13 +221,11 @@ private:
 
     // Resource loading
     void LoadLoginResources();
+    void LoadLoginBackground();  // Load LoginBack.img background
     void LoadGenderAndFrameChoosable();
     void LoadNewCharInfo(std::int32_t nRace);
     void LoadNewDummyCharInfo();
     void LoadSkinList();
-
-    // Fade effect
-    void FadeOverFrame(bool bFadeIn);
 
     // Utility
     [[nodiscard]] auto ConvertSelectedRaceToUIRace() const -> std::int32_t;
@@ -435,7 +434,6 @@ private:
     std::shared_ptr<WzGr2DLayer> m_pLayerBook;
     std::shared_ptr<WzGr2DLayer> m_pLayerLight;
     std::shared_ptr<WzGr2DLayer> m_pLayerDust;
-    std::shared_ptr<WzGr2DLayer> m_pLayerFadeOverFrame;
 
     // UI elements
     std::shared_ptr<UILoginStart> m_pLoginStart;
@@ -454,8 +452,8 @@ private:
     std::shared_ptr<UIButton> m_pBtnQuit;       // (159, 117) - Quit button
     std::shared_ptr<UIButton> m_pBtnEmailSave;  // (27, 97) - Save email checkbox
     std::shared_ptr<WzGr2DLayer> m_pLayerEmailCheck;  // Checkmark layer for email save
-    std::shared_ptr<WzCanvas> m_pCanvasCheck0;        // Unchecked state (check/0)
-    std::shared_ptr<WzCanvas> m_pCanvasCheck1;        // Checked state (check/1)
+    std::shared_ptr<WzGr2DCanvas> m_pCanvasCheck0;        // Unchecked state (check/0)
+    std::shared_ptr<WzGr2DCanvas> m_pCanvasCheck1;        // Checked state (check/1)
     std::shared_ptr<UIButton> m_pBtnEmailLost;  // (99, 97) - Lost email button
     std::shared_ptr<UIButton> m_pBtnPasswdLost; // (171, 97) - Lost password button
     std::shared_ptr<UIButton> m_pBtnNew;        // (15, 117) - New account button
@@ -468,7 +466,10 @@ private:
     // Cached WZ properties for UI
     std::shared_ptr<WzProperty> m_pPropChangeStepBGM;
     std::string m_sLastChangeStepBGM;
-    std::shared_ptr<WzProperty> m_pLoginImgProp;
+    std::shared_ptr<WzImage> m_pLoginImgProp;
+
+    // Login background layer
+    std::shared_ptr<WzGr2DLayer> m_pLayerBackground;
 
     // Character card
     CharacterCard m_characterCard;

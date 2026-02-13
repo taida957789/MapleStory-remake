@@ -15,7 +15,7 @@ struct SDL_Renderer;
 namespace ms
 {
 
-class WzCanvas;
+class WzGr2DCanvas;
 class WzGr2DLayer;
 
 /**
@@ -90,7 +90,7 @@ public:
     [[nodiscard]] auto CreateLayer(std::int32_t left, std::int32_t top,
                                     std::uint32_t width, std::uint32_t height,
                                     std::int32_t z,
-                                    std::shared_ptr<WzCanvas> canvas = nullptr,
+                                    std::shared_ptr<WzGr2DCanvas> canvas = nullptr,
                                     std::uint32_t filter = 0) -> std::shared_ptr<WzGr2DLayer>;
 
     /**

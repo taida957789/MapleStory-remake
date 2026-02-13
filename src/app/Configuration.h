@@ -76,8 +76,8 @@ private:
     ~Configuration() override;
 
     // Screen settings
-    int m_nScreenWidth{800};
-    int m_nScreenHeight{600};
+    int m_nScreenWidth{1366};  // Updated from 800 to match LoginBack.img origin (683*2)
+    int m_nScreenHeight{768};  // Updated from 600 to match LoginBack.img origin (384*2)
     bool m_bFullScreen{false};
 
     // Audio settings
@@ -90,7 +90,7 @@ private:
 
     // Path settings
     std::string m_sExecPath;
-    std::string m_sWzPath{"resources/old"};  // Default WZ directory
+    std::string m_sWzPath{"resources/Data"};  // Default WZ directory
 
     // Offline mode
     bool m_bOfflineMode{false};

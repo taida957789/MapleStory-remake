@@ -3,6 +3,7 @@
 #include "graphics/WzGr2D.h"
 #include "graphics/WzGr2DLayer.h"
 #include "util/Logger.h"
+#include "graphics/WzGr2DCanvas.h"
 #include "wz/WzCanvas.h"
 #include "wz/WzProperty.h"
 #include "wz/WzResMan.h"
@@ -53,14 +54,16 @@ auto UIButton::LoadFromProperty(const std::shared_ptr<WzProperty>& prop) -> bool
         LOG_DEBUG("UIButton::LoadFromProperty - found state: {}", name);
 
         // Try to get canvas directly
-        auto canvas = stateProp->GetCanvas();
+        auto wzCanvas = stateProp->GetCanvas();
+        auto canvas = wzCanvas ? std::make_shared<WzGr2DCanvas>(wzCanvas) : nullptr;
         if (!canvas)
         {
             // Try to get from child "0"
             auto childProp = stateProp->GetChild("0");
             if (childProp)
             {
-                canvas = childProp->GetCanvas();
+                auto childWzCanvas = childProp->GetCanvas();
+                canvas = childWzCanvas ? std::make_shared<WzGr2DCanvas>(childWzCanvas) : nullptr;
             }
         }
 
@@ -95,7 +98,8 @@ auto UIButton::LoadFromProperty(const std::shared_ptr<WzProperty>& prop) -> bool
                 continue;
             }
 
-            auto canvas = frameProp->GetCanvas();
+            auto wzCanvas = frameProp->GetCanvas();
+            auto canvas = wzCanvas ? std::make_shared<WzGr2DCanvas>(wzCanvas) : nullptr;
             if (canvas)
             {
                 SetStateCanvas(static_cast<UIState>(i), canvas);
@@ -128,13 +132,15 @@ auto UIButton::LoadFromProperty(const std::shared_ptr<WzProperty>& prop) -> bool
             continue;
         }
 
-        auto canvas = stateProp->GetCanvas();
+        auto wzCanvas = stateProp->GetCanvas();
+        auto canvas = wzCanvas ? std::make_shared<WzGr2DCanvas>(wzCanvas) : nullptr;
         if (!canvas)
         {
             auto childProp = stateProp->GetChild("0");
             if (childProp)
             {
-                canvas = childProp->GetCanvas();
+                auto childWzCanvas = childProp->GetCanvas();
+                canvas = childWzCanvas ? std::make_shared<WzGr2DCanvas>(childWzCanvas) : nullptr;
             }
         }
 
@@ -153,7 +159,8 @@ auto UIButton::LoadFromProperty(const std::shared_ptr<WzProperty>& prop) -> bool
             continue;
         }
 
-        auto canvas = frameProp->GetCanvas();
+        auto wzCanvas = frameProp->GetCanvas();
+        auto canvas = wzCanvas ? std::make_shared<WzGr2DCanvas>(wzCanvas) : nullptr;
         if (canvas)
         {
             // Map 4->Normal, 5->MouseOver, etc.
@@ -165,7 +172,8 @@ auto UIButton::LoadFromProperty(const std::shared_ptr<WzProperty>& prop) -> bool
     // This handles the case where the button is just a single canvas (no states)
     if (!hasNormal)
     {
-        auto canvas = prop->GetCanvas();
+        auto wzCanvas = prop->GetCanvas();
+        auto canvas = wzCanvas ? std::make_shared<WzGr2DCanvas>(wzCanvas) : nullptr;
         if (canvas)
         {
             LOG_DEBUG("UIButton::LoadFromProperty - using property itself as canvas (no states)");
@@ -223,7 +231,7 @@ auto UIButton::LoadFromUOL(const std::wstring& sUOL) -> bool
     return result;
 }
 
-void UIButton::SetStateCanvas(UIState state, std::shared_ptr<WzCanvas> canvas)
+void UIButton::SetStateCanvas(UIState state, std::shared_ptr<WzGr2DCanvas> canvas)
 {
     auto index = static_cast<std::size_t>(state);
     if (index < 4)
@@ -232,7 +240,7 @@ void UIButton::SetStateCanvas(UIState state, std::shared_ptr<WzCanvas> canvas)
     }
 }
 
-void UIButton::SetCheckedStateCanvas(UIState state, std::shared_ptr<WzCanvas> canvas)
+void UIButton::SetCheckedStateCanvas(UIState state, std::shared_ptr<WzGr2DCanvas> canvas)
 {
     // Checked states are stored at indices 4-7
     auto index = static_cast<std::size_t>(state) + 4;
@@ -242,7 +250,7 @@ void UIButton::SetCheckedStateCanvas(UIState state, std::shared_ptr<WzCanvas> ca
     }
 }
 
-auto UIButton::GetCurrentCanvas() const -> std::shared_ptr<WzCanvas>
+auto UIButton::GetCurrentCanvas() const -> std::shared_ptr<WzGr2DCanvas>
 {
     auto baseIndex = static_cast<std::size_t>(m_state);
 
@@ -380,30 +388,27 @@ void UIButton::CreateLayer(WzGr2D& gr, std::int32_t z, bool screenSpace)
     // Get the current canvas
     auto canvas = GetCurrentCanvas();
 
-    // MapleStory coordinate system:
+    // New coordinate system (with Canvas.position support):
     // - absPos = desired RENDER position on screen (where we want the button to appear)
-    // - WzGr2DLayer::Render formula: renderPos = layerPos - canvasOrigin
-    // - Therefore: layerPos = absPos + canvasOrigin (to compensate for origin subtraction)
+    // - Rendering formula: renderPos = layerPos + canvasPos - canvasOrigin + cameraOffset
+    // - We set: layerPos = absPos, canvasPos = canvasOrigin
+    // - Result: renderPos = absPos + canvasOrigin - canvasOrigin = absPos ✓
     auto absPos = GetAbsolutePosition();
 
-    // Compensate for canvas origin (matching CUIChannelSelect background logic)
-    auto canvasOrigin = canvas ? canvas->GetOrigin() : Point2D{0, 0};
-    std::int32_t layerX = absPos.x + canvasOrigin.x;
-    std::int32_t layerY = absPos.y + canvasOrigin.y;
-
-    // Create a layer for this button
-    auto layer = gr.CreateLayer(layerX, layerY,
+    // Create a layer for this button at the absolute position
+    auto layer = gr.CreateLayer(absPos.x, absPos.y,
                                  static_cast<std::uint32_t>(m_nWidth),
                                  static_cast<std::uint32_t>(m_nHeight), z);
 
     if (layer)
     {
         // UI buttons are typically in screen space (not affected by camera)
-        layer->SetScreenSpace(screenSpace);
 
         // Add the normal state canvas initially
         if (canvas)
         {
+            // Set canvas position to its origin so that: renderPos = layerPos + origin - origin = layerPos
+            canvas->SetPosition(canvas->GetOrigin());
             layer->InsertCanvas(canvas, 0, 255, 255);
         }
 
@@ -476,10 +481,10 @@ void UIButton::UpdateLayerCanvas()
     auto canvas = GetCurrentCanvas();
     if (canvas)
     {
+        // Set canvas position to its origin to maintain correct rendering
+        canvas->SetPosition(canvas->GetOrigin());
         m_pLayer->RemoveAllCanvases();
         m_pLayer->InsertCanvas(canvas, 0, 255, 255);
-        // Layer position stays at m_position (anchor point)
-        // Different canvas origins will render at different offsets automatically
     }
 }
 

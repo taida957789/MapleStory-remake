@@ -324,11 +324,11 @@ cmake --build . -j$(nproc)
 
 The WZ resource files location can be configured:
 
-- **Default path**: `resources/old`
+- **Default path**: `resources/new`
 - **Command line**: `./MapleStory --wz-path <path>` or `./MapleStory -w <path>`
 
 ```bash
-# Use default path (resources/old)
+# Use default path (resources/new)
 ./MapleStory
 
 # Use custom WZ path
@@ -340,7 +340,7 @@ If the configured path doesn't exist, the application will search common locatio
 - `./UI.wz`
 - `../UI.wz`
 - `./data/UI.wz`
-- `./resources/old/UI.wz`
+- `./resources/new/UI.wz`
 
 ### CMake Options
 

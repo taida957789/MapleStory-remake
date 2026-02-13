@@ -2,38 +2,39 @@
 
 #include "WzGr2DTypes.h"
 #include "util/Point.h"
+#include "Gr2DVector.h"
 
+#include <array>
 #include <cstdint>
-#include <functional>
 #include <memory>
 #include <vector>
 
 struct SDL_Renderer;
+struct SDL_Texture;
 
 namespace ms
 {
 
-class WzCanvas;
+class WzGr2DCanvas;
 
 /**
- * @brief Graphics layer for 2D rendering
+ * @brief 2D sprite layer class
  *
  * Based on IWzGr2DLayer interface from the original MapleStory client.
  * GUID: 6dc8c7ce-8e81-4420-b4f6-4b60b7d5fcdf
  *
- * Represents a single layer in the rendering system that can contain
- * multiple canvas frames for animation.
+ * Uses FrameNode doubly-linked list + ROR5 hash table for frame management,
+ * 6 Gr2DVector objects for coordinate chains, 3 Gr2DVector color channels,
+ * and RenderCommand output from Animate().
  */
-class WzGr2DLayer
+class WzGr2DLayer : public IWzVector2D
 {
 public:
-    using PostRenderCallback = std::function<void(WzGr2DLayer&, std::int32_t)>;
-
     WzGr2DLayer();
     WzGr2DLayer(std::int32_t left, std::int32_t top,
                 std::uint32_t width, std::uint32_t height,
                 std::int32_t z);
-    ~WzGr2DLayer();
+    ~WzGr2DLayer() override;
 
     // Non-copyable, movable
     WzGr2DLayer(const WzGr2DLayer&) = delete;
@@ -41,45 +42,148 @@ public:
     WzGr2DLayer(WzGr2DLayer&&) noexcept;
     auto operator=(WzGr2DLayer&&) noexcept -> WzGr2DLayer&;
 
-    // Position and dimensions
+    // === Initialization (source-matching) ===
+    void SetVideoMode(std::int32_t screenW, std::int32_t screenH,
+                      std::int32_t viewW, std::int32_t viewH);
+    void InitAnimation(std::int32_t baseTimestamp);
+    void SetAnimOrigin(Gr2DVector* origin);
+
+    // === Frame management (source-matching API) ===
+    auto InsertCanvas(ICanvas* canvas, std::int32_t duration,
+                      std::int32_t alpha = -1, std::int32_t colorMod = -1,
+                      std::int32_t blendSrc = 0, std::int32_t blendDst = 0) -> int;
+    void RemoveCanvas(int index);
+    void InitCanvasOrder();
+    void ShiftCanvas(int index);
+    void SetFrameCanvas(int index, ICanvas* canvas);
+    [[nodiscard]] auto get_canvasCount() const -> int;
+    [[nodiscard]] auto get_canvas() const -> ICanvas*;
+
+    // === Frame management (backward-compatible wrappers) ===
+    auto InsertCanvas(std::shared_ptr<WzGr2DCanvas> canvas,
+                      std::int32_t delay = 100,
+                      std::uint8_t alpha0 = 255,
+                      std::uint8_t alpha1 = 255,
+                      std::int32_t zoom0 = 1000,
+                      std::int32_t zoom1 = 1000) -> std::size_t;
+    void RemoveAllCanvases();
+    [[nodiscard]] auto GetCanvasCount() const noexcept -> std::size_t;
+    [[nodiscard]] auto GetCanvas(std::size_t index) const -> std::shared_ptr<WzGr2DCanvas>;
+    [[nodiscard]] auto GetCurrentCanvas() const -> std::shared_ptr<WzGr2DCanvas>;
+
+    // === Animation (source-matching API) ===
+    auto Animate(std::uint32_t flags, std::int32_t timeDelta, int targetFrame = -1) -> int;
+    [[nodiscard]] auto get_animationState() const -> int;
+    [[nodiscard]] auto get_animationTime() const -> int;
+    [[nodiscard]] auto getRenderCommands() const -> const std::vector<RenderCommand>&;
+
+    // === Animation (backward-compatible wrappers) ===
+    auto Animate(Gr2DAnimationType type,
+                 std::int32_t delayRate = 1000,
+                 std::int32_t repeat = -1) -> bool;
+    void StopAnimation();
+    [[nodiscard]] auto IsAnimating() const noexcept -> bool { return m_bAnimating; }
+    [[nodiscard]] auto GetCurrentFrame() const noexcept -> std::size_t;
+    void SetCurrentFrame(std::size_t frame);
+    [[nodiscard]] auto GetAnimationState() const noexcept -> AnimationState;
+    [[nodiscard]] auto GetAnimationTime() const noexcept -> std::int32_t { return m_animTimer; }
+
+    // === Dimensions (source-matching) ===
+    [[nodiscard]] auto get_width() const -> std::int32_t { return m_width; }
+    void put_width(std::int32_t w) { m_width = w; }
+    [[nodiscard]] auto get_height() const -> std::int32_t { return m_height; }
+    void put_height(std::int32_t h) { m_height = h; }
+
+    // === Dimensions (backward-compatible) ===
+    [[nodiscard]] auto GetWidth() const noexcept -> std::uint32_t
+    {
+        return static_cast<std::uint32_t>(m_width > 0 ? m_width : 0);
+    }
+    [[nodiscard]] auto GetHeight() const noexcept -> std::uint32_t
+    {
+        return static_cast<std::uint32_t>(m_height > 0 ? m_height : 0);
+    }
+    void SetWidth(std::uint32_t width) noexcept { m_width = static_cast<std::int32_t>(width); }
+    void SetHeight(std::uint32_t height) noexcept { m_height = static_cast<std::int32_t>(height); }
+
+    // === Position ===
     [[nodiscard]] auto GetLeft() const noexcept -> std::int32_t { return m_nLeft; }
     [[nodiscard]] auto GetTop() const noexcept -> std::int32_t { return m_nTop; }
-    [[nodiscard]] auto GetWidth() const noexcept -> std::uint32_t { return m_uWidth; }
-    [[nodiscard]] auto GetHeight() const noexcept -> std::uint32_t { return m_uHeight; }
-
     void SetPosition(std::int32_t left, std::int32_t top) noexcept;
+    [[nodiscard]] auto GetLeftTop() const noexcept -> Point2D { return {m_nLeft, m_nTop}; }
+    [[nodiscard]] auto GetRightBottom() const noexcept -> Point2D
+    {
+        return {m_nLeft + m_width, m_nTop + m_height};
+    }
 
-    // Z-order (depth)
-    [[nodiscard]] auto GetZ() const noexcept -> std::int32_t { return m_nZ; }
-    void SetZ(std::int32_t z) noexcept { m_nZ = z; }
+    // === Boundary vectors (source-matching) ===
+    [[nodiscard]] auto get_lt() const -> Gr2DVector*;
+    [[nodiscard]] auto get_rb() const -> Gr2DVector*;
+    void InterlockedOffset(std::int32_t ltX, std::int32_t ltY,
+                           std::int32_t rbX, std::int32_t rbY);
 
-    // Flip state
-    [[nodiscard]] auto GetFlip() const noexcept -> LayerFlipState { return m_flipState; }
-    void SetFlip(LayerFlipState flip) noexcept { m_flipState = flip; }
-    void SetFlip(std::int32_t flip) noexcept { m_flipState = static_cast<LayerFlipState>(flip); }
+    // === Position helpers (operate on positionVec origin) ===
+    void MoveOrigin(std::int32_t x, std::int32_t y);
+    void OffsetOrigin(std::int32_t dx, std::int32_t dy);
+    void ScaleOrigin(std::int32_t sx, std::int32_t divx,
+                     std::int32_t sy, std::int32_t divy,
+                     std::int32_t cx, std::int32_t cy);
 
-    // Color tint (ARGB)
-    [[nodiscard]] auto GetColor() const noexcept -> std::uint32_t { return m_dwColor; }
-    void SetColor(std::uint32_t color) noexcept { m_dwColor = color; }
+    // === Z-order ===
+    [[nodiscard]] auto get_z() const -> std::int32_t { return m_zOrder; }
+    void put_z(std::int32_t z) { m_zOrder = z; }
+    [[nodiscard]] auto GetZ() const noexcept -> std::int32_t { return m_zOrder; }
+    void SetZ(std::int32_t z) noexcept { m_zOrder = z; }
 
-    // Visibility
-    [[nodiscard]] auto IsVisible() const noexcept -> bool { return m_bVisible; }
-    void SetVisible(bool visible) noexcept { m_bVisible = visible; }
+    // === Flip ===
+    [[nodiscard]] auto get_flip() const -> std::int32_t { return m_flipMode; }
+    void put_flip(std::int32_t mode) { m_flipMode = mode; }
+    [[nodiscard]] auto GetFlip() const noexcept -> LayerFlipState
+    {
+        return static_cast<LayerFlipState>(m_flipMode);
+    }
+    void SetFlip(LayerFlipState flip) noexcept { m_flipMode = static_cast<std::int32_t>(flip); }
+    void SetFlip(std::int32_t flip) noexcept { m_flipMode = flip; }
 
-    // Screen space (UI elements that don't move with camera)
-    [[nodiscard]] auto IsScreenSpace() const noexcept -> bool { return m_bScreenSpace; }
-    void SetScreenSpace(bool screenSpace) noexcept { m_bScreenSpace = screenSpace; }
+    // === Color (source-matching: 3 Gr2DVector channels) ===
+    void put_color(std::uint32_t argb);
+    [[nodiscard]] auto get_color() const -> std::uint32_t;
+    [[nodiscard]] auto get_alpha() const -> Gr2DVector*;
+    [[nodiscard]] auto get_redTone() const -> Gr2DVector*;
+    [[nodiscard]] auto get_greenBlueTone() const -> Gr2DVector*;
 
-    // Center-based positioning (position is relative to screen center, matching original MS client)
-    // Only applies when IsScreenSpace() is true
-    [[nodiscard]] auto IsCenterBased() const noexcept -> bool { return m_bCenterBased; }
-    void SetCenterBased(bool centerBased) noexcept { m_bCenterBased = centerBased; }
+    // === Color (backward-compatible) ===
+    [[nodiscard]] auto GetColor() const noexcept -> std::uint32_t { return get_color(); }
+    void SetColor(std::uint32_t color) noexcept { put_color(color); }
+    [[nodiscard]] auto GetAlpha() const noexcept -> std::uint8_t;
+    void SetAlpha(std::uint8_t alpha) noexcept;
 
-    // Tiling/parallax parameters
-    // cx: horizontal tile distance (0 = no tiling)
-    // cy: vertical tile distance (0 = no tiling)
-    // rx: horizontal parallax factor (0-100, 0 = no scroll with camera)
-    // ry: vertical parallax factor (0-100, 0 = no scroll with camera)
+    // === Visibility ===
+    [[nodiscard]] auto get_visible() const -> bool { return m_visible; }
+    void put_visible(bool v) { m_visible = v; }
+    [[nodiscard]] auto IsVisible() const noexcept -> bool { return m_visible; }
+    void SetVisible(bool visible) noexcept { m_visible = visible; }
+
+    // === Overlay (parent layer in render tree) ===
+    void put_overlay(const std::shared_ptr<WzGr2DLayer>& parent) { m_pOverlay = parent; }
+    [[nodiscard]] auto get_overlay() const -> std::shared_ptr<WzGr2DLayer> { return m_pOverlay; }
+
+    // === Blend ===
+    [[nodiscard]] auto get_blend() const -> std::int32_t { return m_blendMode; }
+    void put_blend(std::int32_t mode) { m_blendMode = mode; }
+    [[nodiscard]] auto GetBlend() const noexcept -> LayerBlendType
+    {
+        return static_cast<LayerBlendType>(m_blendMode);
+    }
+    void SetBlend(LayerBlendType blend) noexcept { m_blendMode = static_cast<std::int32_t>(blend); }
+    void SetBlend(std::int32_t blend) noexcept { m_blendMode = blend; }
+
+    // === Rotation (SDL-specific, kept from local) ===
+    [[nodiscard]] auto GetRotation() const noexcept -> float { return m_fRotation; }
+    void SetRotation(float degrees) noexcept { m_fRotation = degrees; }
+    void SetRotation(std::int32_t degrees) noexcept { m_fRotation = static_cast<float>(degrees); }
+
+    // === Tiling/Parallax (local feature) ===
     void SetTiling(std::int32_t cx, std::int32_t cy) noexcept { m_nTileCx = cx; m_nTileCy = cy; }
     void SetParallax(std::int32_t rx, std::int32_t ry) noexcept { m_nParallaxRx = rx; m_nParallaxRy = ry; }
     [[nodiscard]] auto GetTileCx() const noexcept -> std::int32_t { return m_nTileCx; }
@@ -87,183 +191,174 @@ public:
     [[nodiscard]] auto GetParallaxRx() const noexcept -> std::int32_t { return m_nParallaxRx; }
     [[nodiscard]] auto GetParallaxRy() const noexcept -> std::int32_t { return m_nParallaxRy; }
 
-    // Position animation (for background type 4-7 animated movement)
-    // Based on IWzVector2D::RelMove from original client
-    /**
-     * @brief Start position animation with looping
-     * @param offsetX X offset from initial position
-     * @param offsetY Y offset from initial position
-     * @param duration Animation duration in milliseconds
-     * @param loop True to loop animation
-     */
+    // === Position animation (backward-compatible) ===
     void StartPositionAnimation(std::int32_t offsetX, std::int32_t offsetY,
                                 std::int32_t duration, bool loop = true);
-
-    /**
-     * @brief Stop position animation
-     */
     void StopPositionAnimation();
+    [[nodiscard]] auto IsPositionAnimating() const noexcept -> bool;
 
-    /**
-     * @brief Check if position animation is active
-     */
-    [[nodiscard]] auto IsPositionAnimating() const noexcept -> bool { return m_bPositionAnimating; }
+    // === Non-vtable helpers (source-matching) ===
+    [[nodiscard]] auto getTag() const -> std::int32_t { return m_tag; }
+    void setTag(std::int32_t tag) { m_tag = tag; }
+    void setColorKey(std::uint8_t a, std::uint8_t r, std::uint8_t g, std::uint8_t b);
+    void setFlags(std::uint32_t mask) { m_flags |= mask; }
+    void clearFlags(std::uint32_t mask) { m_flags &= ~mask; }
+    void setAnimSpeed(float speed) { m_animSpeed = speed; }
 
-    // Canvas frame management
-    /**
-     * @brief Insert a canvas frame
-     * @param canvas The canvas to insert
-     * @param delay Frame delay in milliseconds
-     * @param alpha0 Start alpha (0-255)
-     * @param alpha1 End alpha (0-255)
-     * @param zoom0 Start zoom in thousandths (1000 = 100%)
-     * @param zoom1 End zoom in thousandths (1000 = 100%)
-     * @return Index of inserted canvas
-     */
-    auto InsertCanvas(std::shared_ptr<WzCanvas> canvas,
-                      std::int32_t delay = 100,
-                      std::uint8_t alpha0 = 255,
-                      std::uint8_t alpha1 = 255,
-                      std::int32_t zoom0 = 1000,
-                      std::int32_t zoom1 = 1000) -> std::size_t;
+    // === Particle system ===
+    auto getEmitter() -> ParticleEmitter*;
+    void UpdateParticles(float deltaTime);
 
-    /**
-     * @brief Remove a canvas frame by index
-     * @param index Index of canvas to remove
-     * @return The removed canvas, or nullptr if index invalid
-     */
-    auto RemoveCanvas(std::size_t index) -> std::shared_ptr<WzCanvas>;
+    // === Animation origin ===
+    [[nodiscard]] auto getAnimOriginVector() const -> Gr2DVector*;
 
-    /**
-     * @brief Remove all canvas frames
-     */
-    void RemoveAllCanvases();
-
-    /**
-     * @brief Get canvas count
-     */
-    [[nodiscard]] auto GetCanvasCount() const noexcept -> std::size_t;
-
-    /**
-     * @brief Get canvas at index
-     */
-    [[nodiscard]] auto GetCanvas(std::size_t index) const -> std::shared_ptr<WzCanvas>;
-
-    /**
-     * @brief Get current frame canvas
-     */
-    [[nodiscard]] auto GetCurrentCanvas() const -> std::shared_ptr<WzCanvas>;
-
-    // Animation control
-    /**
-     * @brief Start animation
-     * @param type Animation type
-     * @param delayRate Delay multiplier in thousandths (1000 = normal speed)
-     * @param repeat Number of times to repeat (-1 = infinite)
-     * @return true if animation started
-     */
-    auto Animate(Gr2DAnimationType type,
-                 std::int32_t delayRate = 1000,
-                 std::int32_t repeat = -1) -> bool;
-
-    /**
-     * @brief Stop animation
-     */
-    void StopAnimation();
-
-    /**
-     * @brief Check if currently animating
-     */
-    [[nodiscard]] auto IsAnimating() const noexcept -> bool { return m_bAnimating; }
-
-    /**
-     * @brief Get current frame index
-     */
-    [[nodiscard]] auto GetCurrentFrame() const noexcept -> std::size_t { return m_nCurrentFrame; }
-
-    /**
-     * @brief Set current frame index
-     */
-    void SetCurrentFrame(std::size_t frame);
-
-    // Post-render callback
-    void SetPostRenderCallback(PostRenderCallback callback);
-
-    // Update and render
-    /**
-     * @brief Update animation state
-     * @param tCur Current time in milliseconds
-     */
+    // === Update and Render (SDL-specific) ===
     void Update(std::int32_t tCur);
-
-    /**
-     * @brief Render the layer
-     * @param renderer SDL renderer
-     * @param offsetX X offset for rendering
-     * @param offsetY Y offset for rendering
-     */
     void Render(SDL_Renderer* renderer, std::int32_t offsetX = 0, std::int32_t offsetY = 0);
 
+    // === IWzShape2D / IWzVector2D overrides (delegate to m_positionVec) ===
+    [[nodiscard]] auto GetX() -> std::int32_t override;
+    [[nodiscard]] auto GetY() -> std::int32_t override;
+    void PutX(std::int32_t x) override;
+    void PutY(std::int32_t y) override;
+    void Move(std::int32_t x, std::int32_t y) override;
+    void Offset(std::int32_t dx, std::int32_t dy) override;
+    void Scale(std::int32_t sx, std::int32_t divx,
+               std::int32_t sy, std::int32_t divy,
+               std::int32_t cx, std::int32_t cy) override;
+    void Init(std::int32_t x, std::int32_t y) override;
+    [[nodiscard]] auto GetCurrentTime() -> std::int32_t override;
+    void PutCurrentTime(std::int32_t t) override;
+    [[nodiscard]] auto GetOrigin() const -> IWzVector2D* override;
+    void PutOrigin(IWzVector2D* parent) override;
+    [[nodiscard]] auto GetRX() -> std::int32_t override;
+    void PutRX(std::int32_t x) override;
+    [[nodiscard]] auto GetRY() -> std::int32_t override;
+    void PutRY(std::int32_t y) override;
+    [[nodiscard]] auto GetA() -> double override;
+    [[nodiscard]] auto GetRA() -> double override;
+    void PutRA(double a) override;
+    [[nodiscard]] auto GetFlipX() -> bool override;
+    void PutFlipX(std::int32_t f) override;
+    void GetSnapshot(std::int32_t* x, std::int32_t* y,
+                     std::int32_t* rx, std::int32_t* ry,
+                     std::int32_t* ox, std::int32_t* oy,
+                     double* a, double* ra,
+                     std::int32_t time = -1) override;
+    void RelMove(std::int32_t x, std::int32_t y,
+                 std::int32_t startTime = 0, std::int32_t endTime = 0,
+                 bool bounce = false, bool pingpong = false,
+                 bool replace = false) override;
+    void RelOffset(std::int32_t dx, std::int32_t dy,
+                   std::int32_t startTime = 0, std::int32_t endTime = 0) override;
+    void Ratio(IWzVector2D* target,
+               std::int32_t denomX, std::int32_t denomY,
+               std::int32_t scaleX, std::int32_t scaleY) override;
+    void WrapClip(IWzVector2D* bounds,
+                  std::int32_t x, std::int32_t y,
+                  std::int32_t w, std::int32_t h,
+                  bool clampMode) override;
+    void Rotate(double angle, std::int32_t period,
+                std::int32_t easeFrames = 0) override;
+    [[nodiscard]] auto GetLooseLevel() -> std::int32_t override;
+    void PutLooseLevel(std::int32_t level) override;
+    void Fly(const std::vector<FlyKeyframe>& keyframes,
+             IWzVector2D* completionTarget = nullptr) override;
+
 private:
-    struct CanvasEntry
-    {
-        std::shared_ptr<WzCanvas> canvas;
-        CanvasFrameInfo frameInfo;
-    };
+    // === Identification ===
+    std::int32_t m_tag = 0;
+    std::int32_t m_uniqueId = 0;
+    static std::int32_t s_idCounter;
 
-    void AdvanceFrame();
-    void UpdateFrameInterpolation(std::int32_t tCur);
+    // === Layer dimensions ===
+    std::int32_t m_width = 0;
+    std::int32_t m_height = 0;
 
-    // Position and dimensions
-    std::int32_t m_nLeft{0};
-    std::int32_t m_nTop{0};
-    std::uint32_t m_uWidth{0};
-    std::uint32_t m_uHeight{0};
-    std::int32_t m_nZ{0};
+    // === Vector2D objects (created by SetVideoMode or ensureVectors) ===
+    std::unique_ptr<Gr2DVector> m_screenVec;
+    std::unique_ptr<Gr2DVector> m_alphaVec;
+    std::unique_ptr<Gr2DVector> m_colorRedVec;
+    std::unique_ptr<Gr2DVector> m_colorGBVec;
+    std::unique_ptr<Gr2DVector> m_positionVec;
+    std::unique_ptr<Gr2DVector> m_rbVec;
 
-    // Display properties
-    LayerFlipState m_flipState{LayerFlipState::None};
-    std::uint32_t m_dwColor{0xFFFFFFFF}; // ARGB white (fully opaque)
-    bool m_bVisible{true};
-    bool m_bScreenSpace{false}; // If true, position is in screen coordinates (not affected by camera)
-    bool m_bCenterBased{false};  // If true (and screen-space), position is relative to screen center
+    // === Animation Vector2D (created by InitAnimation) ===
+    std::unique_ptr<Gr2DVector> m_animOriginVec;
+    std::unique_ptr<Gr2DVector> m_animIntermediate;
 
-    // Tiling/parallax properties
-    std::int32_t m_nTileCx{0};      // Horizontal tile distance (0 = no tiling)
-    std::int32_t m_nTileCy{0};      // Vertical tile distance (0 = no tiling)
-    std::int32_t m_nParallaxRx{0};  // Horizontal parallax factor (0-100)
-    std::int32_t m_nParallaxRy{0};  // Vertical parallax factor (0-100)
+    // === Frame linked list ===
+    FrameNode* m_frameHead = nullptr;
+    FrameNode* m_frameTail = nullptr;
+    FrameNode* m_currentFrame = nullptr;
+    std::int32_t m_frameCount = 0;
+    std::int32_t m_frameIdCounter = 0;
+    std::int32_t m_totalDuration = 0;
 
-    // Position animation properties (for background type 4-7)
-    bool m_bPositionAnimating{false};     // Is position animation active
-    std::int32_t m_nAnimOffsetX{0};       // Target X offset from initial position
-    std::int32_t m_nAnimOffsetY{0};       // Target Y offset from initial position
-    std::int32_t m_nAnimDuration{0};      // Animation duration in milliseconds
-    bool m_bAnimLoop{false};              // Loop animation
-    std::int32_t m_tAnimStart{0};         // Animation start time
-    std::int32_t m_nInitialLeft{0};       // Initial left position (before animation)
-    std::int32_t m_nInitialTop{0};        // Initial top position (before animation)
+    // === Frame hash table (O(1) ID lookup) ===
+    static constexpr int HASH_BUCKETS = 31;
+    std::array<FrameNode*, HASH_BUCKETS> m_hashTable = {};
 
-    // Canvas frames
-    std::vector<CanvasEntry> m_canvases;
-    std::size_t m_nCurrentFrame{0};
+    // === Render commands output ===
+    std::vector<RenderCommand> m_renderCommands;
 
-    // Animation state (based on original this[91] state machine)
-    bool m_bAnimating{false};
-    AnimationState m_animState{AnimationState::Idle};
-    Gr2DAnimationType m_animType{Gr2DAnimationType::None};
-    std::int32_t m_nDelayRate{1000};  // Delay rate in thousandths (1000 = normal speed)
-    std::int32_t m_nRepeatCount{-1};
-    std::int32_t m_nCurrentRepeat{0};
-    std::int32_t m_tLastFrameTime{0};
-    bool m_bReverseDirection{false};
+    // === Display properties ===
+    bool m_visible = true;
+    std::int32_t m_zOrder = 0;
+    std::int32_t m_flipMode = 0;
+    std::int32_t m_blendMode = 0;
+    std::uint32_t m_flags = 0;
+    bool m_colorKeyEnabled = false;
+    std::uint32_t m_colorKey = 0xFFFFFFFF;
+    std::int32_t m_lastUpdateFlags = 0;
+    std::int32_t m_surfaceMode = 1;
+    float m_animSpeed = 1.0F;
 
-    // Current interpolated values (using thousandths for zoom, matching original)
-    std::uint8_t m_nCurrentAlpha{255};
-    std::int32_t m_nCurrentZoom{1000};  // Zoom in thousandths (1000 = 100%)
+    // === SDL-specific (local) ===
+    float m_fRotation = 0.0F;
 
-    // Callbacks
-    PostRenderCallback m_postRenderCallback;
+    // === Tiling/parallax (local) ===
+    std::int32_t m_nTileCx = 0;
+    std::int32_t m_nTileCy = 0;
+    std::int32_t m_nParallaxRx = 0;
+    std::int32_t m_nParallaxRy = 0;
+
+    // === Backward-compatible position state ===
+    std::int32_t m_nLeft = 0;
+    std::int32_t m_nTop = 0;
+
+    // === Backward-compatible animation state ===
+    bool m_bAnimating = false;
+    Gr2DAnimationType m_animType = Gr2DAnimationType::None;
+    std::int32_t m_nDelayRate = 1000;
+    std::int32_t m_nRepeatCount = -1;
+    std::int32_t m_nCurrentRepeat = 0;
+    std::int32_t m_tLastFrameTime = 0;
+    bool m_bReverseDirection = false;
+
+    // === Particle emitter ===
+    std::unique_ptr<ParticleEmitter> m_emitter;
+
+    // === Timing ===
+    std::int32_t m_baseTimestamp = 0;
+    std::int32_t m_animTimer = 0;
+
+    // === Overlay (parent layer reference) ===
+    std::shared_ptr<WzGr2DLayer> m_pOverlay;
+
+    // === Ownership for backward-compatible InsertCanvas ===
+    std::vector<std::shared_ptr<WzGr2DCanvas>> m_ownedCanvases;
+
+    // === Internal helpers ===
+    auto findFrameById(std::int32_t id) const -> FrameNode*;
+    auto findFrameByIndex(int index) const -> FrameNode*;
+    void insertFrameHash(FrameNode* node);
+    void removeFrameHash(FrameNode* node);
+    static auto hashFrameId(std::int32_t id) -> std::uint32_t;
+    void clearFrames();
+    auto computeAlpha(std::int32_t frameAlpha) const -> std::int32_t;
+    void ensureVectors();
+    void advanceFrame();
 };
 
 } // namespace ms

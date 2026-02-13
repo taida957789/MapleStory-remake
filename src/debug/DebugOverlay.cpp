@@ -2,6 +2,7 @@
 
 #include "DebugOverlay.h"
 #include "graphics/WzGr2D.h"
+#include "graphics/WzGr2DCanvas.h"
 #include "graphics/WzGr2DLayer.h"
 #include "ui/UIElement.h"
 #include "wz/WzCanvas.h"
@@ -121,18 +122,9 @@ auto DebugOverlay::FindCanvasesAt(int screenX, int screenY) -> std::vector<Canva
             continue;
         }
 
-        // Get layer position in screen coordinates
-        int layerScreenX, layerScreenY;
-        if (layer->IsScreenSpace())
-        {
-            layerScreenX = layer->GetLeft();
-            layerScreenY = layer->GetTop();
-        }
-        else
-        {
-            layerScreenX = layer->GetLeft() - cameraPos.x + screenCenterX;
-            layerScreenY = layer->GetTop() - cameraPos.y + screenCenterY;
-        }
+        // Get layer position in screen coordinates (world space with camera offset)
+        int layerScreenX = layer->GetLeft() - cameraPos.x + screenCenterX;
+        int layerScreenY = layer->GetTop() - cameraPos.y + screenCenterY;
 
         // Check each canvas in the layer
         auto canvasCount = layer->GetCanvasCount();
@@ -189,18 +181,9 @@ auto DebugOverlay::LayerHitTest(const std::shared_ptr<WzGr2DLayer>& layer,
     auto screenCenterY = static_cast<int>(gr.GetHeight() / 2);
     auto cameraPos = gr.GetCameraPosition();
 
-    // Get layer position in screen coordinates
-    int layerScreenX, layerScreenY;
-    if (layer->IsScreenSpace())
-    {
-        layerScreenX = layer->GetLeft();
-        layerScreenY = layer->GetTop();
-    }
-    else
-    {
-        layerScreenX = layer->GetLeft() - cameraPos.x + screenCenterX;
-        layerScreenY = layer->GetLeft() - cameraPos.y + screenCenterY;
-    }
+    // Get layer position in screen coordinates (world space with camera offset)
+    int layerScreenX = layer->GetLeft() - cameraPos.x + screenCenterX;
+    int layerScreenY = layer->GetTop() - cameraPos.y + screenCenterY;
 
     // Check each canvas in the layer
     auto canvasCount = layer->GetCanvasCount();

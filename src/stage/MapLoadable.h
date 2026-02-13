@@ -17,6 +17,24 @@ class WzGr2DLayer;
 class WzProperty;
 
 /**
+ * @brief Background layer type
+ *
+ * Defines how a background layer tiles and moves.
+ * Based on the original MapleStory background system.
+ */
+enum class BackgroundType : std::int32_t
+{
+    Normal = 0,      // No tiling, parallax with rx/ry
+    HTiled = 1,      // Horizontal tiling, parallax with rx/ry
+    VTiled = 2,      // Vertical tiling, parallax with rx/ry
+    Tiled = 3,       // Both H+V tiling, parallax with rx/ry
+    HMoveA = 4,      // Animated H movement (rx), then H-tiling
+    VMoveA = 5,      // Animated V movement (ry), then V-tiling
+    HMoveB = 6,      // Animated H movement (rx), then both tiling
+    VMoveB = 7,      // Animated V movement (ry), then both tiling
+};
+
+/**
  * @brief Loadable map/scene base class
  *
  * Based on CMapLoadable from the original MapleStory client.

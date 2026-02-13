@@ -4,6 +4,7 @@
 #include "graphics/WzGr2D.h"
 #include "graphics/WzGr2DLayer.h"
 #include "util/Logger.h"
+#include "graphics/WzGr2DCanvas.h"
 #include "wz/WzCanvas.h"
 #include "wz/WzProperty.h"
 #include "wz/WzResMan.h"
@@ -205,13 +206,14 @@ void LayoutMan::ProcessLayer(
     int nOffsetY)
 {
     // 1. 獲取 canvas
-    auto pCanvas = pProp->GetCanvas();
-    if (!pCanvas)
+    auto wzCanvas = pProp->GetCanvas();
+    if (!wzCanvas)
     {
         LOG_DEBUG("LayoutMan::ProcessLayer - no canvas for layer: {}",
                   std::string(sCtrlName.begin(), sCtrlName.end()));
         return;
     }
+    auto pCanvas = std::make_shared<WzGr2DCanvas>(wzCanvas);
 
     // 2. 獲取 origin 並計算位置
     auto origin = pCanvas->GetOrigin();
@@ -351,7 +353,6 @@ void LayoutMan::CreateLayers(WzGr2D& gr, std::int32_t baseZ, bool screenSpace)
 
         if (pLayer)
         {
-            pLayer->SetScreenSpace(screenSpace);
             pLayer->InsertCanvas(pending.pCanvas, 0, 255, 255);
 
             // 註冊圖層

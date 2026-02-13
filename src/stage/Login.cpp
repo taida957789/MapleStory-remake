@@ -11,8 +11,10 @@
 #include "ui/UISelectChar.h"
 #include "ui/UIWorldSelect.h"
 #include "util/Logger.h"
+#include "graphics/WzGr2DCanvas.h"
 #include "wz/WzCanvas.h"
 #include "wz/WzProperty.h"
+#include "wz/WzImage.h"
 #include "wz/WzResMan.h"
 
 #include <random>
@@ -38,23 +40,23 @@ void Login::Init(void* param)
     m_nMagLevelBack = 0;
     m_nMagLevelSkillEffect = 0;
 
-    // Load map properties (UI/MapLogin.img and UI/Login.img)
+    // Load login resources (UI/LoginBack.img and UI/Login.img)
     LoadLoginResources();
 
-    // Load map elements (tiles, objects, backgrounds, etc.)
-    // Based on CLogin::Init which calls this->LoadMap(this)
-    LoadMap();
+    // Load login background from LoginBack.img
+    // Note: LoginBack.img is a simple background image, not a map format
+    // Structure: LoginBack.img/Title or LoginBack.img/WorldSelect/[variant]
+    LoadLoginBackground();
 
-    // Create placeholder background if no backgrounds were loaded via RestoreBack
-    // This check must happen AFTER LoadMap() which calls RestoreBack()
-    if (m_lpLayerBack.empty())
+    // Create placeholder background if loading failed
+    if (m_pLayerBackground == nullptr)
     {
-        LOG_DEBUG("No backgrounds loaded from WZ, creating placeholder...");
+        LOG_DEBUG("No background loaded from WZ, creating placeholder...");
         CreatePlaceholderBackground();
     }
     else
     {
-        LOG_INFO("Loaded {} background layers from WZ", m_lpLayerBack.size());
+        LOG_INFO("Login background loaded successfully");
     }
 
     // Create login-specific layers
@@ -68,57 +70,6 @@ void Login::Init(void* param)
         // -400, -300 places the 800x600 content area's top-left at screen center minus (400, 300)
         m_pLayerBook->SetPosition(-400, -300);
         m_pLayerBook->SetColor(0xFFFFFFFF);  // Full opacity
-        m_pLayerBook->SetScreenSpace(true);  // UI layer, not affected by camera
-        m_pLayerBook->SetCenterBased(true);  // Use center-based coordinate system
-
-        // Load UI/Login.img/Common/frame to m_pLayerBook
-        // StringPool ID 2204, loaded at 0xb6f61b in original CLogin::Init
-        if (m_pLoginImgProp)
-        {
-            auto commonProp = m_pLoginImgProp->GetChild("Common");
-            if (commonProp)
-            {
-                auto frameProp = commonProp->GetChild("frame");
-                if (frameProp)
-                {
-                    if (LoadStaticLayer(m_pLayerBook, frameProp))
-                    {
-                        // For fullscreen UI frames that cover the entire screen,
-                        // reset origin to (0, 0) so the layer position controls the top-left corner.
-                        // The center-based position (-400, -300) + screen center (400, 300) = (0, 0)
-                        // With origin (0, 0), the frame renders at screen (0, 0) - correct!
-                        auto canvas = m_pLayerBook->GetCurrentCanvas();
-                        if (canvas)
-                        {
-                            auto oldOrigin = canvas->GetOrigin();
-                            if (oldOrigin.x != 0 || oldOrigin.y != 0)
-                            {
-                                LOG_DEBUG("Frame canvas had origin ({}, {}), resetting to (0, 0)",
-                                          oldOrigin.x, oldOrigin.y);
-                                canvas->SetOrigin({0, 0});
-                            }
-                        }
-                        LOG_INFO("Loaded UI/Login.img/Common/frame to m_pLayerBook (z=110)");
-                    }
-                    else
-                    {
-                        LOG_WARN("Failed to load Common/frame to m_pLayerBook");
-                    }
-                }
-            }
-        }
-    }
-
-    // Fade overlay layer at z=211 (above everything)
-    // Based on CLogin::Init: RelMove(v101, -400, -300 - v102, ...)
-    m_pLayerFadeOverFrame = CreateLayer(211);
-    if (m_pLayerFadeOverFrame)
-    {
-        // Fixed position relative to screen center (matching original MS client)
-        m_pLayerFadeOverFrame->SetPosition(-400, -300);
-        m_pLayerFadeOverFrame->SetColor(0xFFFFFFFF);  // Full opacity
-        m_pLayerFadeOverFrame->SetScreenSpace(true);  // UI layer, not affected by camera
-        m_pLayerFadeOverFrame->SetCenterBased(true);  // Use center-based coordinate system
     }
 
     // Initialize state
@@ -165,22 +116,14 @@ void Login::Init(void* param)
     // Based on CLogin::Init: IWzVector2D::RelMove(*v126, 28, v125, ...)
     // X = 28, Y = -8 - 600 * step
     auto& gr = get_gr();
-    auto stepY = -8 - 600 * m_nLoginStep;
-    gr.SetCameraPosition(28, stepY);
-    LOG_DEBUG("Initial camera pos=({}, {}) for step {}", 28, stepY, m_nLoginStep);
-
     // Load gender and frame choosable options for character creation
     LoadGenderAndFrameChoosable();
-
     // Load new character info
     LoadNewCharInfo(0);
     LoadNewDummyCharInfo();
 
     // Play background music from map info
     // PlayBGMFromMapInfo(); // Implemented in MapLoadable
-
-    // Fade in effect
-    FadeOverFrame(true);
 
     // Initialize world item final list
     InitWorldItemFinal();
@@ -191,50 +134,45 @@ void Login::Init(void* param)
 void Login::LoadLoginResources()
 {
     auto& resMan = WzResMan::GetInstance();
+    m_pLoginImgProp = resMan.GetImage("UI/Login.img");
+}
 
-    // Load MapLogin.img as the main field property (based on CMapLoadable architecture)
-    // This contains the "back" property which defines background layers
-    m_pPropField = resMan.GetProperty("UI/MapLogin.img");
-    if (m_pPropField && m_pPropField->HasChildren())
+void Login::LoadLoginBackground()
+{
+    auto& resMan = WzResMan::GetInstance();
+    auto& gr = get_gr();
+
+    auto canvasProp = resMan.GetProperty("UI/LoginBack.img/Title/0");
+    if (!canvasProp)
     {
-        LOG_DEBUG("Loading UI/MapLogin.img resources...");
-
-        // Get field info property
-        auto fieldInfoProp = m_pPropField->GetChild("info");
-        if (fieldInfoProp)
-        {
-            m_pPropFieldInfo = fieldInfoProp;
-
-            // Get change step BGM property
-            auto bgmProp = fieldInfoProp->GetChild("changeStepBGM");
-            if (bgmProp)
-            {
-                m_pPropChangeStepBGM = bgmProp;
-            }
-        }
-
-        // Note: RestoreBack and other loading is done by LoadMap()
-        // which is called after LoadLoginResources()
-    }
-    else
-    {
-        LOG_WARN("UI/MapLogin.img not found or empty");
+        LOG_WARN("LoadLoginBackground: UI/LoginBack.img/Title/0 not found");
+        return;
     }
 
-    // Load Login.img property - used later for UI elements
-    // Note: Common/frame is loaded to m_pLayerBook in Init() after layer creation
-    m_pLoginImgProp = resMan.GetProperty("UI/Login.img");
-    if (!m_pLoginImgProp || !m_pLoginImgProp->HasChildren())
+    auto wzCanvas = canvasProp->GetCanvas();
+    auto canvas = wzCanvas ? std::make_shared<WzGr2DCanvas>(wzCanvas) : nullptr;
+    if (!canvas)
     {
-        LOG_WARN("Login.img not found or empty");
+        LOG_WARN("LoadLoginBackground: No canvas found in Title");
+        return;
     }
-    else
+    auto originProp = canvasProp->GetChild("origin");
+    if (originProp)
     {
-        LOG_DEBUG("Login.img property loaded successfully");
+        auto vec = originProp->GetVector();
+        canvas->SetOrigin({vec.x, vec.y});
     }
 
-    // Note: Placeholder background is created in Init() after LoadMap() if needed
-    LOG_DEBUG("Login resources loaded");
+    m_pLayerBackground = gr.CreateLayer(
+        0, 0,  // Position at screen center
+        canvas->GetWidth(),
+        canvas->GetHeight(),
+        0  // z=0, behind everything
+    );
+    if (m_pLayerBackground)
+    {
+        m_pLayerBackground->InsertCanvas(canvas, 0, 255, 255);
+    }
 }
 
 void Login::CreatePlaceholderBackground()
@@ -254,7 +192,8 @@ void Login::CreatePlaceholderBackground()
     const auto width = static_cast<int>(gr.GetWidth());
     const auto height = static_cast<int>(gr.GetHeight());
 
-    auto canvas = std::make_shared<WzCanvas>(width, height);
+    auto wzCanvas = std::make_shared<WzCanvas>(width, height);
+    auto canvas = std::make_shared<WzGr2DCanvas>(wzCanvas);
     if (!canvas->HasPixelData())
     {
         return;
@@ -283,7 +222,7 @@ void Login::CreatePlaceholderBackground()
         }
     }
 
-    canvas->SetPixelData(std::move(pixels));
+    wzCanvas->SetPixelData(std::move(pixels));
     canvas->SetOrigin({0, 0});
 
     bgLayer->InsertCanvas(canvas, 0, 255, 255);
@@ -304,69 +243,23 @@ void Login::SetupStep0UI()
     {
         // v1029 uses title, not Title (based on CUITitle::OnCreate decompilation)
         // Try title first (KMS v1029), fallback to Title (older versions)
-        auto titleProp = m_pLoginImgProp->GetChild("title");
-        auto newTitleProp = m_pLoginImgProp->GetChild("Title_new");
-        if (titleProp)
+        auto newTitleProp = (*m_pLoginImgProp)["Title_new"];
+        if (newTitleProp)
         {
-            LOG_DEBUG("Found UI/Login.img/title");
-        }
-        else
-        {
-            LOG_DEBUG("title not found, trying Title...");
-            titleProp = m_pLoginImgProp->GetChild("Title");
-            if (titleProp)
-            {
-                LOG_DEBUG("Found UI/Login.img/Title");
-            }
-            else
-            {
-                LOG_WARN("Neither title nor Title found in Login.img");
-            }
-        }
-
-        if (titleProp && newTitleProp)
-        {
-            // Dialog size from CUITitle constructor: 244 x 158
-            // Dialog is centered on screen
-            constexpr int kDialogWidth = 244;
-            constexpr int kDialogHeight = 158;
-            const int dialogX = (static_cast<int>(gr.GetWidth()) - kDialogWidth) / 2;
-            const int dialogY = (static_cast<int>(gr.GetHeight()) - kDialogHeight) / 2;
-
-            LOG_DEBUG("Title dialog position: ({}, {})", dialogX, dialogY);
-
-            // Load background for title first (z=100, below buttons)
             auto backgrdProp = newTitleProp->GetChild("backgrd");
             if (backgrdProp)
             {
                 LOG_DEBUG("Found backgrd property");
-                auto canvas = backgrdProp->GetCanvas();
+                auto wzCanvas = backgrdProp->GetCanvas();
+                auto canvas = wzCanvas ? std::make_shared<WzGr2DCanvas>(wzCanvas) : nullptr;
                 if (canvas)
                 {
                     LOG_DEBUG("backgrd canvas: {}x{}, origin=({},{})", canvas->GetWidth(), canvas->GetHeight(),
                               canvas->GetOrigin().x, canvas->GetOrigin().y);
                 }
-                else
-                {
-                    LOG_DEBUG("backgrd has no canvas, trying child '0'");
-                    auto childProp = backgrdProp->GetChild("0");
-                    if (childProp)
-                    {
-                        canvas = childProp->GetCanvas();
-                        if (canvas)
-                        {
-                            LOG_DEBUG("backgrd/0 canvas: {}x{}", canvas->GetWidth(), canvas->GetHeight());
-                        }
-                    }
-                }
-
                 auto titleBgLayer = CreateObjectLayer("titleDialogBg", 100);
                 if (titleBgLayer)
                 {
-                    LoadStaticLayer(titleBgLayer, backgrdProp);
-                    titleBgLayer->SetPosition(dialogX, dialogY);
-                    titleBgLayer->SetScreenSpace(true);  // UI element, use screen coordinates
-                    LOG_DEBUG("Title dialog background loaded from WZ at ({}, {})", dialogX, dialogY);
                 }
             }
             else
@@ -375,7 +268,7 @@ void Login::SetupStep0UI()
             }
 
             // Load Login button - original position: (178, 41) relative to dialog
-            auto btnLoginProp = titleProp->GetChild("BtLogin");
+            auto btnLoginProp = newTitleProp->GetChild("BtLogin");
             if (btnLoginProp)
             {
                 LOG_DEBUG("Found BtLogin property");
@@ -383,15 +276,10 @@ void Login::SetupStep0UI()
                 m_pBtnLogin = std::make_shared<UIButton>();
                 if (m_pBtnLogin->LoadFromProperty(btnLoginProp))
                 {
-                    int btnX = dialogX + 178;
-                    int btnY = dialogY + 41;
-                    m_pBtnLogin->SetPosition(btnX, btnY);
                     m_pBtnLogin->CreateLayer(gr, 150);
                     m_pBtnLogin->SetClickCallback([this]() { OnLoginButtonClick(); });
                     m_uiManager.AddElement("btnLogin", m_pBtnLogin);
                     hasWzButtons = true;
-                    LOG_DEBUG("Login button loaded: {}x{} at ({}, {})", m_pBtnLogin->GetWidth(),
-                              m_pBtnLogin->GetHeight(), btnX, btnY);
                 }
                 else
                 {
@@ -404,50 +292,45 @@ void Login::SetupStep0UI()
             }
 
             // Load Quit button - original position: (159, 117) relative to dialog
-            auto btnQuitProp = titleProp->GetChild("BtQuit");
+            auto btnQuitProp = newTitleProp->GetChild("BtQuit");
             if (btnQuitProp)
             {
                 m_pBtnQuit = std::make_shared<UIButton>();
                 if (m_pBtnQuit->LoadFromProperty(btnQuitProp))
                 {
-                    int btnX = dialogX + 159;
-                    int btnY = dialogY + 117;
-                    m_pBtnQuit->SetPosition(btnX, btnY);
                     m_pBtnQuit->CreateLayer(gr, 150);
                     m_pBtnQuit->SetClickCallback([this]() { OnQuitButtonClick(); });
                     m_uiManager.AddElement("btnQuit", m_pBtnQuit);
-                    LOG_DEBUG("Quit button at ({}, {})", btnX, btnY);
                 }
             }
 
             // Load additional buttons based on CUITitle::OnCreate
             // BtEmailSave - (27, 97) - Save email checkbox (based on CCtrlButton checkbox mode)
-            auto btnEmailSaveProp = titleProp->GetChild("BtEmailSave");
+            auto btnEmailSaveProp = newTitleProp->GetChild("BtEmailSave");
             if (btnEmailSaveProp)
             {
                 m_pBtnEmailSave = std::make_shared<UIButton>();
                 if (m_pBtnEmailSave->LoadFromProperty(btnEmailSaveProp))
                 {
-                    int btnX = dialogX + 27;
-                    int btnY = dialogY + 97;
-                    m_pBtnEmailSave->SetPosition(btnX, btnY);
                     m_pBtnEmailSave->SetCheckMode(true);  // Enable checkbox behavior
                     m_pBtnEmailSave->SetChecked(false);   // Default unchecked
                     m_pBtnEmailSave->CreateLayer(gr, 150);
 
                     // Load checkmark canvases from Title_new/check
-                    auto checkProp = titleProp->GetChild("check");
+                    auto checkProp = newTitleProp->GetChild("check");
                     if (checkProp)
                     {
                         auto check0Prop = checkProp->GetChild("0");
                         auto check1Prop = checkProp->GetChild("1");
                         if (check0Prop)
                         {
-                            m_pCanvasCheck0 = check0Prop->GetCanvas();
+                            auto tmpWzCanvas_433 = check0Prop->GetCanvas();
+                            m_pCanvasCheck0 = tmpWzCanvas_433 ? std::make_shared<WzGr2DCanvas>(tmpWzCanvas_433) : nullptr;
                         }
                         if (check1Prop)
                         {
-                            m_pCanvasCheck1 = check1Prop->GetCanvas();
+                            auto tmpWzCanvas_437 = check1Prop->GetCanvas();
+                            m_pCanvasCheck1 = tmpWzCanvas_437 ? std::make_shared<WzGr2DCanvas>(tmpWzCanvas_437) : nullptr;
                         }
 
                         // Create checkmark layer (position relative to button)
@@ -456,14 +339,13 @@ void Login::SetupStep0UI()
                         {
                             auto checkCanvas = m_pCanvasCheck0 ? m_pCanvasCheck0 : m_pCanvasCheck1;
                             m_pLayerEmailCheck = gr.CreateLayer(
-                                btnX, btnY,
+                                0, 0,
                                 checkCanvas->GetWidth(),
                                 checkCanvas->GetHeight(),
                                 151  // Slightly above button
                             );
                             if (m_pLayerEmailCheck)
                             {
-                                m_pLayerEmailCheck->SetScreenSpace(true);
                                 // Start with unchecked state (check/0)
                                 if (m_pCanvasCheck0)
                                 {
@@ -492,94 +374,78 @@ void Login::SetupStep0UI()
                         }
                     });
                     m_uiManager.AddElement("btnEmailSave", m_pBtnEmailSave);
-                    LOG_DEBUG("EmailSave checkbox at ({}, {})", btnX, btnY);
                 }
             }
 
             // BtEmailLost - (99, 97) - Lost email button
-            auto btnEmailLostProp = titleProp->GetChild("BtEmailLost");
+            auto btnEmailLostProp = newTitleProp->GetChild("BtEmailLost");
             if (btnEmailLostProp)
             {
                 m_pBtnEmailLost = std::make_shared<UIButton>();
                 if (m_pBtnEmailLost->LoadFromProperty(btnEmailLostProp))
                 {
-                    int btnX = dialogX + 99;
-                    int btnY = dialogY + 97;
-                    m_pBtnEmailLost->SetPosition(btnX, btnY);
                     m_pBtnEmailLost->CreateLayer(gr, 150);
                     m_uiManager.AddElement("btnEmailLost", m_pBtnEmailLost);
-                    LOG_DEBUG("EmailLost button at ({}, {})", btnX, btnY);
                 }
             }
 
             // BtPasswdLost - (171, 97) - Lost password button
-            auto btnPasswdLostProp = titleProp->GetChild("BtPasswdLost");
+            auto btnPasswdLostProp = newTitleProp->GetChild("BtPasswdLost");
             if (btnPasswdLostProp)
             {
                 m_pBtnPasswdLost = std::make_shared<UIButton>();
                 if (m_pBtnPasswdLost->LoadFromProperty(btnPasswdLostProp))
                 {
-                    int btnX = dialogX + 171;
-                    int btnY = dialogY + 97;
-                    m_pBtnPasswdLost->SetPosition(btnX, btnY);
                     m_pBtnPasswdLost->CreateLayer(gr, 150);
                     m_uiManager.AddElement("btnPasswdLost", m_pBtnPasswdLost);
-                    LOG_DEBUG("PasswdLost button at ({}, {})", btnX, btnY);
                 }
             }
 
             // BtNew - (15, 117) - New account button
-            auto btnNewProp = titleProp->GetChild("BtNew");
+            auto btnNewProp = newTitleProp->GetChild("BtNew");
             if (btnNewProp)
             {
                 m_pBtnNew = std::make_shared<UIButton>();
                 if (m_pBtnNew->LoadFromProperty(btnNewProp))
                 {
-                    int btnX = dialogX + 15;
-                    int btnY = dialogY + 117;
-                    m_pBtnNew->SetPosition(btnX, btnY);
                     m_pBtnNew->CreateLayer(gr, 150);
                     m_uiManager.AddElement("btnNew", m_pBtnNew);
-                    LOG_DEBUG("New button at ({}, {})", btnX, btnY);
                 }
             }
 
             // BtHomePage - (87, 117) - Homepage button
-            auto btnHomePageProp = titleProp->GetChild("BtHomePage");
+            auto btnHomePageProp = newTitleProp->GetChild("BtHomePage");
             if (btnHomePageProp)
             {
                 m_pBtnHomePage = std::make_shared<UIButton>();
                 if (m_pBtnHomePage->LoadFromProperty(btnHomePageProp))
                 {
-                    int btnX = dialogX + 87;
-                    int btnY = dialogY + 117;
-                    m_pBtnHomePage->SetPosition(btnX, btnY);
                     m_pBtnHomePage->CreateLayer(gr, 150);
                     m_uiManager.AddElement("btnHomePage", m_pBtnHomePage);
-                    LOG_DEBUG("HomePage button at ({}, {})", btnX, btnY);
                 }
             }
 
             // Create Edit fields for ID and Password
             // EditID - (14, 43) - size (163, 24) - nHorzMax=64
             m_pEditID = std::make_shared<UIEdit>();
-            m_pEditID->SetPosition(dialogX + 14, dialogY + 43);
             m_pEditID->SetSize(163, 24);
             m_pEditID->SetMaxLength(64);
             m_pEditID->SetTextOffset(6, 6);
             m_pEditID->SetFontColor(0xFF5D7E3D);  // From CCtrlEdit::CREATEPARAM
 
             // Load placeholder canvas for ID field (UI/Login.img/title/ID)
-            auto idPlaceholderProp = titleProp->GetChild("ID");
+            auto idPlaceholderProp = newTitleProp->GetChild("ID");
             if (idPlaceholderProp)
             {
-                auto canvas = idPlaceholderProp->GetCanvas();
+                auto wzCanvas = idPlaceholderProp->GetCanvas();
+        auto canvas = wzCanvas ? std::make_shared<WzGr2DCanvas>(wzCanvas) : nullptr;
                 if (!canvas)
                 {
                     auto childProp = idPlaceholderProp->GetChild("0");
                     if (childProp)
                     {
-                        canvas = childProp->GetCanvas();
+                        auto tmpWzCanvas = childProp->GetCanvas();
+                        canvas = tmpWzCanvas ? std::make_shared<WzGr2DCanvas>(tmpWzCanvas) : nullptr;
                     }
                 }
                 if (canvas)
@@ -598,11 +464,9 @@ void Login::SetupStep0UI()
                 }
             });
             m_uiManager.AddElement("editID", m_pEditID);
-            LOG_DEBUG("EditID created at ({}, {})", dialogX + 14, dialogY + 43);
 
             // EditPasswd - (14, 69) - size (163, 24) - nHorzMax=12, bPasswd=1
-            m_pEditPasswd = std::make_shared<UIEdit>();
-            m_pEditPasswd->SetPosition(dialogX + 14, dialogY + 69);
+            m_pEditPasswd = std::make_shared<UIEdit>(); 
             m_pEditPasswd->SetSize(163, 24);
             m_pEditPasswd->SetMaxLength(12);  // 12 for MapleID, 16 for NexonID
             m_pEditPasswd->SetPasswordMode(true);
@@ -610,16 +474,18 @@ void Login::SetupStep0UI()
             m_pEditPasswd->SetFontColor(0xFF5D7E3D);
 
             // Load placeholder canvas for Password field (UI/Login.img/title/PW)
-            auto pwPlaceholderProp = titleProp->GetChild("PW");
+            auto pwPlaceholderProp = newTitleProp->GetChild("PW");
             if (pwPlaceholderProp)
             {
-                auto canvas = pwPlaceholderProp->GetCanvas();
+                auto wzCanvas = pwPlaceholderProp->GetCanvas();
+        auto canvas = wzCanvas ? std::make_shared<WzGr2DCanvas>(wzCanvas) : nullptr;
                 if (!canvas)
                 {
                     auto childProp = pwPlaceholderProp->GetChild("0");
                     if (childProp)
                     {
-                        canvas = childProp->GetCanvas();
+                        auto tmpWzCanvas = childProp->GetCanvas();
+                        canvas = tmpWzCanvas ? std::make_shared<WzGr2DCanvas>(tmpWzCanvas) : nullptr;
                     }
                 }
                 if (canvas)
@@ -635,7 +501,6 @@ void Login::SetupStep0UI()
                 OnLoginButtonClick();
             });
             m_uiManager.AddElement("editPasswd", m_pEditPasswd);
-            LOG_DEBUG("EditPasswd created at ({}, {})", dialogX + 14, dialogY + 69);
 
             // Set initial focus to ID field
             m_uiManager.SetFocusedElement(m_pEditID);
@@ -652,7 +517,8 @@ void Login::SetupStep0UI()
 
         // Login button
         m_pBtnLogin = std::make_shared<UIButton>();
-        auto loginCanvas = std::make_shared<WzCanvas>(btnWidth, btnHeight);
+        auto loginWzCanvas = std::make_shared<WzCanvas>(btnWidth, btnHeight);
+    auto loginCanvas = std::make_shared<WzGr2DCanvas>(loginWzCanvas);
         {
             std::vector<std::uint8_t> pixels(static_cast<std::size_t>(btnWidth * btnHeight * 4));
             for (int y = 0; y < btnHeight; ++y)
@@ -667,13 +533,14 @@ void Login::SetupStep0UI()
                     pixels[idx + 3] = 255;
                 }
             }
-            loginCanvas->SetPixelData(std::move(pixels));
+            loginWzCanvas->SetPixelData(std::move(pixels));
         }
         m_pBtnLogin->SetStateCanvas(UIState::Normal, loginCanvas);
         m_pBtnLogin->SetSize(btnWidth, btnHeight);
 
         // MouseOver state (brighter)
-        auto loginOverCanvas = std::make_shared<WzCanvas>(btnWidth, btnHeight);
+        auto loginOverWzCanvas = std::make_shared<WzCanvas>(btnWidth, btnHeight);
+    auto loginOverCanvas = std::make_shared<WzGr2DCanvas>(loginOverWzCanvas);
         {
             std::vector<std::uint8_t> pixels(static_cast<std::size_t>(btnWidth * btnHeight * 4));
             for (int y = 0; y < btnHeight; ++y)
@@ -688,12 +555,13 @@ void Login::SetupStep0UI()
                     pixels[idx + 3] = 255;
                 }
             }
-            loginOverCanvas->SetPixelData(std::move(pixels));
+            loginOverWzCanvas->SetPixelData(std::move(pixels));
         }
         m_pBtnLogin->SetStateCanvas(UIState::MouseOver, loginOverCanvas);
 
         // Pressed state (darker)
-        auto loginPressCanvas = std::make_shared<WzCanvas>(btnWidth, btnHeight);
+        auto loginPressWzCanvas = std::make_shared<WzCanvas>(btnWidth, btnHeight);
+    auto loginPressCanvas = std::make_shared<WzGr2DCanvas>(loginPressWzCanvas);
         {
             std::vector<std::uint8_t> pixels(static_cast<std::size_t>(btnWidth * btnHeight * 4));
             for (int y = 0; y < btnHeight; ++y)
@@ -708,20 +576,18 @@ void Login::SetupStep0UI()
                     pixels[idx + 3] = 255;
                 }
             }
-            loginPressCanvas->SetPixelData(std::move(pixels));
+            loginPressWzCanvas->SetPixelData(std::move(pixels));
         }
         m_pBtnLogin->SetStateCanvas(UIState::Pressed, loginPressCanvas);
 
-        int btnX = (static_cast<int>(gr.GetWidth()) - btnWidth) / 2 - 60;
-        int btnY = static_cast<int>(gr.GetHeight()) - 150;
-        m_pBtnLogin->SetPosition(btnX, btnY);
         m_pBtnLogin->CreateLayer(gr, 150);
         m_pBtnLogin->SetClickCallback([this]() { OnLoginButtonClick(); });
         m_uiManager.AddElement("btnLogin", m_pBtnLogin);
 
         // Quit button (gray)
         m_pBtnQuit = std::make_shared<UIButton>();
-        auto quitCanvas = std::make_shared<WzCanvas>(btnWidth, btnHeight);
+        auto quitWzCanvas = std::make_shared<WzCanvas>(btnWidth, btnHeight);
+    auto quitCanvas = std::make_shared<WzGr2DCanvas>(quitWzCanvas);
         {
             std::vector<std::uint8_t> pixels(static_cast<std::size_t>(btnWidth * btnHeight * 4));
             for (int y = 0; y < btnHeight; ++y)
@@ -737,13 +603,14 @@ void Login::SetupStep0UI()
                     pixels[idx + 3] = 255;
                 }
             }
-            quitCanvas->SetPixelData(std::move(pixels));
+            quitWzCanvas->SetPixelData(std::move(pixels));
         }
         m_pBtnQuit->SetStateCanvas(UIState::Normal, quitCanvas);
         m_pBtnQuit->SetSize(btnWidth, btnHeight);
 
         // MouseOver state
-        auto quitOverCanvas = std::make_shared<WzCanvas>(btnWidth, btnHeight);
+        auto quitOverWzCanvas = std::make_shared<WzCanvas>(btnWidth, btnHeight);
+    auto quitOverCanvas = std::make_shared<WzGr2DCanvas>(quitOverWzCanvas);
         {
             std::vector<std::uint8_t> pixels(static_cast<std::size_t>(btnWidth * btnHeight * 4));
             for (int y = 0; y < btnHeight; ++y)
@@ -759,12 +626,13 @@ void Login::SetupStep0UI()
                     pixels[idx + 3] = 255;
                 }
             }
-            quitOverCanvas->SetPixelData(std::move(pixels));
+            quitOverWzCanvas->SetPixelData(std::move(pixels));
         }
         m_pBtnQuit->SetStateCanvas(UIState::MouseOver, quitOverCanvas);
 
         // Pressed state
-        auto quitPressCanvas = std::make_shared<WzCanvas>(btnWidth, btnHeight);
+        auto quitPressWzCanvas = std::make_shared<WzCanvas>(btnWidth, btnHeight);
+    auto quitPressCanvas = std::make_shared<WzGr2DCanvas>(quitPressWzCanvas);
         {
             std::vector<std::uint8_t> pixels(static_cast<std::size_t>(btnWidth * btnHeight * 4));
             for (int y = 0; y < btnHeight; ++y)
@@ -780,12 +648,10 @@ void Login::SetupStep0UI()
                     pixels[idx + 3] = 255;
                 }
             }
-            quitPressCanvas->SetPixelData(std::move(pixels));
+            quitPressWzCanvas->SetPixelData(std::move(pixels));
         }
         m_pBtnQuit->SetStateCanvas(UIState::Pressed, quitPressCanvas);
 
-        btnX = (static_cast<int>(gr.GetWidth()) - btnWidth) / 2 + 60;
-        m_pBtnQuit->SetPosition(btnX, btnY);
         m_pBtnQuit->CreateLayer(gr, 150);
         m_pBtnQuit->SetClickCallback([this]() { OnQuitButtonClick(); });
         m_uiManager.AddElement("btnQuit", m_pBtnQuit);
@@ -1229,34 +1095,7 @@ void Login::Update()
 
 void Login::Draw()
 {
-    // Call base class draw
-    MapLoadable::Draw();
-
-    // Background layers are automatically visible (set during RestoreBack)
-    // Just ensure they stay visible
-    for (auto& layer : m_lpLayerBack)
-    {
-        if (layer)
-        {
-            layer->SetVisible(true);
-        }
-    }
-
-    // Fallback to placeholder background layer if no RestoreBack backgrounds
-    auto bgLayer = GetObjectLayer("background");
-    if (bgLayer)
-    {
-        bgLayer->SetVisible(true);
-    }
-
-    // Book layer animation
-    if (m_pLayerBook)
-    {
-        m_pLayerBook->SetVisible(m_nLoginStep >= 0);
-    }
-
-    // Draw UI
-    m_uiManager.Draw();
+    // All rendering removed - layers and UI are handled by the base class
 }
 
 void Login::Close()
@@ -1273,6 +1112,11 @@ void Login::Close()
     }
 
     // Clear login-specific layer pointers
+    if (m_pLayerBackground)
+    {
+        get_gr().RemoveLayer(m_pLayerBackground);
+        m_pLayerBackground.reset();
+    }
     if (m_pLayerBook)
     {
         get_gr().RemoveLayer(m_pLayerBook);
@@ -1287,11 +1131,6 @@ void Login::Close()
     {
         get_gr().RemoveLayer(m_pLayerDust);
         m_pLayerDust.reset();
-    }
-    if (m_pLayerFadeOverFrame)
-    {
-        get_gr().RemoveLayer(m_pLayerFadeOverFrame);
-        m_pLayerFadeOverFrame.reset();
     }
 
     // Clear WZ properties
@@ -1374,8 +1213,6 @@ void Login::ChangeStep(std::int32_t nStep)
         m_tStartFadeOut = tFadeOut;
     }
 
-    // Change BGM for the new step
-    ChangeStepBGM();
 }
 
 void Login::ChangeStepImmediate()
@@ -1523,28 +1360,6 @@ void Login::OnStepChanged()
 
     default:
         break;
-    }
-}
-
-void Login::ChangeStepBGM()
-{
-    // Change background music based on current step
-    if (!m_pPropChangeStepBGM)
-    {
-        return;
-    }
-
-    // Get BGM path from property based on step
-    auto stepStr = std::to_string(m_nLoginStep);
-    auto bgmProp = m_pPropChangeStepBGM->GetChild(stepStr);
-    if (bgmProp)
-    {
-        auto bgmPath = bgmProp->GetString("");
-        if (!bgmPath.empty() && bgmPath != m_sLastChangeStepBGM)
-        {
-            ChangeBGM(bgmPath);
-            m_sLastChangeStepBGM = bgmPath;
-        }
     }
 }
 
@@ -1696,25 +1511,6 @@ void Login::InitWorldItemFinal()
         else
         {
             m_vWorldItemFinal.push_back(item);
-        }
-    }
-}
-
-void Login::FadeOverFrame(bool bFadeIn)
-{
-    // Control fade overlay alpha for smooth transitions
-    // Color is ARGB format: 0xAARRGGBB
-    if (m_pLayerFadeOverFrame)
-    {
-        if (bFadeIn)
-        {
-            // Fade from black to transparent - start transparent (alpha = 0)
-            m_pLayerFadeOverFrame->SetColor(0x00000000);
-        }
-        else
-        {
-            // Fade from transparent to black - start opaque (alpha = 255)
-            m_pLayerFadeOverFrame->SetColor(0xFF000000);
         }
     }
 }

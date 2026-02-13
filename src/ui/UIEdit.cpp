@@ -3,6 +3,7 @@
 #include "graphics/WzGr2D.h"
 #include "graphics/WzGr2DLayer.h"
 #include "text/TextRenderer.h"
+#include "graphics/WzGr2DCanvas.h"
 #include "wz/WzCanvas.h"
 
 #ifdef MS_DEBUG_CANVAS
@@ -45,7 +46,7 @@ void UIEdit::Clear()
     NotifyTextChanged();
 }
 
-void UIEdit::SetPlaceholderCanvas(std::shared_ptr<WzCanvas> canvas)
+void UIEdit::SetPlaceholderCanvas(std::shared_ptr<WzGr2DCanvas> canvas)
 {
     m_pPlaceholderCanvas = std::move(canvas);
     UpdateLayerContent();
@@ -337,7 +338,6 @@ void UIEdit::CreateLayer(WzGr2D& gr, std::int32_t z, bool screenSpace)
 
     if (layer)
     {
-        layer->SetScreenSpace(screenSpace);
 
         // Add background canvas if available
         if (m_pBackgroundCanvas)
@@ -356,7 +356,6 @@ void UIEdit::CreateLayer(WzGr2D& gr, std::int32_t z, bool screenSpace)
                                     z + 2);  // Above text layer
     if (m_pCaretLayer)
     {
-        m_pCaretLayer->SetScreenSpace(screenSpace);
         m_pCaretLayer->SetVisible(false);
 
         // Create a simple caret canvas (1 pixel wide black line, like Windows)
@@ -370,7 +369,7 @@ void UIEdit::CreateLayer(WzGr2D& gr, std::int32_t z, bool screenSpace)
             caretPixels[i + 3] = 255; // A
         }
         caretCanvas->SetPixelData(std::move(caretPixels));
-        m_pCaretLayer->InsertCanvas(caretCanvas, 0, 255, 255);
+        m_pCaretLayer->InsertCanvas(std::make_shared<WzGr2DCanvas>(caretCanvas), 0, 255, 255);
     }
 
     // Create text layer (slightly higher z than background, lower than caret)
@@ -380,7 +379,6 @@ void UIEdit::CreateLayer(WzGr2D& gr, std::int32_t z, bool screenSpace)
                                    z + 1);
     if (m_pTextLayer)
     {
-        m_pTextLayer->SetScreenSpace(screenSpace);
     }
 
 #ifdef MS_DEBUG_CANVAS
@@ -396,7 +394,7 @@ void UIEdit::CreateLayer(WzGr2D& gr, std::int32_t z, bool screenSpace)
 #endif
 }
 
-void UIEdit::SetBackgroundCanvas(std::shared_ptr<WzCanvas> canvas)
+void UIEdit::SetBackgroundCanvas(std::shared_ptr<WzGr2DCanvas> canvas)
 {
     m_pBackgroundCanvas = std::move(canvas);
     if (m_pBackgroundCanvas)

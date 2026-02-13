@@ -5,6 +5,7 @@
 #include "graphics/WzGr2DLayer.h"
 #include "stage/Login.h"
 #include "util/Logger.h"
+#include "graphics/WzGr2DCanvas.h"
 #include "wz/WzCanvas.h"
 #include "wz/WzProperty.h"
 #include "wz/WzResMan.h"
@@ -166,8 +167,8 @@ void UISelectChar::CreateCharacterSlots()
 
     // Try to load character slot canvases from WZ
     // string.csv: UI/Login.img/CharSelect/character/0 and character/1
-    std::shared_ptr<WzCanvas> slotCanvas;
-    std::shared_ptr<WzCanvas> emptySlotCanvas;
+    std::shared_ptr<WzGr2DCanvas> slotCanvas;
+    std::shared_ptr<WzGr2DCanvas> emptySlotCanvas;
 
     if (m_pCharSelectProp)
     {
@@ -177,12 +178,14 @@ void UISelectChar::CreateCharacterSlots()
             auto char0Prop = characterProp->GetChild("0");
             if (char0Prop)
             {
-                slotCanvas = char0Prop->GetCanvas();
+                auto tmpWzCanvas_180 = char0Prop->GetCanvas();
+                slotCanvas = tmpWzCanvas_180 ? std::make_shared<WzGr2DCanvas>(tmpWzCanvas_180) : nullptr;
             }
             auto char1Prop = characterProp->GetChild("1");
             if (char1Prop)
             {
-                emptySlotCanvas = char1Prop->GetCanvas();
+                auto tmpWzCanvas_185 = char1Prop->GetCanvas();
+                emptySlotCanvas = tmpWzCanvas_185 ? std::make_shared<WzGr2DCanvas>(tmpWzCanvas_185) : nullptr;
             }
         }
     }
@@ -199,7 +202,7 @@ void UISelectChar::CreateCharacterSlots()
         auto btn = std::make_shared<UIButton>();
 
         // Use WZ canvas if available, otherwise create placeholder
-        std::shared_ptr<WzCanvas> canvas = (i < m_nCharCount) ? slotCanvas : emptySlotCanvas;
+        std::shared_ptr<WzGr2DCanvas> canvas = (i < m_nCharCount) ? slotCanvas : emptySlotCanvas;
         if (canvas)
         {
             btn->SetStateCanvas(UIState::Normal, canvas);
@@ -208,7 +211,7 @@ void UISelectChar::CreateCharacterSlots()
         else
         {
             // Create placeholder slot
-            auto placeholder = std::make_shared<WzCanvas>(kSlotWidth, kSlotHeight);
+            auto wzPlaceholder = std::make_shared<WzCanvas>(kSlotWidth, kSlotHeight);
             std::vector<std::uint8_t> pixels(static_cast<size_t>(kSlotWidth * kSlotHeight * 4));
             for (size_t p = 0; p < pixels.size(); p += 4)
             {
@@ -218,7 +221,8 @@ void UISelectChar::CreateCharacterSlots()
                 pixels[p + 2] = isEmpty ? 100 : 180;  // B
                 pixels[p + 3] = 200;                   // A
             }
-            placeholder->SetPixelData(std::move(pixels));
+            wzPlaceholder->SetPixelData(std::move(pixels));
+            auto placeholder = std::make_shared<WzGr2DCanvas>(wzPlaceholder);
             btn->SetStateCanvas(UIState::Normal, placeholder);
             btn->SetSize(kSlotWidth, kSlotHeight);
         }
@@ -348,7 +352,7 @@ std::shared_ptr<UIButton> UISelectChar::CreatePlaceholderButton(
     const std::string& /*name*/, int x, int y, int width, int height)
 {
     auto btn = std::make_shared<UIButton>();
-    auto canvas = std::make_shared<WzCanvas>(width, height);
+    auto wzCanvas = std::make_shared<WzCanvas>(width, height);
 
     std::vector<std::uint8_t> pixels(static_cast<size_t>(width * height * 4));
     for (int py = 0; py < height; ++py)
@@ -363,7 +367,8 @@ std::shared_ptr<UIButton> UISelectChar::CreatePlaceholderButton(
             pixels[idx + 3] = 255;
         }
     }
-    canvas->SetPixelData(std::move(pixels));
+    wzCanvas->SetPixelData(std::move(pixels));
+    auto canvas = std::make_shared<WzGr2DCanvas>(wzCanvas);
 
     btn->SetStateCanvas(UIState::Normal, canvas);
     btn->SetSize(width, height);

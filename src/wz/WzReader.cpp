@@ -2,9 +2,9 @@
 #include "WzCrypto.h"
 
 #include <cstring>
-#include <fstream>
 #include <iostream>
 #include <limits>
+#include <system_error>
 
 namespace ms
 {
@@ -23,22 +23,16 @@ auto WzReader::Open(const std::string& path) -> bool
 {
     Close();
 
-    std::ifstream file(path, std::ios::binary | std::ios::ate);
-    if (!file.is_open())
-        return false;
+    std::error_code error;
+    m_mmap.map(path, error);
 
-    m_nSize = static_cast<std::size_t>(file.tellg());
-    file.seekg(0, std::ios::beg);
-
-    m_fileData.resize(m_nSize);
-    if (!file.read(reinterpret_cast<char*>(m_fileData.data()), static_cast<std::streamsize>(m_nSize)))
+    if (error)
     {
-        m_fileData.clear();
-        m_nSize = 0;
         return false;
     }
 
-    m_pData = m_fileData.data();
+    m_pData = reinterpret_cast<const std::uint8_t*>(m_mmap.data());
+    m_nSize = m_mmap.size();
     m_nCursor = 0;
 
     return true;
@@ -46,7 +40,10 @@ auto WzReader::Open(const std::string& path) -> bool
 
 void WzReader::Close()
 {
-    m_fileData.clear();
+    if (m_mmap.is_mapped())
+    {
+        m_mmap.unmap();
+    }
     m_pData = nullptr;
     m_nSize = 0;
     m_nCursor = 0;
@@ -54,7 +51,7 @@ void WzReader::Close()
 
 auto WzReader::IsOpen() const noexcept -> bool
 {
-    return m_pData != nullptr && m_nSize > 0;
+    return m_mmap.is_mapped();
 }
 
 auto WzReader::ReadBytes(std::size_t count) -> std::vector<std::uint8_t>

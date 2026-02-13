@@ -92,6 +92,9 @@ public:
         return m_tUpdateTime;
     }
 
+    /// CWvsApp::GetTimeGap — returns m_tUpdateTime - g_gr.get_currentTime()
+    [[nodiscard]] auto GetTimeGap() const noexcept -> std::int32_t;
+
     [[nodiscard]] static auto GetTick() noexcept -> std::uint64_t;
 
     // State
@@ -133,8 +136,8 @@ private:
 
 private:
     // Screen dimensions (used to initialize WzGr2D)
-    int m_nWidth = 800;
-    int m_nHeight = 600;
+    int m_nWidth = 1366;
+    int m_nHeight = 768;
 
     // Current stage (scene)
     std::shared_ptr<Stage> m_pStage;

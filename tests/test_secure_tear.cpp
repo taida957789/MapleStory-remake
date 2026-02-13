@@ -1,3 +1,4 @@
+#include "user/AvatarData.h"
 #include "util/Rand32.h"
 #include "util/security/TSecType.h"
 #include "util/security/ZtlSecureTear.h"

@@ -6,6 +6,8 @@
 #include <cmath>
 #include "wz/WzProperty.h"
 #include "wz/WzCanvas.h"
+#include "wz/WzFile.h"
+#include "wz/WzImage.h"
 
 using namespace ms;
 
@@ -190,7 +192,7 @@ TEST_F(WzCanvasTest, DefaultConstructor)
     WzCanvas canvas;
     EXPECT_EQ(canvas.GetWidth(), 0);
     EXPECT_EQ(canvas.GetHeight(), 0);
-    EXPECT_EQ(canvas.GetZ(), 0);
+    // Note: GetZ() moved to WzGr2DCanvas
 }
 
 TEST_F(WzCanvasTest, SizedConstructor)
@@ -203,25 +205,17 @@ TEST_F(WzCanvasTest, SizedConstructor)
     EXPECT_EQ(canvas.GetPixelData().size(), 100 * 50 * 4);
 }
 
-TEST_F(WzCanvasTest, Origin)
-{
-    WzCanvas canvas(100, 100);
+// Note: Origin functionality moved to WzGr2DCanvas
+// TEST_F(WzCanvasTest, Origin)
+// {
+//     Origin functionality moved to WzGr2DCanvas
+// }
 
-    canvas.SetOrigin(Point2D(10, 20));
-    EXPECT_EQ(canvas.GetOrigin().x, 10);
-    EXPECT_EQ(canvas.GetOrigin().y, 20);
-}
-
-TEST_F(WzCanvasTest, ZValue)
-{
-    WzCanvas canvas(100, 100);
-
-    canvas.SetZ(5);
-    EXPECT_EQ(canvas.GetZ(), 5);
-
-    canvas.SetZ(-3);
-    EXPECT_EQ(canvas.GetZ(), -3);
-}
+// Note: Z value functionality moved to WzGr2DCanvas
+// TEST_F(WzCanvasTest, ZValue)
+// {
+//     Z functionality moved to WzGr2DCanvas
+// }
 
 TEST_F(WzCanvasTest, SetPixelData)
 {
@@ -259,13 +253,15 @@ TEST_F(WzCanvasTest, NullCanvas)
 
 #include "wz/WzFile.h"
 #include "wz/WzResMan.h"
+#include "wz/WzDirectory.h"
+#include "wz/WzImage.h"
 #include <filesystem>
 #include <set>
 #include <algorithm>
 #include <cctype>
 
 // Path to test WZ files
-static const std::string WZ_TEST_PATH = "../resources/old";
+static const std::string WZ_TEST_PATH = "../resources/new";
 
 class WzFileTest : public ::testing::Test
 {
@@ -355,7 +351,7 @@ TEST_F(WzFileTest, OpenEtcWz)
     int count = 0;
     for (const auto& [name, child] : root->GetChildren())
     {
-        std::cout << "  - " << name << " (type: " << static_cast<int>(child->GetNodeType()) << ")" << std::endl;
+        std::cout << "  - " << name << " (type: " << static_cast<int>(child->GetType()) << ")" << std::endl;
         if (++count >= 10)
         {
             std::cout << "  ... and more" << std::endl;
@@ -383,7 +379,7 @@ TEST_F(WzFileTest, LazyLoadingImg)
     {
         if (name.find(".img") != std::string::npos)
         {
-            imgNode = child;
+            imgNode = std::dynamic_pointer_cast<WzProperty>(child);
             std::cout << "Found img: " << name << std::endl;
             break;
         }
@@ -463,8 +459,12 @@ TEST_F(WzResManTest, InitializeWithTestFiles)
     EXPECT_TRUE(result) << "Failed to initialize WzResMan";
 }
 
-TEST_F(WzResManTest, CheckMapLoginStructure)
+// NOTE: This test is disabled because MapLogin.img is no longer used.
+// Login now uses LoginBack.img instead (simple background format, not map format).
+TEST_F(WzResManTest, DISABLED_CheckMapLoginStructure)
 {
+    GTEST_SKIP() << "MapLogin.img is no longer used - Login now uses LoginBack.img";
+
     if (!m_bHasTestFiles)
     {
         GTEST_SKIP() << "Test WZ files not found";
@@ -935,4 +935,68 @@ TEST_F(WzResManTest, CheckMapLoginStructure)
     {
         std::cout << "Map1.wz not found or not loaded" << std::endl;
     }
+}
+
+// Test for _inlink resolution
+TEST(WzCanvasLinkTest, InlinkResolution)
+{
+    // Create a target canvas with actual data
+    auto targetCanvas = std::make_shared<WzCanvas>(456, 285);
+    std::vector<std::uint8_t> pixelData(456 * 285 * 4, 0xFF); // White pixels
+    targetCanvas->SetPixelData(std::move(pixelData));
+
+    // Create target property containing the canvas
+    auto targetProp = std::make_shared<WzProperty>("24");
+    targetProp->SetCanvas(targetCanvas);
+
+    // Create WzImage (Logo.img equivalent)
+    auto logoImg = std::make_shared<WzImage>("Logo.img");
+
+    // Create Wizet property under Logo.img
+    auto wizet = std::make_shared<WzProperty>("Wizet");
+    wizet->AddChild(targetProp);
+
+    // Create a property with _inlink
+    auto linkedProp = std::make_shared<WzProperty>("25");
+
+    // Add _inlink child
+    auto inlinkChild = std::make_shared<WzProperty>("_inlink");
+    inlinkChild->SetString("Wizet/24");
+    linkedProp->AddChild(inlinkChild);
+
+    // Add placeholder canvas (1x1) to linkedProp
+    auto placeholderCanvas = std::make_shared<WzCanvas>(1, 1);
+    linkedProp->SetCanvas(placeholderCanvas);
+
+    wizet->AddChild(linkedProp);
+
+    // Add Wizet to Logo.img
+    logoImg->AddProperty(wizet);
+
+    // Create a mock WzFile for path resolution
+    auto wzFile = std::make_shared<WzFile>();
+
+    // CRITICAL: Set WzFile pointer on the linked property so it can resolve the path
+    linkedProp->SetWzFile(wzFile.get());
+
+    std::cout << "\n=== Testing _inlink resolution ===" << std::endl;
+    std::cout << "Target canvas (Wizet/24): " << targetCanvas->GetWidth() << "x" << targetCanvas->GetHeight() << std::endl;
+    std::cout << "Linked property (Wizet/25) has _inlink child: "
+              << (linkedProp->GetChild("_inlink") != nullptr) << std::endl;
+    std::cout << "Linked property _inlink value: "
+              << (linkedProp->GetChild("_inlink") ? linkedProp->GetChild("_inlink")->GetString() : "NULL") << std::endl;
+
+    // Try to get canvas from linked property
+    auto resolvedCanvas = linkedProp->GetCanvas();
+
+    std::cout << "Resolved canvas: " << (resolvedCanvas != nullptr ? "NOT NULL" : "NULL") << std::endl;
+    if (resolvedCanvas)
+    {
+        std::cout << "Resolved canvas size: " << resolvedCanvas->GetWidth() << "x" << resolvedCanvas->GetHeight() << std::endl;
+    }
+
+    // Verify that the resolved canvas is the target canvas (456x285), not the placeholder (1x1)
+    ASSERT_NE(resolvedCanvas, nullptr) << "_inlink resolution returned nullptr";
+    EXPECT_EQ(resolvedCanvas->GetWidth(), 456) << "_inlink resolution failed - got placeholder canvas";
+    EXPECT_EQ(resolvedCanvas->GetHeight(), 285) << "_inlink resolution failed - got placeholder canvas";
 }

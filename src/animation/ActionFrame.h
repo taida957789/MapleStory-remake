@@ -67,10 +67,42 @@ public:
         const std::shared_ptr<WzProperty>& pProperty
     ) -> std::shared_ptr<std::vector<MapInfo>>;
 
+    /// 計算所有 sprite 的最小包圍矩形，快取於 m_rcMBR。
+    /// 已計算過（m_bMBRValid == true）則直接返回。
+    void UpdateMBR();
+
+    /// Resolve VSlot visibility conflicts between equip sprites.
+    /// Seeds a map from m_sExclVSlot (2-char pair codes → hidden),
+    /// then iterates sprites comparing ISlot priorities per VSlot.
+    /// Higher ISlot priority hides lower; exclusive VSlots always hide.
+    void UpdateVisibility();
+
     /// Find a group in m_lGroups (other than pMIL) that shares any
     /// MapInfo name with pMIL. Returns nullptr if no match found.
     [[nodiscard]] auto FindGroup(const std::shared_ptr<std::vector<MapInfo>>& pMIL)
         -> std::shared_ptr<std::vector<MapInfo>>;
+
+    /// Set the exclusive VSlot string (original: Ztl_bstr_t copy assignment).
+    void SetExclusiveVSlot(const std::string& sExclVSlot) { m_sExclVSlot = sExclVSlot; }
+
+    /// Add a sprite layer to this frame.
+    /// Creates a SpriteInstance from the canvas+property, inserts it sorted
+    /// by z-order, extracts attachment map, and merges overlapping groups.
+    void Merge(
+        const std::string& sISlot,
+        const std::string& sVSlot,
+        const std::shared_ptr<WzGr2DCanvas>& pRawSprite,
+        std::int32_t nJob,
+        const std::shared_ptr<WzProperty>& pSpriteProp
+    );
+
+    /// Merge source group into destination group.
+    /// Computes average offset from common attachment points, applies it
+    /// to non-common entries and associated sprite positions, then removes pSrc.
+    void MergeGroup(
+        const std::shared_ptr<std::vector<MapInfo>>& pDst,
+        const std::shared_ptr<std::vector<MapInfo>>& pSrc
+    );
 
     // === Instance members ===
 

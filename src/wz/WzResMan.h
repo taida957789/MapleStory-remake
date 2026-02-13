@@ -13,9 +13,13 @@
 namespace ms
 {
 
+class WzNode;
+class WzDirectory;
+class WzImage;
 class WzProperty;
 class WzCanvas;
 class WzFile;
+class IWzSource;
 
 /**
  * @brief WZ Resource Manager
@@ -45,6 +49,7 @@ class WzResMan final : public Singleton<WzResMan>
     friend class Singleton<WzResMan>;
 
 public:
+
     /**
      * @brief WZ file loading order as defined in CWvsApp::InitializeResMan
      */
@@ -62,10 +67,48 @@ public:
     void Shutdown();
 
     /**
+     * @brief Get node from path
+     *
+     * Core method that returns any type of WzNode (Directory, Image, or Property).
+     * Use type-specific methods (GetDirectory, GetImage, GetProperty) for type-safe access.
+     * Example: "UI.wz/Login.img/Title" or "UI/Login.img/Title"
+     *
+     * @param path Path to the node
+     * @return shared_ptr to WzNode, or nullptr if not found
+     */
+    [[nodiscard]] auto GetNode(const std::string& path) -> std::shared_ptr<WzNode>;
+
+    /**
+     * @brief Get directory from path
+     *
+     * Type-safe wrapper around GetNode() that returns a WzDirectory.
+     * Example: "UI.wz" or "Map.wz/Map/Map0"
+     *
+     * @param path Path to the directory
+     * @return shared_ptr to WzDirectory, or nullptr if not found or wrong type
+     */
+    [[nodiscard]] auto GetDirectory(const std::string& path) -> std::shared_ptr<WzDirectory>;
+
+    /**
+     * @brief Get image from path
+     *
+     * Type-safe wrapper around GetNode() that returns a WzImage.
+     * Example: "UI.wz/Login.img" or "Map.wz/Map/Map0/000010000.img"
+     *
+     * @param path Path to the image
+     * @return shared_ptr to WzImage, or nullptr if not found or wrong type
+     */
+    [[nodiscard]] auto GetImage(const std::string& path) -> std::shared_ptr<WzImage>;
+
+    /**
      * @brief Get property from path
      *
+     * Type-safe wrapper around GetNode() that returns a WzProperty.
      * Based on IWzResMan::GetObjectA
      * Example: "UI.wz/Login.img/Title" or "UI/Login.img/Title"
+     *
+     * @param path Path to the property
+     * @return shared_ptr to WzProperty, or nullptr if not found or wrong type
      */
     [[nodiscard]] auto GetProperty(const std::string& path) -> std::shared_ptr<WzProperty>;
 
@@ -119,7 +162,6 @@ public:
 private:
     WzResMan();
     ~WzResMan() override;
-
     /**
      * @brief Load Base.wz and parse Version.img
      *
@@ -133,15 +175,20 @@ private:
     [[nodiscard]] auto InitializeWzFiles() -> bool;
 
     /**
-     * @brief Get or load a WZ file
+     * @brief Get or load a WZ source (file or package)
      */
-    [[nodiscard]] auto GetWzFile(const std::string& name) -> std::shared_ptr<WzFile>;
+    [[nodiscard]] auto GetWzSource(const std::string& name) -> std::shared_ptr<IWzSource>;
 
-    // Loaded WZ files
-    std::unordered_map<std::string, std::shared_ptr<WzFile>> m_wzFiles;
+    /**
+     * @brief Scan base path directory and discover all WZ sources
+     */
+    [[nodiscard]] auto DiscoverWzSources() -> bool;
 
-    // Property cache
-    std::map<std::string, std::shared_ptr<WzProperty>> m_propertyCache;
+    // Loaded WZ sources (files or packages)
+    std::unordered_map<std::string, std::shared_ptr<IWzSource>> m_wzSources;
+
+    // Node cache (stores all node types: Directory, Image, Property)
+    std::map<std::string, std::shared_ptr<WzNode>> m_nodeCache;
 
     // Version info from Version.img
     std::unordered_map<std::string, std::int32_t> m_wzVersions;

@@ -14,6 +14,7 @@ namespace ms
 class UIElement;
 class UIButton;
 class WzGr2DLayer;
+class WzGr2DCanvas;
 class WzProperty;
 
 /**
@@ -195,7 +196,7 @@ private:
     struct PendingLayer
     {
         std::wstring sName;
-        std::shared_ptr<class WzCanvas> pCanvas;
+        std::shared_ptr<WzGr2DCanvas> pCanvas;
         std::int32_t nX;
         std::int32_t nY;
     };

@@ -1,11 +1,17 @@
 #include "WzResMan.h"
+#include "WzDirectory.h"
 #include "WzFile.h"
+#include "WzImage.h"
+#include "WzNode.h"
 #include "WzProperty.h"
 #include "WzTypes.h"
-#include "util/Logger.h"
+#include "IWzSource.h"
+#include "WzSourceFactory.h"
+#include "WzFormatDetector.h"
 
 #include <filesystem>
 #include <vector>
+#include <iostream>
 
 namespace ms
 {
@@ -22,7 +28,7 @@ auto WzResMan::Initialize() -> bool
     if (m_bInitialized)
         return true;
 
-    LOG_INFO("Initializing WZ Resource Manager...");
+    // Initializing WZ Resource Manager
 
     // If base path is not set, try to auto-detect
     if (m_sBasePath.empty())
@@ -35,7 +41,7 @@ auto WzResMan::Initialize() -> bool
     // Based on CWvsApp::InitializeResMan
     if (!InitializeBase())
     {
-        LOG_ERROR("Failed to initialize Base.wz");
+        // Failed to initialize Base.wz
         // Continue anyway - Base.wz may not exist in all clients
     }
 
@@ -43,101 +49,153 @@ auto WzResMan::Initialize() -> bool
     // Based on CWvsApp::InitializeResMan - asNameOrder array
     if (!InitializeWzFiles())
     {
-        LOG_WARN("Some WZ files failed to load");
+        // Some WZ files failed to load
         // Continue anyway - some files may be optional
     }
 
     m_bInitialized = true;
-    LOG_INFO("WZ Resource Manager initialized");
     return true;
 }
 
 void WzResMan::Shutdown()
 {
-    m_propertyCache.clear();
-    m_wzFiles.clear();
+    m_nodeCache.clear();
+    m_wzSources.clear();
     m_wzVersions.clear();
     m_bInitialized = false;
 }
 
 auto WzResMan::InitializeBase() -> bool
 {
-    // Load Base.wz
-    auto basePath = m_sBasePath + "/Base.wz";
+    // Try to load Base.wz (single file) or Base/ (package directory)
+    std::string basePath = m_sBasePath + "/Base.wz";
+    std::string baseDir = m_sBasePath + "/Base";
 
-    if (!std::filesystem::exists(basePath))
+    // Check which format exists
+    std::string path;
+    if (std::filesystem::exists(basePath))
     {
-        LOG_ERROR("Base.wz not found at: {}", basePath);
-        return false;
+        path = basePath;
     }
-
-    auto baseFile = std::make_shared<WzFile>();
-    if (!baseFile->Open(basePath))
+    else if (std::filesystem::exists(baseDir) && std::filesystem::is_directory(baseDir))
     {
-        LOG_ERROR("Failed to open Base.wz");
-        return false;
-    }
-
-    m_wzFiles["Base"] = baseFile;
-    LOG_INFO("Loaded Base.wz (version {})", baseFile->GetVersion());
-
-    // Parse Version.img to get version info for all WZ files
-    // Based on CWvsApp::InitializeResMan - pVersion = GetObjectA("Version.img")
-    auto versionImg = baseFile->FindNode("Version.img");
-    if (versionImg)
-    {
-        // Iterate through children to get version numbers
-        // Each child is named after a WZ file (e.g., "UI", "Map")
-        // and contains an integer version number
-        for (const auto& [name, child] : versionImg->GetChildren())
-        {
-            auto version = child->GetInt();
-            if (version != 0)
-            {
-                m_wzVersions[name] = version;
-                LOG_DEBUG("  Version info: {} = {}", name, version);
-            }
-        }
+        path = baseDir;
     }
     else
     {
-        LOG_DEBUG("Version.img not found in Base.wz");
+        // Base not found (neither .wz file nor directory)
+        return false;
     }
+
+    // Use WzSourceFactory to automatically detect and load
+    auto baseSource = WzSourceFactory::CreateAndOpen(path);
+    if (!baseSource)
+    {
+        // Failed to open Base
+        return false;
+    }
+
+    m_wzSources["Base"] = std::move(baseSource);
 
     return true;
 }
 
 auto WzResMan::InitializeWzFiles() -> bool
 {
-    // Load WZ files in order defined by asNameOrder
-    // Based on CWvsApp::InitializeResMan
-    bool allLoaded = true;
+    // Automatically discover and load all WZ sources in base path
+    return DiscoverWzSources();
+}
 
-    for (const auto* wzName : WZ_LOAD_ORDER)
+auto WzResMan::DiscoverWzSources() -> bool
+{
+    if (!std::filesystem::exists(m_sBasePath) || !std::filesystem::is_directory(m_sBasePath))
     {
-        auto filePath = m_sBasePath + "/" + wzName + ".wz";
+        // Failed: base path doesn't exist or isn't a directory
+        return false;
+    }
 
-        if (!std::filesystem::exists(filePath))
+    int loadedCount = 0;
+    int failedCount = 0;
+
+    // DEBUG: Log discovery process
+    // Base path OK, starting WZ source discovery
+
+    // Scan directory for .wz files and package directories
+    for (const auto& entry : std::filesystem::directory_iterator(m_sBasePath))
+    {
+        std::string name;
+        std::string path = entry.path().string();
+
+        // Check if it's a .wz file
+        if (entry.is_regular_file() && entry.path().extension() == ".wz")
         {
-            LOG_DEBUG("WZ file not found (skipping): {}.wz", wzName);
-            continue;
+            name = entry.path().stem().string();
+
+            // Skip if already loaded (e.g., Base.wz loaded in InitializeBase)
+            if (m_wzSources.find(name) != m_wzSources.end())
+            {
+                continue;
+            }
+
+            auto source = WzSourceFactory::CreateAndOpen(path);
+            if (source)
+            {
+                m_wzSources[name] = std::move(source);
+                loadedCount++;
+            }
+            else
+            {
+                failedCount++;
+            }
         }
-
-        if (!LoadWzFile(wzName))
+        // Check if it's a package directory (contains .ini file)
+        else if (entry.is_directory())
         {
-            LOG_ERROR("Failed to load: {}.wz", wzName);
-            allLoaded = false;
+            name = entry.path().filename().string();
+
+            // Skip if already loaded
+            if (m_wzSources.find(name) != m_wzSources.end())
+            {
+                continue;
+            }
+
+            // Check if directory contains a .ini file
+            bool hasIniFile = false;
+            for (const auto& subEntry : std::filesystem::directory_iterator(path))
+            {
+                if (subEntry.path().extension() == ".ini")
+                {
+                    hasIniFile = true;
+                    break;
+                }
+            }
+
+            if (hasIniFile)
+            {
+                auto source = WzSourceFactory::CreateAndOpen(path);
+                if (source)
+                {
+                    m_wzSources[name] = std::move(source);
+                    loadedCount++;
+                }
+                else
+                {
+                    failedCount++;
+                }
+            }
         }
     }
 
-    return allLoaded;
+    // Return true even if some sources failed to load
+    // (some may be optional or corrupted)
+    return loadedCount > 0;
 }
 
-auto WzResMan::GetProperty(const std::string& path) -> std::shared_ptr<WzProperty>
+auto WzResMan::GetNode(const std::string& path) -> std::shared_ptr<WzNode>
 {
     // Check cache first
-    const auto cacheIt = m_propertyCache.find(path);
-    if (cacheIt != m_propertyCache.end())
+    const auto cacheIt = m_nodeCache.find(path);
+    if (cacheIt != m_nodeCache.end())
     {
         return cacheIt->second;
     }
@@ -163,53 +221,104 @@ auto WzResMan::GetProperty(const std::string& path) -> std::shared_ptr<WzPropert
         wzName = wzName.substr(0, wzName.size() - 3);
     }
 
-    // Get or load WZ file
-    auto wzFile = GetWzFile(wzName);
-    if (!wzFile)
+    // Get or load WZ source
+    auto wzSource = GetWzSource(wzName);
+    if (!wzSource)
     {
-        // Return empty property if file not found
-        auto prop = std::make_shared<WzProperty>();
-        m_propertyCache[path] = prop;
-        return prop;
+        // Return nullptr if source not found
+        return nullptr;
     }
 
-    // Find node in WZ file
-    std::shared_ptr<WzProperty> prop;
+    // Find node in WZ source
+    std::shared_ptr<WzNode> node;
     if (subPath.empty())
     {
-        prop = wzFile->GetRoot();
+        // Return root directory
+        node = wzSource->GetRoot();
     }
     else
     {
-        prop = wzFile->FindNode(subPath);
+        // FindNode handles lazy loading of images
+        node = wzSource->FindNode(subPath);
     }
 
-    if (!prop)
+    if (node)
     {
-        prop = std::make_shared<WzProperty>();
+        m_nodeCache[path] = node;
     }
 
-    m_propertyCache[path] = prop;
-    return prop;
+    return node;
+}
+
+auto WzResMan::GetDirectory(const std::string& path) -> std::shared_ptr<WzDirectory>
+{
+    auto node = GetNode(path);
+    if (!node)
+    {
+        return nullptr;
+    }
+
+    // Use dynamic_pointer_cast for type-safe downcasting
+    return std::dynamic_pointer_cast<WzDirectory>(node);
+}
+
+auto WzResMan::GetImage(const std::string& path) -> std::shared_ptr<WzImage>
+{
+    auto node = GetNode(path);
+    if (!node)
+    {
+        return nullptr;
+    }
+
+    // Use dynamic_pointer_cast for type-safe downcasting
+    return std::dynamic_pointer_cast<WzImage>(node);
+}
+
+auto WzResMan::GetProperty(const std::string& path) -> std::shared_ptr<WzProperty>
+{
+    auto node = GetNode(path);
+    if (!node)
+    {
+        return nullptr;
+    }
+
+    // Use dynamic_pointer_cast for type-safe downcasting
+    return std::dynamic_pointer_cast<WzProperty>(node);
 }
 
 auto WzResMan::LoadWzFile(const std::string& name) -> bool
 {
     // Check if already loaded
-    if (m_wzFiles.find(name) != m_wzFiles.end())
+    if (m_wzSources.find(name) != m_wzSources.end())
         return true;
 
-    auto wzFile = std::make_shared<WzFile>();
-    auto filePath = m_sBasePath + "/" + name + ".wz";
+    // Try both .wz file and package directory
+    std::string filePath = m_sBasePath + "/" + name + ".wz";
+    std::string dirPath = m_sBasePath + "/" + name;
 
-    if (!wzFile->Open(filePath))
+    std::string path;
+    if (std::filesystem::exists(filePath))
     {
-        LOG_ERROR("Failed to load WZ file: {}", filePath);
+        path = filePath;
+    }
+    else if (std::filesystem::exists(dirPath) && std::filesystem::is_directory(dirPath))
+    {
+        path = dirPath;
+    }
+    else
+    {
+        // WZ source not found
         return false;
     }
 
-    m_wzFiles[name] = wzFile;
-    LOG_INFO("Loaded WZ file: {}.wz (version {})", name, wzFile->GetVersion());
+    auto wzSource = WzSourceFactory::CreateAndOpen(path);
+    if (!wzSource)
+    {
+        // Failed to load WZ source
+        return false;
+    }
+
+    m_wzSources[name] = std::move(wzSource);
     return true;
 }
 
@@ -219,9 +328,9 @@ void WzResMan::FlushCachedObjects(int flags)
     // flags: 0 = flush all, other values may be used for selective flushing
     if (flags == 0)
     {
-        // Flush all cached properties
-        m_propertyCache.clear();
-        LOG_DEBUG("Flushed all cached objects");
+        // Flush all cached nodes
+        m_nodeCache.clear();
+        // Flushed all cached objects
     }
 }
 
@@ -233,15 +342,15 @@ auto WzResMan::GetWzVersion(const std::string& name) const -> std::int32_t
     return 0;
 }
 
-auto WzResMan::GetWzFile(const std::string& name) -> std::shared_ptr<WzFile>
+auto WzResMan::GetWzSource(const std::string& name) -> std::shared_ptr<IWzSource>
 {
-    auto it = m_wzFiles.find(name);
-    if (it != m_wzFiles.end())
+    auto it = m_wzSources.find(name);
+    if (it != m_wzSources.end())
         return it->second;
 
-    // Try to load the file on demand
+    // Try to load the source on demand
     if (LoadWzFile(name))
-        return m_wzFiles[name];
+        return m_wzSources[name];
 
     return nullptr;
 }
@@ -257,15 +366,36 @@ auto WzResMan::LoadSoundData(const std::shared_ptr<WzProperty>& prop) -> std::ve
     auto soundData = prop->GetSound();
     if (soundData.size <= 0 || soundData.offset == 0)
     {
-        LOG_DEBUG("Property has no sound data");
+        // Property has no sound data
         return {};
     }
 
-    // Get the parent WzFile from the property
-    auto* wzFile = prop->GetWzFile();
+    // Navigate up the parent chain to find the WzImage
+    auto parent = prop->GetParent().lock();
+    std::shared_ptr<WzImage> image;
+
+    while (parent)
+    {
+        if (parent->GetType() == WzNodeType::Image)
+        {
+            // Found the image - downcast to WzImage
+            image = std::dynamic_pointer_cast<WzImage>(parent);
+            break;
+        }
+        parent = parent->GetParent().lock();
+    }
+
+    if (!image)
+    {
+        // Could not find parent WzImage
+        return {};
+    }
+
+    // Get the WzFile from the image
+    auto wzFile = image->GetWzFile().lock();
     if (!wzFile)
     {
-        LOG_ERROR("Property has no parent WzFile");
+        // Image has no parent WzFile
         return {};
     }
 

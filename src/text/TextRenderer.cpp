@@ -189,7 +189,7 @@ auto TextRenderer::Utf8ToUtf32(const std::string& utf8) -> std::u32string
 }
 
 auto TextRenderer::RenderText(const std::string& text, std::uint32_t color)
-    -> std::shared_ptr<WzCanvas>
+    -> std::shared_ptr<WzGr2DCanvas>
 {
     if (!m_bInitialized || text.empty())
     {
@@ -236,7 +236,8 @@ auto TextRenderer::RenderText(const std::string& text, std::uint32_t color)
     }
 
     // Create canvas
-    auto canvas = std::make_shared<WzCanvas>(totalWidth, lineHeight);
+    auto wzCanvas = std::make_shared<WzCanvas>(totalWidth, lineHeight);
+    auto canvas = std::make_shared<WzGr2DCanvas>(wzCanvas);
 
     // Create pixel buffer (RGBA)
     std::vector<std::uint8_t> pixels(static_cast<size_t>(totalWidth * lineHeight * 4), 0);
@@ -298,7 +299,7 @@ auto TextRenderer::RenderText(const std::string& text, std::uint32_t color)
         penX += static_cast<int>(slot->advance.x >> 6);
     }
 
-    canvas->SetPixelData(std::move(pixels));
+    wzCanvas->SetPixelData(std::move(pixels));
     return canvas;
 }
 
@@ -332,7 +333,7 @@ void TextRenderer::RenderTextDirect(SDL_Renderer* renderer, const std::string& t
 
     SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
 
-    const auto& pixelData = canvas->GetPixelData();
+    const auto& pixelData = canvas->GetCanvas()->GetPixelData();
     SDL_UpdateTexture(texture, nullptr, pixelData.data(),
                       static_cast<int>(canvas->GetWidth() * 4));
 

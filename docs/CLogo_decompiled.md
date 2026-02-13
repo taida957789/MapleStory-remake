@@ -59,7 +59,7 @@ CLogo *__thiscall CLogo::CLogo(CLogo *this)
 ### Key Member Variables:
 - `m_pLayerBackground` - Background layer for logo
 - `m_pLayerMain` - Main layer for logo display
-- `m_pLogoProp` - WZ property for logo images (UI/Logo.img/Logo)
+- `m_pLogoProp` - WZ property for logo images (UI/Logo.img/Gamania)
 - `m_pGradeProp` - WZ property for grade images (UI/Logo.img/Grade)
 - `m_nGradeCount` - Number of grade images
 - `m_pMessageProp` - WZ property for messages (UI/Logo.img/Message)
@@ -283,8 +283,8 @@ void __thiscall CLogo::InitWZLogo(CLogo *this)
   this->m_videoState = (result >= 0);  // Set based on success
 
   // 2. Load WZ properties
-  // StringPool 0x958 = "UI/Logo.img/Logo"
-  this->m_pLogoProp = GetObject("UI/Logo.img/Logo");
+  // StringPool 0x958 = "UI/Logo.img/Gamania"
+  this->m_pLogoProp = GetObject("UI/Logo.img/Gamania");
   this->m_nLogoCount = this->m_pLogoProp->Getcount() + 50;
 
   // 3. Load Grade property
@@ -313,7 +313,7 @@ void __thiscall CLogo::InitWZLogo(CLogo *this)
 ### WZ Resource Paths:
 | Resource | Path |
 |----------|------|
-| Logo images | UI/Logo.img/Logo |
+| Logo images | UI/Logo.img/Gamania |
 | Grade images | UI/Logo.img/Grade |
 | Message images | UI/Logo.img/Message |
 | Video file | StringPool 0x95A |

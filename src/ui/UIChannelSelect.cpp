@@ -5,6 +5,7 @@
 #include "graphics/WzGr2DLayer.h"
 #include "stage/Login.h"
 #include "util/Logger.h"
+#include "graphics/WzGr2DCanvas.h"
 #include "wz/WzCanvas.h"
 #include "wz/WzProperty.h"
 #include "wz/WzResMan.h"
@@ -73,7 +74,8 @@ auto UIChannelSelect::OnCreate(std::any params) -> Result<void>
             auto chBackgrnProp = btChannelProp ? btChannelProp->GetChild("layer:bg") : nullptr;
             if (chBackgrnProp)
             {
-                auto canvas = chBackgrnProp->GetCanvas();
+                auto wzCanvas = chBackgrnProp->GetCanvas();
+                auto canvas = wzCanvas ? std::make_shared<WzGr2DCanvas>(wzCanvas) : nullptr;
                 if (canvas)
                 {
                     LOG_DEBUG("UIChannelSelect: chBackgrn canvas loaded ({}x{})",
@@ -92,7 +94,6 @@ auto UIChannelSelect::OnCreate(std::any params) -> Result<void>
                                                  static_cast<std::uint32_t>(canvas->GetHeight()), 140);
                     if (m_pLayerBg)
                     {
-                        m_pLayerBg->SetScreenSpace(true);
                         m_pLayerBg->InsertCanvas(canvas, 0, 255, 255);
                         LOG_DEBUG("UIChannelSelect: chBackgrn layer at ({}, {}), renders at ({}, {})",
                                   layerX, layerY, kDialogX, kDialogY);
@@ -105,7 +106,8 @@ auto UIChannelSelect::OnCreate(std::any params) -> Result<void>
                     auto child0 = chBackgrnProp->GetChild("0");
                     if (child0)
                     {
-                        canvas = child0->GetCanvas();
+                        auto tmpWzCanvas = child0->GetCanvas();
+                        canvas = tmpWzCanvas ? std::make_shared<WzGr2DCanvas>(tmpWzCanvas) : nullptr;
                         if (canvas)
                         {
                             // Origin_LT style: layerPos = targetTopLeft + origin
@@ -118,7 +120,6 @@ auto UIChannelSelect::OnCreate(std::any params) -> Result<void>
                                                          static_cast<std::uint32_t>(canvas->GetHeight()), 140);
                             if (m_pLayerBg)
                             {
-                                m_pLayerBg->SetScreenSpace(true);
                                 m_pLayerBg->InsertCanvas(canvas, 0, 255, 255);
                                 LOG_DEBUG("UIChannelSelect: chBackgrn/0 layer at ({}, {})", layerX, layerY);
                             }
@@ -256,7 +257,8 @@ void UIChannelSelect::ResetInfo(std::int32_t worldIndex, bool bRedraw)
         auto chgaugeProp = m_pChannelSelectProp->GetChild("gauge");
         if (chgaugeProp)
         {
-            m_pCanvasGauge = chgaugeProp->GetCanvas();
+            auto wzCanvas_260 = chgaugeProp->GetCanvas();
+            m_pCanvasGauge = wzCanvas_260 ? std::make_shared<WzGr2DCanvas>(wzCanvas_260) : nullptr;
             if (m_pCanvasGauge)
             {
                 LOG_DEBUG("UIChannelSelect: chgauge canvas loaded ({}x{})",
@@ -268,7 +270,8 @@ void UIChannelSelect::ResetInfo(std::int32_t worldIndex, bool bRedraw)
                 auto child0 = chgaugeProp->GetChild("0");
                 if (child0)
                 {
-                    m_pCanvasGauge = child0->GetCanvas();
+                    auto wzCanvas_272 = child0->GetCanvas();
+                    m_pCanvasGauge = wzCanvas_272 ? std::make_shared<WzGr2DCanvas>(wzCanvas_272) : nullptr;
                     if (m_pCanvasGauge)
                     {
                         LOG_DEBUG("UIChannelSelect: chgauge/0 canvas loaded");
@@ -280,7 +283,7 @@ void UIChannelSelect::ResetInfo(std::int32_t worldIndex, bool bRedraw)
 
     // Load selection indicator (if exists in WZ)
     // Note: Original uses CLayoutMan AutoBuild, may not have separate chSelect
-    std::shared_ptr<WzCanvas> chSelectCanvas;
+    std::shared_ptr<WzGr2DCanvas> chSelectCanvas;
     if (m_pChannelSelectProp)
     {
         auto chSelectProp = m_pChannelSelectProp->GetChild("chSelect");
@@ -295,7 +298,8 @@ void UIChannelSelect::ResetInfo(std::int32_t worldIndex, bool bRedraw)
         }
         if (chSelectProp)
         {
-            chSelectCanvas = chSelectProp->GetCanvas();
+            auto tmpWzCanvas_301 = chSelectProp->GetCanvas();
+            chSelectCanvas = tmpWzCanvas_301 ? std::make_shared<WzGr2DCanvas>(tmpWzCanvas_301) : nullptr;
             if (chSelectCanvas)
             {
                 LOG_DEBUG("UIChannelSelect: chSelect canvas loaded ({}x{})",
@@ -307,7 +311,8 @@ void UIChannelSelect::ResetInfo(std::int32_t worldIndex, bool bRedraw)
                 auto child0 = chSelectProp->GetChild("0");
                 if (child0)
                 {
-                    chSelectCanvas = child0->GetCanvas();
+                    auto tmpWzCanvas_313 = child0->GetCanvas();
+                    chSelectCanvas = tmpWzCanvas_313 ? std::make_shared<WzGr2DCanvas>(tmpWzCanvas_313) : nullptr;
                     if (chSelectCanvas)
                     {
                         LOG_DEBUG("UIChannelSelect: chSelect/0 canvas loaded");
@@ -792,7 +797,7 @@ void UIChannelSelect::CreatePlaceholderUI()
             }
         }
         canvas->SetPixelData(std::move(pixels));
-        m_pBtnGoWorld->SetStateCanvas(UIState::Normal, canvas);
+        m_pBtnGoWorld->SetStateCanvas(UIState::Normal, std::make_shared<WzGr2DCanvas>(canvas));
         m_pBtnGoWorld->SetSize(goBtnWidth, goBtnHeight);
         m_pBtnGoWorld->SetParent(this);  // Set parent-child relationship
         const int goWorldY = 180;  // Placeholder position
@@ -852,8 +857,7 @@ void UIChannelSelect::CreatePlaceholderBackground(WzGr2D& gr, std::int32_t x, st
     m_pLayerBg = gr.CreateLayer(x, y, bgWidth, bgHeight, 140);
     if (m_pLayerBg)
     {
-        m_pLayerBg->SetScreenSpace(true);
-        m_pLayerBg->InsertCanvas(canvas, 0, 255, 255);
+        m_pLayerBg->InsertCanvas(std::make_shared<WzGr2DCanvas>(canvas), 0, 255, 255);
         LOG_DEBUG("UIChannelSelect: Placeholder background created at ({}, {}) size {}x{}",
                   x, y, bgWidth, bgHeight);
     }

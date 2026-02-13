@@ -1,5 +1,6 @@
 #include "AnimationDisplayer.h"
 
+#include "app/Application.h"
 #include "graphics/Gr2DVector.h"
 #include "graphics/WzGr2D.h"
 #include "graphics/WzGr2DCanvas.h"
@@ -11,6 +12,86 @@
 
 namespace ms
 {
+
+// ========== AnimationDisplayer::PrepareInfo ==========
+
+auto AnimationDisplayer::PrepareInfo::Update(
+    [[maybe_unused]] std::int32_t tCur) -> bool
+{
+    // TODO: implement prepare animation update
+    return false;
+}
+
+// ========== AnimationDisplayer::TrembleCtx ==========
+
+void AnimationDisplayer::TrembleCtx::Update(
+    [[maybe_unused]] std::int32_t tCur)
+{
+    // TODO: implement tremble effect update
+}
+
+// ========== AnimationDisplayer ==========
+
+void AnimationDisplayer::Update()
+{
+    const auto tCur = static_cast<std::int32_t>(
+        Application::GetInstance().GetUpdateTime());
+
+    UpdateWeaponHeadEffect(tCur);
+    m_tremble.Update(tCur);
+
+    // Iterate prepare animation list; remove completed entries
+    for (auto it = m_lPrepare.begin(); it != m_lPrepare.end(); )
+    {
+        auto& pInfo = *it;
+        ++it; // advance before potential removal
+
+        if (pInfo && pInfo->Update(tCur))
+            RemovePrepareAnimation(pInfo->dwCharacterID);
+    }
+
+    NonFieldUpdate(tCur);
+    UpdateMoveRandSprayEffect(tCur);
+    UpdateUpDownEffect(tCur);
+    UpdateDelaySetViewEffect();
+}
+
+void AnimationDisplayer::UpdateWeaponHeadEffect(
+    [[maybe_unused]] std::int32_t tCur)
+{
+    // TODO: stub
+}
+
+void AnimationDisplayer::NonFieldUpdate(
+    [[maybe_unused]] std::int32_t tCur)
+{
+    // TODO: stub
+}
+
+void AnimationDisplayer::UpdateMoveRandSprayEffect(
+    [[maybe_unused]] std::int32_t tCur)
+{
+    // TODO: stub
+}
+
+void AnimationDisplayer::UpdateUpDownEffect(
+    [[maybe_unused]] std::int32_t tCur)
+{
+    // TODO: stub
+}
+
+void AnimationDisplayer::UpdateDelaySetViewEffect()
+{
+    // TODO: stub
+}
+
+void AnimationDisplayer::RemovePrepareAnimation(
+    [[maybe_unused]] std::uint32_t dwCharacterID)
+{
+    m_lPrepare.remove_if([dwCharacterID](const auto& pInfo) {
+        return pInfo && pInfo->dwCharacterID == dwCharacterID;
+    });
+}
 
 // Overload 1: UOL string wrapper
 auto AnimationDisplayer::LoadLayer(

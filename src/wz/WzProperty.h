@@ -1,5 +1,6 @@
 #pragma once
 
+#include "WzNode.h"
 #include "WzTypes.h"
 
 #include <cstdint>
@@ -14,6 +15,7 @@ namespace ms
 
 class WzCanvas;
 class WzFile;
+class IWzSource;
 
 /**
  * @brief WZ Property node
@@ -32,7 +34,7 @@ class WzFile;
  * - UOL (link to another property)
  * - Child properties (sub-nodes)
  */
-class WzProperty
+class WzProperty : public WzNode
 {
 public:
     using Value = std::variant<
@@ -48,7 +50,7 @@ public:
 
     WzProperty();
     explicit WzProperty(const std::string& name);
-    ~WzProperty();
+    ~WzProperty() override;
 
     // Non-copyable, movable
     WzProperty(const WzProperty&) = delete;
@@ -56,9 +58,8 @@ public:
     WzProperty(WzProperty&&) noexcept = default;
     auto operator=(WzProperty&&) noexcept -> WzProperty& = default;
 
-    // Name
-    [[nodiscard]] auto GetName() const noexcept -> const std::string& { return m_sName; }
-    void SetName(const std::string& name) { m_sName = name; }
+    // Override GetType from WzNode
+    [[nodiscard]] auto GetType() const noexcept -> WzNodeType override;
 
     // Value getters
     [[nodiscard]] auto GetInt(std::int32_t defaultValue = 0) const -> std::int32_t;
@@ -131,10 +132,18 @@ public:
      */
     void SetWzFile(WzFile* file) noexcept { m_pWzFile = file; }
 
+    /**
+     * @brief Set IWzSource pointer for outlink resolution
+     *
+     * Used by WzPackage to enable cross-package outlink resolution.
+     */
+    void SetWzSource(IWzSource* source) noexcept { m_pWzSource = source; }
+
 private:
     void EnsureLoaded() const;
+    auto ResolveOutlinkCanvas(const std::string& outlinkPath) const -> std::shared_ptr<WzCanvas>;
+    auto ResolveInlinkCanvas(const std::string& inlinkPath) const -> std::shared_ptr<WzCanvas>;
 
-    std::string m_sName;
     Value m_value;
     WzNodeType m_nodeType{WzNodeType::NotSet};
     std::map<std::string, std::shared_ptr<WzProperty>> m_children;
@@ -143,6 +152,7 @@ private:
     mutable bool m_bNeedsLoad{false};
     std::size_t m_nOffset{0};
     WzFile* m_pWzFile{nullptr};
+    IWzSource* m_pWzSource{nullptr};  // For outlink resolution in packages
     mutable LoadCallback m_loadCallback;
 };
 

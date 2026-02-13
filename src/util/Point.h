@@ -215,4 +215,15 @@ struct Rect
     }
 };
 
+/**
+ * @brief Integer range (low/high)
+ *
+ * Based on RANGE from the original MapleStory client.
+ */
+struct Range
+{
+    std::int32_t low{};
+    std::int32_t high{};
+};
+
 } // namespace ms

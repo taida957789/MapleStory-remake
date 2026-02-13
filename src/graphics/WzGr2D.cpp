@@ -1,6 +1,6 @@
 #include "WzGr2D.h"
 #include "WzGr2DLayer.h"
-#include "wz/WzCanvas.h"
+#include "WzGr2DCanvas.h"
 
 #ifdef MS_DEBUG_CANVAS
 #include "debug/DebugOverlay.h"
@@ -166,7 +166,7 @@ void WzGr2D::UpdateCurrentTime(std::int32_t tCur)
 auto WzGr2D::CreateLayer(std::int32_t left, std::int32_t top,
                           std::uint32_t width, std::uint32_t height,
                           std::int32_t z,
-                          std::shared_ptr<WzCanvas> canvas,
+                          std::shared_ptr<WzGr2DCanvas> canvas,
                           std::uint32_t /*filter*/) -> std::shared_ptr<WzGr2DLayer>
 {
     auto layer = std::make_shared<WzGr2DLayer>(left, top, width, height, z);
@@ -244,27 +244,10 @@ auto WzGr2D::RenderFrame(std::int32_t tCur) -> bool
         {
             layer->Update(tCur);
 
-            if (layer->IsScreenSpace())
-            {
-                if (layer->IsCenterBased())
-                {
-                    // Center-based layers: position is relative to screen center (matching original MS client)
-                    // This allows UI to use fixed positions like (-400, -300) that work at any resolution
-                    layer->Render(m_pRenderer, screenCenterX, screenCenterY);
-                }
-                else
-                {
-                    // Screen-space layers: position is in screen coordinates (0,0 = top-left)
-                    layer->Render(m_pRenderer, 0, 0);
-                }
-            }
-            else
-            {
-                // World-space layers: apply camera offset with screen center
-                layer->Render(m_pRenderer,
-                              -m_cameraPos.x + screenCenterX,
-                              -m_cameraPos.y + screenCenterY);
-            }
+            // All layers use world-space coordinates with camera offset
+            layer->Render(m_pRenderer,
+                          -m_cameraPos.x + screenCenterX,
+                          -m_cameraPos.y + screenCenterY);
         }
     }
 

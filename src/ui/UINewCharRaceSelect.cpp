@@ -5,6 +5,7 @@
 #include "graphics/WzGr2DLayer.h"
 #include "stage/Login.h"
 #include "util/Logger.h"
+#include "graphics/WzGr2DCanvas.h"
 #include "wz/WzCanvas.h"
 #include "wz/WzProperty.h"
 #include "wz/WzResMan.h"
@@ -76,13 +77,15 @@ auto UINewCharRaceSelect::OnCreate(std::any params) -> Result<void>
     auto newProp = resMan.GetProperty("UI/Login.img/RaceSelect_new/new");
     if (newProp)
     {
-        m_pNewCanvas = newProp->GetCanvas();
+        auto tmpWzCanvas_79 = newProp->GetCanvas();
+        m_pNewCanvas = tmpWzCanvas_79 ? std::make_shared<WzGr2DCanvas>(tmpWzCanvas_79) : nullptr;
         if (!m_pNewCanvas)
         {
             auto frame0 = newProp->GetChild("0");
             if (frame0)
             {
-                m_pNewCanvas = frame0->GetCanvas();
+                auto tmpWzCanvas_85 = frame0->GetCanvas();
+                m_pNewCanvas = tmpWzCanvas_85 ? std::make_shared<WzGr2DCanvas>(tmpWzCanvas_85) : nullptr;
             }
         }
         if (m_pNewCanvas)
@@ -94,13 +97,15 @@ auto UINewCharRaceSelect::OnCreate(std::any params) -> Result<void>
     auto hotProp = resMan.GetProperty("UI/Login.img/RaceSelect_new/hot");
     if (hotProp)
     {
-        m_pHotCanvas = hotProp->GetCanvas();
+        auto tmpWzCanvas_97 = hotProp->GetCanvas();
+        m_pHotCanvas = tmpWzCanvas_97 ? std::make_shared<WzGr2DCanvas>(tmpWzCanvas_97) : nullptr;
         if (!m_pHotCanvas)
         {
             auto frame0 = hotProp->GetChild("0");
             if (frame0)
             {
-                m_pHotCanvas = frame0->GetCanvas();
+                auto tmpWzCanvas_103 = frame0->GetCanvas();
+                m_pHotCanvas = tmpWzCanvas_103 ? std::make_shared<WzGr2DCanvas>(tmpWzCanvas_103) : nullptr;
             }
         }
         if (m_pHotCanvas)
@@ -219,7 +224,7 @@ void UINewCharRaceSelect::LoadButton()
             }
             canvas->SetPixelData(std::move(pixels));
 
-            btn->SetStateCanvas(UIState::Normal, canvas);
+            btn->SetStateCanvas(UIState::Normal, std::make_shared<WzGr2DCanvas>(canvas));
             btn->SetSize(kButtonWidth, kButtonHeight);
             LOG_DEBUG("UINewCharRaceSelect: Using placeholder for race {}", raceId);
         }
@@ -286,7 +291,7 @@ void UINewCharRaceSelect::LoadArrowButtons()
             pixels[p + 3] = 220;
         }
         canvas->SetPixelData(std::move(pixels));
-        m_pLeftButton->SetStateCanvas(UIState::Normal, canvas);
+        m_pLeftButton->SetStateCanvas(UIState::Normal, std::make_shared<WzGr2DCanvas>(canvas));
         m_pLeftButton->SetSize(kArrowSize, kArrowSize);
     }
 
@@ -321,7 +326,7 @@ void UINewCharRaceSelect::LoadArrowButtons()
             pixels[p + 3] = 220;
         }
         canvas->SetPixelData(std::move(pixels));
-        m_pRightButton->SetStateCanvas(UIState::Normal, canvas);
+        m_pRightButton->SetStateCanvas(UIState::Normal, std::make_shared<WzGr2DCanvas>(canvas));
         m_pRightButton->SetSize(kArrowSize, kArrowSize);
     }
 
@@ -357,7 +362,7 @@ void UINewCharRaceSelect::LoadArrowButtons()
             pixels[p + 3] = 255;
         }
         canvas->SetPixelData(std::move(pixels));
-        m_pCreateButton->SetStateCanvas(UIState::Normal, canvas);
+        m_pCreateButton->SetStateCanvas(UIState::Normal, std::make_shared<WzGr2DCanvas>(canvas));
         m_pCreateButton->SetSize(kMakeWidth, kMakeHeight);
     }
 
@@ -393,7 +398,7 @@ void UINewCharRaceSelect::LoadArrowButtons()
             pixels[p + 3] = 255;  // A
         }
         canvas->SetPixelData(std::move(pixels));
-        m_pCancelButton->SetStateCanvas(UIState::Normal, canvas);
+        m_pCancelButton->SetStateCanvas(UIState::Normal, std::make_shared<WzGr2DCanvas>(canvas));
         m_pCancelButton->SetSize(kCancelWidth, kCancelHeight);
     }
 
@@ -567,7 +572,8 @@ void UINewCharRaceSelect::LoadBackground()
     auto backProp = resMan.GetProperty("UI/Login.img/RaceSelect_new/Back/0");
     if (backProp)
     {
-        auto canvas = backProp->GetCanvas();
+        auto wzCanvas = backProp->GetCanvas();
+        auto canvas = wzCanvas ? std::make_shared<WzGr2DCanvas>(wzCanvas) : nullptr;
         if (canvas)
         {
             auto origin = canvas->GetOrigin();
@@ -584,7 +590,6 @@ void UINewCharRaceSelect::LoadBackground()
                                                 static_cast<std::uint32_t>(canvasHeight), 100);
             if (m_pLayerBackGround)
             {
-                m_pLayerBackGround->SetScreenSpace(true);
                 m_pLayerBackGround->InsertCanvas(canvas, 0, 255, 255);
                 LOG_DEBUG("UINewCharRaceSelect: Background loaded at ({}, {})", layerX, layerY);
             }
@@ -599,7 +604,8 @@ void UINewCharRaceSelect::LoadBackground()
     auto back1Prop = resMan.GetProperty("UI/Login.img/RaceSelect_new/Back1/0");
     if (back1Prop)
     {
-        auto canvas = back1Prop->GetCanvas();
+        auto wzCanvas = back1Prop->GetCanvas();
+        auto canvas = wzCanvas ? std::make_shared<WzGr2DCanvas>(wzCanvas) : nullptr;
         if (canvas)
         {
             auto origin = canvas->GetOrigin();
@@ -616,7 +622,6 @@ void UINewCharRaceSelect::LoadBackground()
                                                  static_cast<std::uint32_t>(canvasHeight), 105);
             if (m_pLayerBackGround1)
             {
-                m_pLayerBackGround1->SetScreenSpace(true);
                 m_pLayerBackGround1->InsertCanvas(canvas, 0, 255, 255);
                 LOG_DEBUG("UINewCharRaceSelect: Background1 loaded");
             }
@@ -657,15 +662,17 @@ void UINewCharRaceSelect::LoadCharacterPreview(std::int32_t raceId)
     {
         // Check if it's animated (has numbered children) or static
         auto frame0 = previewProp->GetChild("0");
-        std::shared_ptr<WzCanvas> canvas;
+        std::shared_ptr<WzGr2DCanvas> canvas;
 
         if (frame0)
         {
-            canvas = frame0->GetCanvas();
+            auto wzCanvas = frame0->GetCanvas();
+            canvas = wzCanvas ? std::make_shared<WzGr2DCanvas>(wzCanvas) : nullptr;
         }
         else
         {
-            canvas = previewProp->GetCanvas();
+            auto wzCanvas = previewProp->GetCanvas();
+            canvas = wzCanvas ? std::make_shared<WzGr2DCanvas>(wzCanvas) : nullptr;
         }
 
         if (canvas)
@@ -688,7 +695,6 @@ void UINewCharRaceSelect::LoadCharacterPreview(std::int32_t raceId)
 
             if (m_pLayerCharPreview)
             {
-                m_pLayerCharPreview->SetScreenSpace(true);
                 m_pLayerCharPreview->InsertCanvas(canvas, 0, 255, 255);
 
                 // If animated, load more frames
@@ -701,9 +707,10 @@ void UINewCharRaceSelect::LoadCharacterPreview(std::int32_t raceId)
                         {
                             break;
                         }
-                        auto frameCanvas = frameN->GetCanvas();
-                        if (frameCanvas)
+                        auto wzFrameCanvas = frameN->GetCanvas();
+                        if (wzFrameCanvas)
                         {
+                            auto frameCanvas = std::make_shared<WzGr2DCanvas>(wzFrameCanvas);
                             auto delayProp = frameN->GetChild("delay");
                             int delay = delayProp ? delayProp->GetInt(100) : 100;
                             m_pLayerCharPreview->InsertCanvas(frameCanvas, delay, 255, 255);
@@ -751,13 +758,15 @@ void UINewCharRaceSelect::LoadRaceInfo(std::int32_t raceId)
 
     if (infoProp)
     {
-        auto canvas = infoProp->GetCanvas();
+        auto wzCanvas = infoProp->GetCanvas();
+        auto canvas = wzCanvas ? std::make_shared<WzGr2DCanvas>(wzCanvas) : nullptr;
         if (!canvas)
         {
             auto frame0 = infoProp->GetChild("0");
             if (frame0)
             {
-                canvas = frame0->GetCanvas();
+                auto wzFrameCanvas = frame0->GetCanvas();
+                canvas = wzFrameCanvas ? std::make_shared<WzGr2DCanvas>(wzFrameCanvas) : nullptr;
             }
         }
 
@@ -781,7 +790,6 @@ void UINewCharRaceSelect::LoadRaceInfo(std::int32_t raceId)
 
             if (m_pLayerRaceInfo)
             {
-                m_pLayerRaceInfo->SetScreenSpace(true);
                 m_pLayerRaceInfo->InsertCanvas(canvas, 0, 255, 255);
                 LOG_DEBUG("UINewCharRaceSelect: Race info loaded for race {}", raceId);
             }
@@ -844,7 +852,6 @@ void UINewCharRaceSelect::LoadNewHotIndicators()
 
             if (m_apNewIndicator[i])
             {
-                m_apNewIndicator[i]->SetScreenSpace(true);
                 m_apNewIndicator[i]->InsertCanvas(m_pNewCanvas, 0, 255, 255);
                 LOG_DEBUG("UINewCharRaceSelect: 'new' indicator created for race {} at slot {}",
                           raceId, i);
@@ -871,7 +878,6 @@ void UINewCharRaceSelect::LoadNewHotIndicators()
 
             if (m_apHotIndicator[i])
             {
-                m_apHotIndicator[i]->SetScreenSpace(true);
                 m_apHotIndicator[i]->InsertCanvas(m_pHotCanvas, 0, 255, 255);
                 LOG_DEBUG("UINewCharRaceSelect: 'hot' indicator created for race {} at slot {}",
                           raceId, i);

@@ -14,6 +14,7 @@ class Login;
 class UIButton;
 class WzCanvas;
 class WzGr2D;
+class WzGr2DCanvas;
 class WzGr2DLayer;
 class WzProperty;
 class UIManager;
@@ -219,8 +220,8 @@ private:
     std::shared_ptr<WzGr2DLayer> m_apHotIndicator[kButtonsPerPage];
 
     // Cached New/Hot indicator canvases from WZ
-    std::shared_ptr<WzCanvas> m_pNewCanvas;
-    std::shared_ptr<WzCanvas> m_pHotCanvas;
+    std::shared_ptr<WzGr2DCanvas> m_pNewCanvas;
+    std::shared_ptr<WzGr2DCanvas> m_pHotCanvas;
 };
 
 } // namespace ms

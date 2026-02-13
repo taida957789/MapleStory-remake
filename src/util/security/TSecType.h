@@ -3,6 +3,7 @@
 #include "util/Rand32.h"
 
 #include <cstdint>
+#include <cstring>
 #include <stdexcept>
 #include <type_traits>
 
@@ -14,6 +15,28 @@ namespace detail
 
 /// Shared counter for periodic TSecType heap reshuffling
 inline uint32_t g_nShuffleCounter{0};
+
+/// XOR for arithmetic types — uses bitwise XOR for integrals, memcpy for floats
+template <typename T>
+[[nodiscard]] auto XorValue(T a, T b) noexcept -> T
+{
+    if constexpr (std::is_integral_v<T>)
+    {
+        return static_cast<T>(a ^ b);
+    }
+    else
+    {
+        // Floating-point: XOR raw bytes via uint64_t
+        static_assert(sizeof(T) <= sizeof(uint64_t));
+        uint64_t ra{}, rb{};
+        std::memcpy(&ra, &a, sizeof(T));
+        std::memcpy(&rb, &b, sizeof(T));
+        ra ^= rb;
+        T result{};
+        std::memcpy(&result, &ra, sizeof(T));
+        return result;
+    }
+}
 
 } // namespace detail
 
@@ -29,7 +52,7 @@ inline uint32_t g_nShuffleCounter{0};
 template <typename T>
 struct TSecData
 {
-    static_assert(std::is_integral_v<T>, "TSecData requires an integral type");
+    static_assert(std::is_arithmetic_v<T>, "TSecData requires an arithmetic type");
 
     T data{};
     T bKey{};
@@ -57,7 +80,7 @@ struct TSecData
 template <typename T>
 class TSecType
 {
-    static_assert(std::is_integral_v<T>, "TSecType requires an integral type");
+    static_assert(std::is_arithmetic_v<T>, "TSecType requires an arithmetic type");
 
     static constexpr uint16_t kChecksumInit = 0x9A65u;  // -26011 as uint16
     static constexpr uint16_t kChecksumBase =
@@ -104,7 +127,7 @@ class TSecType
         if (!bKey)
             bKey = kFallbackKey;
 
-        m_pSecData->data = static_cast<T>(data ^ bKey);
+        m_pSecData->data = detail::XorValue(data, bKey);
         m_pSecData->wChecksum = ComputeChecksum();
     }
 
@@ -179,7 +202,7 @@ public:
         if (!bKey)
             bKey = kFallbackKey;
 
-        const auto value = static_cast<T>(bKey ^ m_pSecData->data);
+        const auto value = detail::XorValue(bKey, m_pSecData->data);
 
         const auto expectedChecksum = ComputeChecksum();
 

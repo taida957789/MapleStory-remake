@@ -11,6 +11,7 @@ namespace ms
 
 class WzCanvas;
 class WzGr2D;
+class WzGr2DCanvas;
 
 /**
  * @brief Button UI element
@@ -53,19 +54,19 @@ public:
      * @brief Set canvas for a specific state
      * @param stateIndex State index (0-3 for normal, 4-7 for checked)
      */
-    void SetStateCanvas(UIState state, std::shared_ptr<WzCanvas> canvas);
+    void SetStateCanvas(UIState state, std::shared_ptr<WzGr2DCanvas> canvas);
 
     /**
      * @brief Set canvas for checked state
      * @param state Base state (Normal, MouseOver, etc.)
      * @param canvas Canvas for the checked version of this state
      */
-    void SetCheckedStateCanvas(UIState state, std::shared_ptr<WzCanvas> canvas);
+    void SetCheckedStateCanvas(UIState state, std::shared_ptr<WzGr2DCanvas> canvas);
 
     /**
      * @brief Get canvas for current state
      */
-    [[nodiscard]] auto GetCurrentCanvas() const -> std::shared_ptr<WzCanvas>;
+    [[nodiscard]] auto GetCurrentCanvas() const -> std::shared_ptr<WzGr2DCanvas>;
 
     // Override input handling for button-specific behavior
     void OnMouseMove(std::int32_t x, std::int32_t y) override;
@@ -136,7 +137,7 @@ private:
     void UpdateLayerCanvas();
 
     // Canvas for each state (0-3 = normal states, 4-7 = checked states)
-    std::array<std::shared_ptr<WzCanvas>, 8> m_stateCanvases;
+    std::array<std::shared_ptr<WzGr2DCanvas>, 8> m_stateCanvases;
 
     // Track if we need to update the layer
     UIState m_lastState{UIState::Normal};

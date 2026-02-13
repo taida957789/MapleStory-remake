@@ -1,8 +1,9 @@
 #include "WzFile.h"
 #include "WzCanvas.h"
 #include "WzCrypto.h"
+#include "WzDirectory.h"
+#include "WzImage.h"
 #include "WzProperty.h"
-#include "util/Logger.h"
 
 namespace ms
 {
@@ -13,13 +14,21 @@ WzFile::~WzFile() = default;
 WzFile::WzFile(WzFile&&) noexcept = default;
 auto WzFile::operator=(WzFile&&) noexcept -> WzFile& = default;
 
+// IWzSource interface Open() - delegates to Open(path, iv)
+auto WzFile::Open(const std::string& path) -> bool
+{
+    // Default to ZERO_IV for auto-detection
+    return Open(path, WzKeys::ZERO_IV);
+}
+
+// Legacy Open() with explicit IV parameter
 auto WzFile::Open(const std::string& path, const std::uint8_t* iv) -> bool
 {
     Close();
 
     if (!m_reader.Open(path))
     {
-        LOG_ERROR("Failed to open WZ file: {}", path);
+        // Failed to open WZ file
         return false;
     }
 
@@ -28,24 +37,29 @@ auto WzFile::Open(const std::string& path, const std::uint8_t* iv) -> bool
 
     if (!ParseHeader())
     {
-        LOG_ERROR("Failed to parse WZ header: {}", path);
+        // Failed to parse WZ header
         Close();
         return false;
     }
 
-    // Create root property
-    m_pRoot = std::make_shared<WzProperty>(path);
-    m_pRoot->SetWzFile(this);  // Set WzFile for data access
+    // Create root directory
+    m_pRoot = std::make_shared<WzDirectory>(path);
 
-    // Parse directory structure
-    if (!ParseDirectories(m_pRoot))
+    // Try normal parsing first
+    if (ParseDirectories(m_pRoot))
     {
-        LOG_ERROR("Failed to parse WZ directories: {}", path);
-        Close();
-        return false;
+        return true;
     }
 
-    return true;
+    // If failed, try 64-bit version detection
+    if (Try64BitVersionDetection())
+    {
+        return true;
+    }
+
+    // Failed to parse WZ directories
+    Close();
+    return false;
 }
 
 void WzFile::Close()
@@ -58,23 +72,23 @@ void WzFile::Close()
     m_nVersion = 0;
 }
 
-auto WzFile::IsOpen() const noexcept -> bool
+auto WzFile::IsOpen() const -> bool
 {
     return m_reader.IsOpen() && m_pRoot != nullptr;
 }
 
-auto WzFile::GetRoot() const noexcept -> std::shared_ptr<WzProperty>
+auto WzFile::GetRoot() const -> std::shared_ptr<WzDirectory>
 {
     return m_pRoot;
 }
 
-auto WzFile::FindNode(const std::string& path) -> std::shared_ptr<WzProperty>
+auto WzFile::FindNode(const std::string& path) -> std::shared_ptr<WzNode>
 {
     if (!m_pRoot)
         return nullptr;
 
     // Parse path and navigate
-    std::shared_ptr<WzProperty> current = m_pRoot;
+    std::shared_ptr<WzNode> current = m_pRoot;
     std::string::size_type start = 0;
     std::string::size_type end;
 
@@ -83,7 +97,30 @@ auto WzFile::FindNode(const std::string& path) -> std::shared_ptr<WzProperty>
         auto segment = path.substr(start, end - start);
         if (!segment.empty())
         {
-            current = current->GetChild(segment);
+            // Check node type and navigate accordingly
+            if (auto dir = std::dynamic_pointer_cast<WzDirectory>(current))
+            {
+                current = dir->GetChild(segment);
+            }
+            else if (auto img = std::dynamic_pointer_cast<WzImage>(current))
+            {
+                // Trigger lazy loading if needed
+                if (!img->IsLoaded())
+                {
+                    if (!LoadImage(img.get()))
+                        return nullptr;
+                }
+                current = img->GetProperty(segment);
+            }
+            else if (auto prop = std::dynamic_pointer_cast<WzProperty>(current))
+            {
+                current = prop->GetChild(segment);
+            }
+            else
+            {
+                return nullptr;
+            }
+
             if (!current)
                 return nullptr;
         }
@@ -96,11 +133,46 @@ auto WzFile::FindNode(const std::string& path) -> std::shared_ptr<WzProperty>
         auto segment = path.substr(start);
         if (!segment.empty())
         {
-            current = current->GetChild(segment);
+            if (auto dir = std::dynamic_pointer_cast<WzDirectory>(current))
+            {
+                current = dir->GetChild(segment);
+            }
+            else if (auto img = std::dynamic_pointer_cast<WzImage>(current))
+            {
+                // Trigger lazy loading if needed
+                if (!img->IsLoaded())
+                {
+                    if (!LoadImage(img.get()))
+                        return nullptr;
+                }
+                current = img->GetProperty(segment);
+            }
+            else if (auto prop = std::dynamic_pointer_cast<WzProperty>(current))
+            {
+                current = prop->GetChild(segment);
+            }
         }
     }
 
     return current;
+}
+
+auto WzFile::LoadImage(WzImage* image) -> bool
+{
+    if (!image)
+        return false;
+
+    // Check if already loaded
+    if (image->IsLoaded())
+        return true;
+
+    // Parse the image at its stored offset
+    if (!ParseImage(image))
+        return false;
+
+    // Mark as loaded
+    image->MarkLoaded();
+    return true;
 }
 
 auto WzFile::ParseHeader() -> bool
@@ -149,7 +221,7 @@ auto WzFile::ParseHeader() -> bool
     return false;
 }
 
-auto WzFile::ParseDirectories(std::shared_ptr<WzProperty> parent) -> bool
+auto WzFile::ParseDirectories(std::shared_ptr<WzDirectory> parent) -> bool
 {
     auto entryCount = m_reader.ReadCompressedInt();
 
@@ -185,8 +257,8 @@ auto WzFile::ParseDirectories(std::shared_ptr<WzProperty> parent) -> bool
             return false;
         }
 
-        [[maybe_unused]] auto size = m_reader.ReadCompressedInt();
-        [[maybe_unused]] auto checksum = m_reader.ReadCompressedInt();
+        auto size = m_reader.ReadCompressedInt();
+        auto checksum = m_reader.ReadCompressedInt();
         auto offset = GetWzOffset();
 
         if (parent == nullptr && offset >= m_reader.GetSize())
@@ -194,39 +266,44 @@ auto WzFile::ParseDirectories(std::shared_ptr<WzProperty> parent) -> bool
 
         if (parent != nullptr)
         {
-            // Convert u16string to string for property name
+            // Convert u16string to string for node name
             std::string nameStr(name.begin(), name.end());
-            auto child = std::make_shared<WzProperty>(nameStr);
-            child->SetWzFile(this);  // Set WzFile for data access
 
             if (type == 3)
             {
-                // Directory - parse children recursively
+                // Directory - create WzDirectory node
+                auto dir = std::make_shared<WzDirectory>(nameStr);
+
+                // Parse children recursively
                 auto prevPos = m_reader.GetPosition();
                 m_reader.SetPosition(offset);
 
-                if (!ParseDirectories(child))
+                if (!ParseDirectories(dir))
                 {
-                    LOG_ERROR("Failed to parse directory: {}", nameStr);
+                    // Failed to parse directory
                 }
 
                 m_reader.SetPosition(prevPos);
-                child->SetNodeType(WzNodeType::Directory);
+
+                // Add to parent
+                parent->AddChild(dir);
             }
             else
             {
-                // Image (.img file) - set up lazy loading
-                child->SetNodeType(WzNodeType::Image);
-                child->SetLoadInfo(offset, this);
+                // Image (.img file) - create WzImage node
+                auto img = std::make_shared<WzImage>(nameStr);
+                img->SetOffset(offset);
+                img->SetSize(static_cast<std::size_t>(size));
+                img->SetChecksum(static_cast<std::uint32_t>(checksum));
 
-                // Set up load callback for lazy loading
-                auto* wzFile = this;
-                child->SetLoadCallback([wzFile](std::shared_ptr<WzProperty> node, std::size_t imgOffset) -> bool {
-                    return wzFile->ParseImage(node, imgOffset);
-                });
+                // Set weak_ptr to this WzFile for lazy loading
+                // We need to use shared_from_this, but it may not be available during construction
+                // Store the file pointer for now, it will be set properly after Open() completes
+                img->SetWzFile(shared_from_this());
+
+                // Add to parent
+                parent->AddChild(img);
             }
-
-            parent->AddChild(child);
         }
         else
         {
@@ -250,22 +327,102 @@ auto WzFile::ParseDirectories(std::shared_ptr<WzProperty> parent) -> bool
     return true;
 }
 
-auto WzFile::ParseImage(std::shared_ptr<WzProperty> node, std::size_t offset) -> bool
+auto WzFile::ParseImage(WzImage* image) -> bool
 {
-    m_reader.SetPosition(offset);
+    if (!image)
+        return false;
+
+    m_reader.SetPosition(image->GetOffset());
 
     if (!m_reader.IsWzImage())
         return false;
 
 #ifdef MS_DEBUG_CANVAS
-    // Initialize parse path with node name for this image
-    m_currentParsePath = node->GetName();
+    // Initialize parse path with image name
+    m_currentParsePath = image->GetName();
 #endif
 
-    return ParsePropertyList(node, offset);
+    return ParsePropertyList(image, image->GetOffset());
 }
 
-auto WzFile::ParsePropertyList(std::shared_ptr<WzProperty> target, std::size_t baseOffset) -> bool
+auto WzFile::ParsePropertyList(WzImage* target, std::size_t baseOffset) -> bool
+{
+    auto entryCount = m_reader.ReadCompressedInt();
+
+    for (std::int32_t i = 0; i < entryCount; ++i)
+    {
+        auto name = m_reader.ReadStringBlock(baseOffset);
+        auto propType = m_reader.Read<std::uint8_t>();
+
+        std::string nameStr(name.begin(), name.end());
+        auto prop = std::make_shared<WzProperty>(nameStr);
+        prop->SetWzFile(this);  // Set WzFile for data access (sounds, etc.)
+
+#ifdef MS_DEBUG_CANVAS
+        // Save current path and append this property name
+        std::string savedPath = m_currentParsePath;
+        if (!m_currentParsePath.empty())
+            m_currentParsePath += "/";
+        m_currentParsePath += nameStr;
+#endif
+
+        switch (propType)
+        {
+        case 0: // Null
+            break;
+        case 0x0B:
+        case 2: // UnsignedShort
+            prop->SetInt(static_cast<std::int32_t>(m_reader.Read<std::uint16_t>()));
+            break;
+        case 3: // Int
+            prop->SetInt(m_reader.ReadCompressedInt());
+            break;
+        case 4: // Float
+        {
+            auto floatType = m_reader.Read<std::uint8_t>();
+            if (floatType == 0x80)
+                prop->SetFloat(m_reader.Read<float>());
+            else
+                prop->SetFloat(0.0f);
+            break;
+        }
+        case 5: // Double
+            prop->SetDouble(m_reader.Read<double>());
+            break;
+        case 8: // String
+        {
+            auto str = m_reader.ReadStringBlock(baseOffset);
+            prop->SetString(std::string(str.begin(), str.end()));
+            break;
+        }
+        case 9: // Extended
+        {
+            auto extOffset = m_reader.Read<std::uint32_t>();
+            auto endOfBlock = m_reader.GetPosition() + extOffset;
+            ParseExtendedProperty(name, prop, baseOffset);
+            if (m_reader.GetPosition() != endOfBlock)
+                m_reader.SetPosition(endOfBlock);
+            break;
+        }
+        default:
+#ifdef MS_DEBUG_CANVAS
+            m_currentParsePath = savedPath;
+#endif
+            return false;
+        }
+
+        target->AddProperty(prop);
+
+#ifdef MS_DEBUG_CANVAS
+        // Restore path after processing this property
+        m_currentParsePath = savedPath;
+#endif
+    }
+
+    return true;
+}
+
+auto WzFile::ParsePropertyChildren(std::shared_ptr<WzProperty> target, std::size_t baseOffset) -> bool
 {
     auto entryCount = m_reader.ReadCompressedInt();
 
@@ -352,7 +509,7 @@ void WzFile::ParseExtendedProperty(const std::u16string& name,
     {
         m_reader.Skip(sizeof(std::uint16_t));
         target->SetNodeType(WzNodeType::SubProperty);
-        (void)ParsePropertyList(target, baseOffset);
+        (void)ParsePropertyChildren(target, baseOffset);
     }
     else if (propName == u"Canvas")
     {
@@ -360,7 +517,7 @@ void WzFile::ParseExtendedProperty(const std::u16string& name,
         if (m_reader.Read<std::uint8_t>() == 1)
         {
             m_reader.Skip(sizeof(std::uint16_t));
-            (void)ParsePropertyList(target, baseOffset);
+            (void)ParsePropertyChildren(target, baseOffset);
         }
 
         auto canvasData = ParseCanvasProperty();
@@ -370,23 +527,12 @@ void WzFile::ParseExtendedProperty(const std::u16string& name,
 #ifdef MS_DEBUG_CANVAS
             canvas->SetWzPath(m_currentParsePath);
 #endif
-            // Read origin from child property if present
-            // MapleStory WZ canvases often have an "origin" child specifying the anchor point
-            auto originProp = target->GetChild("origin");
-            if (originProp)
-            {
-                auto originVec = originProp->GetVector();
-                canvas->SetOrigin(Point2D{originVec.x, originVec.y});
-            }
-
             target->SetCanvas(canvas);
         }
         else
         {
             std::string targetName(name.begin(), name.end());
-            LOG_ERROR("WzFile: Failed to load canvas for '{}' (size={}, format={}+{}, {}x{})",
-                      targetName, canvasData.size, canvasData.format,
-                      static_cast<int>(canvasData.format2), canvasData.width, canvasData.height);
+            // Failed to load canvas
         }
     }
     else if (propName == u"Shape2D#Vector2D")
@@ -510,8 +656,7 @@ auto WzFile::LoadCanvasData(const WzCanvasData& canvasData) -> std::shared_ptr<W
 {
     if (canvasData.width <= 0 || canvasData.height <= 0 || canvasData.size <= 0)
     {
-        LOG_ERROR("LoadCanvasData: Invalid dimensions (w={}, h={}, size={})",
-                  canvasData.width, canvasData.height, canvasData.size);
+        // Invalid canvas dimensions
         return nullptr;
     }
 
@@ -537,9 +682,7 @@ auto WzFile::LoadCanvasData(const WzCanvasData& canvasData) -> std::shared_ptr<W
 
     if (decompressed.empty())
     {
-        LOG_ERROR("LoadCanvasData: Decompression failed (compressed={}, expected={}, format={}+{})",
-                  compressedData.size(), canvasData.uncompressedSize,
-                  canvasData.format, static_cast<int>(canvasData.format2));
+        // Decompression failed
         return nullptr;
     }
 
@@ -570,18 +713,20 @@ auto WzFile::LoadCanvasData(const WzCanvasData& canvasData) -> std::shared_ptr<W
     }
     case 2: // ARGB8888
     {
-        // Already in correct format, just reorder to RGBA
+        // WZ stores ARGB8888 as 0xAARRGGBB (DirectX format)
+        // On little-endian, bytes in memory are: B, G, R, A (BGRA byte order)
+        // Convert to RGBA byte order for SDL
         pixels.resize(static_cast<std::size_t>(width * height * 4));
         const auto* src = decompressed.data();
         auto* dst = pixels.data();
 
         for (int i = 0; i < width * height; ++i)
         {
-            // ARGB -> RGBA
-            dst[i * 4 + 0] = src[i * 4 + 1]; // R
-            dst[i * 4 + 1] = src[i * 4 + 2]; // G
-            dst[i * 4 + 2] = src[i * 4 + 3]; // B
-            dst[i * 4 + 3] = src[i * 4 + 0]; // A
+            // BGRA (memory layout) -> RGBA
+            dst[i * 4 + 0] = src[i * 4 + 2]; // R (from byte 2)
+            dst[i * 4 + 1] = src[i * 4 + 1]; // G (from byte 1)
+            dst[i * 4 + 2] = src[i * 4 + 0]; // B (from byte 0)
+            dst[i * 4 + 3] = src[i * 4 + 3]; // A (from byte 3)
         }
         break;
     }
@@ -614,7 +759,7 @@ auto WzFile::LoadCanvasData(const WzCanvasData& canvasData) -> std::shared_ptr<W
         break;
     }
     default:
-        LOG_ERROR("Unknown canvas format: {}", format);
+        // Unknown canvas format
         return nullptr;
     }
 
@@ -846,6 +991,64 @@ auto WzFile::GetVersionHash(std::int32_t encrypted, std::int32_t real) -> std::u
         return static_cast<std::uint32_t>(versionHash);
 
     return 0;
+}
+
+auto WzFile::Try64BitVersionDetection() -> bool
+{
+    // 64-bit WZ files use version range 770-780
+    // Reference: MapleLib wzVersionHeader64bit_start = 770
+    for (int version = 770; version <= 780; ++version)
+    {
+        if (TryDecodeWithVersion(version))
+        {
+            m_nVersion = static_cast<std::int16_t>(version);
+            return true;
+        }
+    }
+    return false;
+}
+
+auto WzFile::TryDecodeWithVersion(int version) -> bool
+{
+    // Save current position
+    auto currentPos = m_reader.GetPosition();
+
+    // Reset to start of directory parsing
+    m_reader.SetPosition(m_dwStart);
+
+    // Try to parse with this version
+    m_pRoot = std::make_shared<WzDirectory>(m_sPath);
+
+    // Temporarily set version for parsing attempt
+    m_nVersion = static_cast<std::int16_t>(version);
+
+    // Calculate version hash for this version
+    // For 64-bit versions, we need to compute the hash differently
+    // We use a dummy encrypted value of 0 to generate hash from version
+    m_dwHash = GetVersionHash(0, version);
+    if (m_dwHash == 0)
+    {
+        // If hash calculation fails, use version number directly as hash
+        // This is common for 64-bit versions
+        std::int32_t versionHash = 0;
+        auto versionStr = std::to_string(version);
+        for (char c : versionStr)
+        {
+            versionHash = (versionHash * 32) + static_cast<std::int32_t>(c) + 1;
+        }
+        m_dwHash = static_cast<std::uint32_t>(versionHash);
+    }
+
+    bool success = ParseDirectories(m_pRoot);
+
+    if (!success)
+    {
+        // Restore position and clear root on failure
+        m_reader.SetPosition(currentPos);
+        m_pRoot.reset();
+    }
+
+    return success;
 }
 
 } // namespace ms
