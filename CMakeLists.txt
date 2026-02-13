@@ -91,6 +91,7 @@ set(SOURCES
     src/graphics/WzGr2DLayer.cpp
     src/graphics/WzGr2DCanvas.cpp
     src/graphics/Gr2DVector.cpp
+    src/graphics/VecCtrl.cpp
     src/input/InputSystem.cpp
     src/audio/SoundSystem.cpp
     src/network/ClientSocket.cpp
@@ -109,7 +110,10 @@ set(SOURCES
     src/animation/LoadItemAction.cpp
     src/animation/LoadCharacterAction.cpp
     src/animation/SpriteInstance.cpp
+    src/life/Life.cpp
     src/user/avatar/Avatar.cpp
+    src/user/avatar/AvatarLook.cpp
+    src/user/User.cpp
     src/user/UserLocal.cpp
     src/constants/ActionConstants.cpp
     src/constants/ActionHelpers.cpp
@@ -118,6 +122,7 @@ set(SOURCES
     src/constants/JobConstants.cpp
     src/constants/WeaponConstants.cpp
     src/templates/morph/MorphTemplate.cpp
+    src/templates/item/CItemInfo.cpp
 )
 
 # Header files
@@ -178,7 +183,10 @@ set(HEADERS
     src/animation/LoadItemAction.h
     src/animation/LoadCharacterAction.h
     src/animation/SpriteInstance.h
+    src/animation/CharacterActionFrameEntry.h
+    src/animation/TamingMobActionFrameEntry.h
     src/user/avatar/Avatar.h
+    src/user/avatar/AvatarLook.h
     src/user/UserLocal.h
     src/enums/BodyPart.h
     src/enums/CharacterAction.h
@@ -189,6 +197,8 @@ set(HEADERS
     src/constants/FieldConstants.h
     src/constants/JobConstants.h
     src/templates/morph/MorphTemplate.h
+    src/templates/item/CItemInfo.h
+    src/templates/item/ItemInfoTypes.h
     src/constants/WeaponConstants.h
 )
 
