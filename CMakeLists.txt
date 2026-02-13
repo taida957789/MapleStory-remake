@@ -110,6 +110,7 @@ set(SOURCES
     src/animation/LoadItemAction.cpp
     src/animation/LoadCharacterAction.cpp
     src/animation/SpriteInstance.cpp
+    src/animation/SpriteSource.cpp
     src/life/Life.cpp
     src/user/avatar/Avatar.cpp
     src/user/avatar/AvatarLook.cpp
@@ -122,7 +123,7 @@ set(SOURCES
     src/constants/JobConstants.cpp
     src/constants/WeaponConstants.cpp
     src/templates/morph/MorphTemplate.cpp
-    src/templates/item/CItemInfo.cpp
+    src/templates/item/ItemInfo.cpp
 )
 
 # Header files
@@ -183,6 +184,7 @@ set(HEADERS
     src/animation/LoadItemAction.h
     src/animation/LoadCharacterAction.h
     src/animation/SpriteInstance.h
+    src/animation/SpriteSource.h
     src/animation/CharacterActionFrameEntry.h
     src/animation/TamingMobActionFrameEntry.h
     src/user/avatar/Avatar.h
@@ -197,7 +199,7 @@ set(HEADERS
     src/constants/FieldConstants.h
     src/constants/JobConstants.h
     src/templates/morph/MorphTemplate.h
-    src/templates/item/CItemInfo.h
+    src/templates/item/ItemInfo.h
     src/templates/item/ItemInfoTypes.h
     src/constants/WeaponConstants.h
 )

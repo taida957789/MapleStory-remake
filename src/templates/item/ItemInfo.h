@@ -31,12 +31,12 @@ class GW_ItemSlotBase;
  * systems require them. Use MCP IDA tools to decompile specific
  * functions when needed.
  */
-class CItemInfo final : public Singleton<CItemInfo>
+class ItemInfo final : public Singleton<ItemInfo>
 {
-    friend class Singleton<CItemInfo>;
+    friend class Singleton<ItemInfo>;
 
 public:
-    ~CItemInfo() override = default;
+    ~ItemInfo() override = default;
 
     // ============================================================
     // Methods are added on-demand as other systems need them.
@@ -74,13 +74,13 @@ public:
     // GetItemCoolTime(long, long&, long&)       @ 0xafa8c0
 
 private:
-    CItemInfo() = default;
+    ItemInfo() = default;
 
     // Non-copyable, non-movable (inherited from Singleton)
-    CItemInfo(const CItemInfo&) = delete;
-    auto operator=(const CItemInfo&) -> CItemInfo& = delete;
-    CItemInfo(CItemInfo&&) = delete;
-    auto operator=(CItemInfo&&) -> CItemInfo& = delete;
+    ItemInfo(const ItemInfo&) = delete;
+    auto operator=(const ItemInfo&) -> ItemInfo& = delete;
+    ItemInfo(ItemInfo&&) = delete;
+    auto operator=(ItemInfo&&) -> ItemInfo& = delete;
 
     // ============================================================
     // Member variables — from constructor @ 0xafad70
@@ -89,8 +89,8 @@ private:
     // ============================================================
 
     // --- Item data caches ---
-    std::map<std::int32_t, std::shared_ptr<EQUIPITEM>> m_mEquipItem;
-    std::map<std::int32_t, std::shared_ptr<BUNDLEITEM>> m_mBundleItem;
+    std::map<std::int32_t, std::shared_ptr<EquipItem>> m_mEquipItem;
+    std::map<std::int32_t, std::shared_ptr<BundleItem>> m_mBundleItem;
     std::map<std::int32_t, std::shared_ptr<GROWTHOPTION>> m_mGrowthOptionItem;
 
     // --- Item string / map string tables ---
