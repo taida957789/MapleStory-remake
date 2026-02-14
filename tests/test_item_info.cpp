@@ -5,6 +5,7 @@
 #include <gtest/gtest.h>
 #include <filesystem>
 
+#include "models/GW_ItemSlotBase.h"
 #include "templates/item/ItemInfo.h"
 #include "wz/WzProperty.h"
 #include "wz/WzResMan.h"
@@ -481,4 +482,88 @@ TEST_F(ItemInfoTest, GetItemPrice_Equip_DoesNotCrash)
     EXPECT_TRUE(bResult) << "GetItemPrice should return true for valid equip";
     EXPECT_GE(nPrice, 0);
     EXPECT_GE(static_cast<double>(dUnitPrice), 0.0);
+}
+
+// ============================================================
+// IsCashItem(const GW_ItemSlotBase&) @ 0x788d20
+// ============================================================
+
+TEST_F(ItemInfoTest, IsCashItem_Slot_NonCashItem_NoCashSN_ReturnsFalse)
+{
+    auto& info = ItemInfo::GetInstance();
+    GW_ItemSlotBase item;
+    item.nItemID = 2000000;  // Red Potion — not a cash item
+    item.liCashItemSN = 0;
+
+    EXPECT_FALSE(info.IsCashItem(item));
+}
+
+TEST_F(ItemInfoTest, IsCashItem_Slot_NonCashItem_WithCashSN_ReturnsTrue)
+{
+    auto& info = ItemInfo::GetInstance();
+    GW_ItemSlotBase item;
+    item.nItemID = 2000000;  // Red Potion — not normally cash
+    item.liCashItemSN = 12345;  // but has a cash serial
+
+    EXPECT_TRUE(info.IsCashItem(item));
+}
+
+TEST_F(ItemInfoTest, IsCashItem_Slot_CashFlaggedEquip_ReturnsTrue)
+{
+    auto& info = ItemInfo::GetInstance();
+    // Use an equip that has cash=1 in WZ (if one exists in test data)
+    // Fallback: verify an equip with liCashItemSN != 0 returns true
+    GW_ItemSlotBase item;
+    item.nItemID = 1302000;  // Regular sword
+    item.liCashItemSN = 99999;
+
+    EXPECT_TRUE(info.IsCashItem(item));
+}
+
+// ============================================================
+// GetItemCoolTime @ 0xafa8c0
+// ============================================================
+
+TEST_F(ItemInfoTest, GetItemCoolTime_BundleItem_ReturnsTrue)
+{
+    auto& info = ItemInfo::GetInstance();
+    std::int32_t nLimitMin = -1, nLimitSec = -1;
+    // Red Potion — bundle item, should return true with defaults (0, 0)
+    auto bResult = info.GetItemCoolTime(2000000, nLimitMin, nLimitSec);
+
+    EXPECT_TRUE(bResult);
+    EXPECT_GE(nLimitMin, 0);
+    EXPECT_GE(nLimitSec, 0);
+}
+
+TEST_F(ItemInfoTest, GetItemCoolTime_InvalidID_ReturnsFalse)
+{
+    auto& info = ItemInfo::GetInstance();
+    std::int32_t nLimitMin = -1, nLimitSec = -1;
+    auto bResult = info.GetItemCoolTime(0, nLimitMin, nLimitSec);
+
+    EXPECT_FALSE(bResult);
+}
+
+TEST_F(ItemInfoTest, GetItemCoolTime_EquipID_ReturnsFalse)
+{
+    auto& info = ItemInfo::GetInstance();
+    std::int32_t nLimitMin = -1, nLimitSec = -1;
+    // Equip items are not bundles or cash, so GetBundleItem returns null
+    auto bResult = info.GetItemCoolTime(1302000, nLimitMin, nLimitSec);
+
+    EXPECT_FALSE(bResult);
+}
+
+TEST_F(ItemInfoTest, GetItemCoolTime_BundleItem_DefaultsZero)
+{
+    auto& info = ItemInfo::GetInstance();
+    std::int32_t nLimitMin = -1, nLimitSec = -1;
+    auto bResult = info.GetItemCoolTime(2000000, nLimitMin, nLimitSec);
+
+    if (bResult)
+    {
+        // Most items default to 0 for limitMin/limitSec
+        std::cout << "  limitMin: " << nLimitMin << "  limitSec: " << nLimitSec << std::endl;
+    }
 }

@@ -1,6 +1,7 @@
 #include "ItemInfo.h"
 
 #include "constants/EquipDataPath.h"
+#include "models/GW_ItemSlotBase.h"
 #include "wz/WzProperty.h"
 #include "wz/WzResMan.h"
 
@@ -289,6 +290,10 @@ auto ItemInfo::GetBundleItem(std::int32_t nItemID) -> const BundleItem*
     // --- Type ---
     pBundle->nBagType = get_child_int(pInfo, "bagType");
 
+    // --- Level / Time limits ---
+    pBundle->nLimitMin = get_child_int(pInfo, "limitMin");
+    pBundle->nLimitSec = get_child_int(pInfo, "limitSec");
+
     // Insert into cache and return
     auto [inserted, _] = m_mBundleItem.emplace(nItemID, std::move(pBundle));
     return inserted->second.get();
@@ -466,6 +471,45 @@ auto ItemInfo::GetItemPrice(std::int32_t nItemID, std::int32_t& nPrice, long dou
     }
 
     return true;
+}
+
+// ============================================================
+// IsCashItem(const GW_ItemSlotBase&) @ 0x788d20
+// Overload that checks the item ID first, then falls back to
+// checking the cash-item serial number on the item slot.
+// ============================================================
+auto ItemInfo::IsCashItem(const GW_ItemSlotBase& item) -> bool
+{
+    if (IsCashItem(static_cast<std::int32_t>(item.nItemID)))
+        return true;
+    return item.liCashItemSN != 0;
+}
+
+// ============================================================
+// GetItemCoolTime @ 0xafa8c0
+// Reads limitMin / limitSec for an item. Cash items read
+// directly from WZ info; non-cash read from BundleItem cache.
+// Returns true if both values are non-negative.
+// ============================================================
+auto ItemInfo::GetItemCoolTime(std::int32_t nItemID, std::int32_t& nLimitMin, std::int32_t& nLimitSec) -> bool
+{
+    if (ItemType::GetItemType(nItemID) == ItemType::kCash)
+    {
+        auto pInfo = GetItemInfo(nItemID);
+        if (!pInfo)
+            return false;
+        nLimitMin = get_child_int(pInfo, "limitMin");
+        nLimitSec = get_child_int(pInfo, "limitSec");
+    }
+    else
+    {
+        auto* pBundle = GetBundleItem(nItemID);
+        if (!pBundle)
+            return false;
+        nLimitMin = pBundle->nLimitMin;
+        nLimitSec = pBundle->nLimitSec;
+    }
+    return nLimitMin >= 0 && nLimitSec >= 0;
 }
 
 } // namespace ms

@@ -765,13 +765,15 @@ public:
     [[nodiscard]] auto IsEquipItem(std::int32_t nItemID) -> bool;                                // @ 0x5c0050
     auto GetItemPrice(std::int32_t nItemID, std::int32_t& nPrice, long double& dUnitPrice) -> bool;  // @ 0xaf4db0
 
+    // --- Overloads / cooltime ---
+    [[nodiscard]] auto IsCashItem(const GW_ItemSlotBase& item) -> bool;                         // @ 0x788d20
+    auto GetItemCoolTime(std::int32_t nItemID, std::int32_t& nLimitMin, std::int32_t& nLimitSec) -> bool;  // @ 0xafa8c0
+
     // --- Not yet implemented (address table) ---
     // GetItemSlot(long, int)                    @ 0xae6c00
-    // IsCashItem(GW_ItemSlotBase*)              @ 0x788d20
     // IsAbleToEquip(...)                        @ 0xaea9e0
     // CalcEquipItemQuality(ZRef<GW_ItemSlotBase>) @ 0xaed3a0
     // IterateItemInfo(void)                     @ 0xafb5d0
-    // GetItemCoolTime(long, long&, long&)       @ 0xafa8c0
 
 private:
     ItemInfo() = default;
