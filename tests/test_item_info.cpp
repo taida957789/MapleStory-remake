@@ -361,3 +361,124 @@ TEST_F(ItemInfoTest, BundleItem_FieldsPopulated)
     // Red Potion should be stackable
     EXPECT_GT(pBundle->nMaxPerSlot, 1) << "Red Potion should be stackable";
 }
+
+// ============================================================
+// GetItemInfo @ 0xaaede0
+// ============================================================
+
+TEST_F(ItemInfoTest, GetItemInfo_Equip_ReturnsInfoNode)
+{
+    auto& info = ItemInfo::GetInstance();
+    auto pInfo = info.GetItemInfo(1302000);
+    ASSERT_NE(pInfo, nullptr) << "GetItemInfo(1302000) should return the info sub-node";
+
+    // The info node should have known equip fields
+    auto pPrice = pInfo->GetChild("price");
+    // price may or may not exist, but the node itself should be valid
+    (void)pPrice;
+}
+
+TEST_F(ItemInfoTest, GetItemInfo_Bundle_ReturnsInfoNode)
+{
+    auto& info = ItemInfo::GetInstance();
+    auto pInfo = info.GetItemInfo(2000000);
+    ASSERT_NE(pInfo, nullptr) << "GetItemInfo(2000000) should return the info sub-node";
+
+    // Should be able to read price from the info node
+    auto pPrice = pInfo->GetChild("price");
+    if (pPrice)
+    {
+        EXPECT_GT(pPrice->GetInt(0), 0) << "Red Potion info should have a price";
+    }
+}
+
+TEST_F(ItemInfoTest, GetItemInfo_InvalidID_ReturnsNull)
+{
+    auto& info = ItemInfo::GetInstance();
+    EXPECT_EQ(info.GetItemInfo(0), nullptr);
+}
+
+TEST_F(ItemInfoTest, GetItemInfo_NonExistent_ReturnsNull)
+{
+    auto& info = ItemInfo::GetInstance();
+    EXPECT_EQ(info.GetItemInfo(1999999), nullptr);
+}
+
+// ============================================================
+// GetItemDesc @ 0xacfe90
+// ============================================================
+
+TEST_F(ItemInfoTest, GetItemDesc_InvalidID_ReturnsEmpty)
+{
+    auto& info = ItemInfo::GetInstance();
+    EXPECT_TRUE(info.GetItemDesc(0).empty());
+}
+
+TEST_F(ItemInfoTest, GetItemDesc_ValidItem_DoesNotCrash)
+{
+    auto& info = ItemInfo::GetInstance();
+    // May or may not have a description — just verify no crash
+    auto sDesc = info.GetItemDesc(2000000);
+    (void)sDesc;
+}
+
+// ============================================================
+// IsEquipItem @ 0x5c0050
+// ============================================================
+
+TEST_F(ItemInfoTest, IsEquipItem_EquipID_ReturnsTrue)
+{
+    auto& info = ItemInfo::GetInstance();
+    EXPECT_TRUE(info.IsEquipItem(1302000));
+}
+
+TEST_F(ItemInfoTest, IsEquipItem_BundleID_ReturnsFalse)
+{
+    auto& info = ItemInfo::GetInstance();
+    EXPECT_FALSE(info.IsEquipItem(2000000));
+}
+
+TEST_F(ItemInfoTest, IsEquipItem_Zero_ReturnsFalse)
+{
+    auto& info = ItemInfo::GetInstance();
+    EXPECT_FALSE(info.IsEquipItem(0));
+}
+
+// ============================================================
+// GetItemPrice @ 0xaf4db0
+// ============================================================
+
+TEST_F(ItemInfoTest, GetItemPrice_RedPotion_HasPrice)
+{
+    auto& info = ItemInfo::GetInstance();
+    std::int32_t nPrice = 0;
+    long double dUnitPrice = 0.0;
+    auto bResult = info.GetItemPrice(2000000, nPrice, dUnitPrice);
+
+    EXPECT_TRUE(bResult) << "GetItemPrice should return true for valid item";
+    EXPECT_GT(nPrice, 0) << "Red Potion should have a price";
+}
+
+TEST_F(ItemInfoTest, GetItemPrice_InvalidID_ReturnsFalse)
+{
+    auto& info = ItemInfo::GetInstance();
+    std::int32_t nPrice = 42;
+    long double dUnitPrice = 1.0;
+    auto bResult = info.GetItemPrice(0, nPrice, dUnitPrice);
+
+    EXPECT_FALSE(bResult) << "GetItemPrice should return false for invalid item";
+    EXPECT_EQ(nPrice, 0);
+    EXPECT_DOUBLE_EQ(static_cast<double>(dUnitPrice), 0.0);
+}
+
+TEST_F(ItemInfoTest, GetItemPrice_Equip_DoesNotCrash)
+{
+    auto& info = ItemInfo::GetInstance();
+    std::int32_t nPrice = -1;
+    long double dUnitPrice = -1.0;
+    auto bResult = info.GetItemPrice(1302000, nPrice, dUnitPrice);
+
+    EXPECT_TRUE(bResult) << "GetItemPrice should return true for valid equip";
+    EXPECT_GE(nPrice, 0);
+    EXPECT_GE(static_cast<double>(dUnitPrice), 0.0);
+}

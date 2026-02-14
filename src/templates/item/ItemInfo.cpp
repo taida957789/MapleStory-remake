@@ -203,6 +203,9 @@ auto ItemInfo::RegisterEquipItemInfo(std::int32_t nItemID, const std::string& sU
     // --- Knockback ---
     pEquip->nKnockback = get_child_int(pInfo, "knockback");
 
+    // --- Description ---
+    pEquip->sDesc = get_child_string(pInfo, "desc");
+
     return pEquip;
 }
 
@@ -377,6 +380,92 @@ auto ItemInfo::GetRequiredLEV(std::int32_t nItemID) -> std::int32_t
 
     auto* pBundle = GetBundleItem(nItemID);
     return pBundle ? pBundle->nRequiredLEV : 0;
+}
+
+// ============================================================
+// GetItemInfo @ 0xaaede0
+// Returns the "info" sub-property for any item ID.
+// Special case: category 910 items return the prop node directly
+// (their .img root IS the info node).
+// ============================================================
+auto ItemInfo::GetItemInfo(std::int32_t nItemID) const -> std::shared_ptr<WzProperty>
+{
+    auto pProp = GetItemProp(nItemID);
+    if (!pProp)
+        return nullptr;
+
+    // Category 910 items: prop root is the info node itself
+    if (nItemID / 10000 == 910)
+        return pProp;
+
+    return pProp->GetChild("info");
+}
+
+// ============================================================
+// GetItemDesc @ 0xacfe90
+// Returns item description string.
+// Original calls GetItemString(nItemID, StringPool(0x9A8="desc"))
+// which reads from m_mItemString table. We approximate by reading
+// from WZ info node until GetItemString is implemented.
+// ============================================================
+auto ItemInfo::GetItemDesc(std::int32_t nItemID) -> std::string
+{
+    // TODO: replace with GetItemString(nItemID, "desc") when implemented
+    if (ItemType::IsEquipItemID(nItemID))
+    {
+        auto* pEquip = GetEquipItem(nItemID);
+        return pEquip ? pEquip->sDesc : std::string{};
+    }
+
+    auto pInfo = GetItemInfo(nItemID);
+    if (!pInfo)
+        return {};
+    return get_child_string(pInfo, "desc");
+}
+
+// ============================================================
+// IsEquipItem @ 0x5c0050
+// Returns true if GetEquipItem succeeds (item exists as equip).
+// ============================================================
+auto ItemInfo::IsEquipItem(std::int32_t nItemID) -> bool
+{
+    return GetEquipItem(nItemID) != nullptr;
+}
+
+// ============================================================
+// GetItemPrice @ 0xaf4db0
+// Reads price, unitPrice, and autoPrice from WZ info node.
+// Original returns int (1=success, 0=no item info).
+// Also checks CSpecialServerMan override first (TODO: not yet implemented).
+// ============================================================
+auto ItemInfo::GetItemPrice(std::int32_t nItemID, std::int32_t& nPrice, long double& dUnitPrice) -> bool
+{
+    nPrice = 0;
+    dUnitPrice = 0.0;
+
+    auto pInfo = GetItemInfo(nItemID);
+    if (!pInfo)
+        return false;
+
+    // TODO: CSpecialServerMan::GetSellItemPrice override check goes here
+
+    nPrice = get_child_int(pInfo, "price");
+    dUnitPrice = static_cast<long double>(get_child_double(pInfo, "unitPrice"));
+
+    if (nPrice == 0 && get_child_int(pInfo, "autoPrice"))
+    {
+        // Read "lv" from WZ info, look up price by category and level
+        auto nLv = get_child_int(pInfo, "lv");
+        auto itCategory = m_mItemSellPriceByLv.find(nItemID / 10000);
+        if (itCategory != m_mItemSellPriceByLv.end())
+        {
+            auto itPrice = itCategory->second.find(nLv);
+            if (itPrice != itCategory->second.end())
+                nPrice = itPrice->second;
+        }
+    }
+
+    return true;
 }
 
 } // namespace ms

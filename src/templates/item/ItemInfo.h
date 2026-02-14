@@ -759,16 +759,18 @@ public:
     [[nodiscard]] auto IsTradeBlockItem(std::int32_t nItemID) -> bool;           // @ 0xab09d0
     [[nodiscard]] auto GetRequiredLEV(std::int32_t nItemID) -> std::int32_t;     // @ 0xab23b0
 
+    // --- WZ property access ---
+    [[nodiscard]] auto GetItemInfo(std::int32_t nItemID) const -> std::shared_ptr<WzProperty>;  // @ 0xaaede0
+    [[nodiscard]] auto GetItemDesc(std::int32_t nItemID) -> std::string;                        // @ 0xacfe90
+    [[nodiscard]] auto IsEquipItem(std::int32_t nItemID) -> bool;                                // @ 0x5c0050
+    auto GetItemPrice(std::int32_t nItemID, std::int32_t& nPrice, long double& dUnitPrice) -> bool;  // @ 0xaf4db0
+
     // --- Not yet implemented (address table) ---
-    // GetItemInfo(long)                         @ 0xaaede0
     // GetItemSlot(long, int)                    @ 0xae6c00
-    // GetItemDesc(long)                         @ 0xacfe90
-    // IsEquipItem(long)                         @ 0x5c0050
     // IsCashItem(GW_ItemSlotBase*)              @ 0x788d20
     // IsAbleToEquip(...)                        @ 0xaea9e0
     // CalcEquipItemQuality(ZRef<GW_ItemSlotBase>) @ 0xaed3a0
     // IterateItemInfo(void)                     @ 0xafb5d0
-    // GetItemPrice(long, long&, double&)        @ 0xaf4db0
     // GetItemCoolTime(long, long&, long&)       @ 0xafa8c0
 
 private:
