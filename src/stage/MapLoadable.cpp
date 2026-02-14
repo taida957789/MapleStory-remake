@@ -1,5 +1,6 @@
 #include "MapLoadable.h"
-#include "audio/SoundSystem.h"
+#include "audio/SoundMan.h"
+#include "util/Rand32.h"
 #include "graphics/WzGr2D.h"
 #include "graphics/WzGr2DLayer.h"
 #include "util/Logger.h"
@@ -40,9 +41,9 @@ void MapLoadable::Init(void* param)
     ClearAllLayers();
 
     // Initialize default values (matching constructor defaults from decompiled code)
-    m_nMagLevelObj = 0;
-    m_nMagLevelBack = 0;
-    m_nMagLevelSkillEffect = 0;
+    m_nMagLevel_Obj = 0;
+    m_nMagLevel_Back = 0;
+    m_nMagLevel_SkillEffect = 0;
     m_nMinZoomOutScale = 1000;
     m_bMagLevelModifying = false;
     m_nScaleField = 1000;
@@ -95,7 +96,7 @@ void MapLoadable::Update()
         auto now = gr.GetCurrentTime();
         if (static_cast<std::int32_t>(now - m_tRestoreBgmVolume) < 0)
         {
-            SoundSystem::GetInstance().SetBGMVolume(
+            SoundMan::GetInstance().SetBGMVolume(
                 static_cast<std::uint32_t>(m_nRestoreBgmVolume), 500);
             m_tRestoreBgmVolume = 0;
             m_nRestoreBgmVolume = 0;
@@ -142,10 +143,10 @@ void MapLoadable::UpdateCameraMoveEffect()
     double t = tElapsed / 100.0;
 
     // Displacement = v0 * t + 0.5 * a * t^2
-    double dx = m_cameraMoveInfo.ptVelocityFirst.x * t +
-                0.5 * m_cameraMoveInfo.ptAcceleration.x * t * t;
-    double dy = m_cameraMoveInfo.ptVelocityFirst.y * t +
-                0.5 * m_cameraMoveInfo.ptAcceleration.y * t * t;
+    double dx = m_cameraMoveInfo.ptVelocity_First.x * t +
+                0.5 * m_cameraMoveInfo.ptAccelation.x * t * t;
+    double dy = m_cameraMoveInfo.ptVelocity_First.y * t +
+                0.5 * m_cameraMoveInfo.ptAccelation.y * t * t;
 
     // Apply relative movement to camera
     auto currentPos = gr.GetCameraPosition();
@@ -153,31 +154,31 @@ void MapLoadable::UpdateCameraMoveEffect()
                          currentPos.y + static_cast<std::int32_t>(dy));
 
     // Apply velocity adjust rate (damping/acceleration factor)
-    if (m_cameraMoveInfo.ptVelocityAdjustRate.x != 0)
+    if (m_cameraMoveInfo.ptVelocity_AdjustRate.x != 0)
     {
-        m_cameraMoveInfo.ptVelocityFirst.x =
-            static_cast<std::int32_t>(m_cameraMoveInfo.ptVelocityAdjustRate.x *
-                                       m_cameraMoveInfo.ptVelocityFirst.x / 100.0);
+        m_cameraMoveInfo.ptVelocity_First.x =
+            static_cast<std::int32_t>(m_cameraMoveInfo.ptVelocity_AdjustRate.x *
+                                       m_cameraMoveInfo.ptVelocity_First.x / 100.0);
     }
-    if (m_cameraMoveInfo.ptVelocityAdjustRate.y != 0)
+    if (m_cameraMoveInfo.ptVelocity_AdjustRate.y != 0)
     {
-        m_cameraMoveInfo.ptVelocityFirst.y =
-            static_cast<std::int32_t>(m_cameraMoveInfo.ptVelocityAdjustRate.y *
-                                       m_cameraMoveInfo.ptVelocityFirst.y / 100.0);
+        m_cameraMoveInfo.ptVelocity_First.y =
+            static_cast<std::int32_t>(m_cameraMoveInfo.ptVelocity_AdjustRate.y *
+                                       m_cameraMoveInfo.ptVelocity_First.y / 100.0);
     }
 
     // Apply acceleration adjust rate
-    if (m_cameraMoveInfo.ptAccelerationAdjustRate.x != 0)
+    if (m_cameraMoveInfo.ptAccelation_AdjustRate.x != 0)
     {
-        m_cameraMoveInfo.ptAcceleration.x =
-            static_cast<std::int32_t>(m_cameraMoveInfo.ptAccelerationAdjustRate.x *
-                                       m_cameraMoveInfo.ptAcceleration.x / 100.0);
+        m_cameraMoveInfo.ptAccelation.x =
+            static_cast<std::int32_t>(m_cameraMoveInfo.ptAccelation_AdjustRate.x *
+                                       m_cameraMoveInfo.ptAccelation.x / 100.0);
     }
-    if (m_cameraMoveInfo.ptAccelerationAdjustRate.y != 0)
+    if (m_cameraMoveInfo.ptAccelation_AdjustRate.y != 0)
     {
-        m_cameraMoveInfo.ptAcceleration.y =
-            static_cast<std::int32_t>(m_cameraMoveInfo.ptAccelerationAdjustRate.y *
-                                       m_cameraMoveInfo.ptAcceleration.y / 100.0);
+        m_cameraMoveInfo.ptAccelation.y =
+            static_cast<std::int32_t>(m_cameraMoveInfo.ptAccelation_AdjustRate.y *
+                                       m_cameraMoveInfo.ptAccelation.y / 100.0);
     }
 
     // Clip camera to view range if enabled
@@ -202,21 +203,21 @@ void MapLoadable::ClipCameraToViewRange()
     auto viewBottom = pos.y + screenHeight;
 
     // Clamp to view range
-    if (viewLeft < m_viewRangeRect.left)
+    if (viewLeft < m_rcViewRange.left)
     {
-        pos.x = m_viewRangeRect.left;
+        pos.x = m_rcViewRange.left;
     }
-    if (viewRight > m_viewRangeRect.right)
+    if (viewRight > m_rcViewRange.right)
     {
-        pos.x = m_viewRangeRect.right - screenWidth;
+        pos.x = m_rcViewRange.right - screenWidth;
     }
-    if (viewTop < m_viewRangeRect.top)
+    if (viewTop < m_rcViewRange.top)
     {
-        pos.y = m_viewRangeRect.top;
+        pos.y = m_rcViewRange.top;
     }
-    if (viewBottom > m_viewRangeRect.bottom)
+    if (viewBottom > m_rcViewRange.bottom)
     {
-        pos.y = m_viewRangeRect.bottom - screenHeight;
+        pos.y = m_rcViewRange.bottom - screenHeight;
     }
 
     gr.SetCameraPosition(pos);
@@ -318,6 +319,72 @@ void MapLoadable::SetObjectAnimation(const std::string& name, Gr2DAnimationType 
     }
 }
 
+void MapLoadable::AnimateObjLayer(const std::shared_ptr<WzGr2DLayer>& pLayer,
+                                   std::int32_t nRepeat)
+{
+    // Based on CMapLoadable::AnimateObjLayer
+    if (!pLayer)
+        return;
+
+    if (nRepeat >= 0)
+    {
+        // GA_REPEAT with specified repeat count
+        pLayer->Animate(Gr2DAnimationType::Repeat, 1000, nRepeat);
+    }
+    else if (nRepeat == -1)
+    {
+        // GA_STOP — stop animation
+        pLayer->Animate(Gr2DAnimationType::Stop);
+    }
+    else if (nRepeat == -2)
+    {
+        // GA_FIRST only if not currently animating
+        if (pLayer->get_animationState() == 0)
+            pLayer->Animate(Gr2DAnimationType::First);
+    }
+}
+
+void MapLoadable::DisableEffectObject(const std::string& sName, bool bCheckPreWord)
+{
+    // Based on CMapLoadable::DisableEffectObject
+    // Collect names of objects to disable
+    std::vector<std::string> asDisableObj;
+
+    if (bCheckPreWord)
+    {
+        // Find all named objects whose key contains sName as prefix/substring
+        for (auto& [key, obj] : m_mNamedObj)
+        {
+            if (sName.empty() || key.find(sName) != std::string::npos)
+                asDisableObj.push_back(key);
+        }
+    }
+    else
+    {
+        asDisableObj.push_back(sName);
+    }
+
+    // Disable each matched object by setting its alpha to 0
+    for (auto& name : asDisableObj)
+    {
+        auto it = m_mNamedObj.find(name);
+        if (it == m_mNamedObj.end())
+            continue;
+
+        auto& obj = it->second;
+        if (obj.nState < 0 || static_cast<std::size_t>(obj.nState) >= obj.aState.size())
+            continue;
+
+        auto& layer = obj.aState[obj.nState].pLayer;
+        if (!layer)
+            continue;
+
+        auto* pAlpha = layer->get_alpha();
+        if (pAlpha)
+            pAlpha->Move(0, 0);
+    }
+}
+
 void MapLoadable::SetTaggedObjectAnimation(const std::string& tag, Gr2DAnimationType type)
 {
     auto it = m_mTaggedLayer.find(tag);
@@ -346,14 +413,14 @@ void MapLoadable::ChangeBGM(const std::string& bgmPath)
     if (bgmPath.empty())
     {
         // Stop BGM if path is empty
-        SoundSystem::GetInstance().StopBGM(0);
+        SoundMan::GetInstance().StopBGM(0);
         LOG_DEBUG("ChangeBGM: stopped");
         return;
     }
 
     // Play BGM with looping (nLoop=1), volume 0x258 (600 -> scaled to 128)
     // Based on CSoundMan::PlayBGM call at 0xbeafc2
-    SoundSystem::GetInstance().PlayBGM(bgmPath, 1, 128, 128, 0, 0);
+    SoundMan::GetInstance().PlayBGM(bgmPath, 1, 128, 128, 0, 0);
     LOG_DEBUG("ChangeBGM: {}", bgmPath);
 }
 
@@ -371,8 +438,8 @@ void MapLoadable::RestoreMutedBGM()
 {
     if (m_tRestoreBgmVolume != 0)
     {
-        // Restore BGM volume via SoundSystem
-        SoundSystem::GetInstance().SetBGMVolume(
+        // Restore BGM volume via SoundMan
+        SoundMan::GetInstance().SetBGMVolume(
             static_cast<std::uint32_t>(m_nRestoreBgmVolume), 0);
         m_tRestoreBgmVolume = 0;
     }
@@ -381,42 +448,30 @@ void MapLoadable::RestoreMutedBGM()
 void MapLoadable::PlayBGMFromMapInfo()
 {
     // Based on CMapLoadable::PlayBGMFromMapInfo (0xbeaef8)
-    // Get "bgm" property from m_pPropFieldInfo (StringPool 0xA13 = 2579)
-
     if (!m_pPropFieldInfo)
-    {
-        LOG_DEBUG("PlayBGMFromMapInfo: No field info property");
         return;
-    }
 
-    // First check if there's a custom BGM UOL
-    if (!m_sFieldCustomBgmUOL.empty())
-    {
-        // Use custom BGM path: "Sound/" + customBgmUOL
-        std::string fullPath = "Sound/" + m_sFieldCustomBgmUOL;
-        ChangeBGM(fullPath);
-        return;
-    }
-
-    // Get "bgm" property from map info
+    // Get "bgm" property from field info (StringPool 0xA13)
     auto bgmProp = m_pPropFieldInfo->GetChild("bgm");
-    if (!bgmProp)
-    {
-        LOG_DEBUG("PlayBGMFromMapInfo: No 'bgm' property in field info");
-        return;
-    }
+    std::string bgmValue = bgmProp ? bgmProp->GetString("") : "";
 
-    // Get the BGM path string
-    std::string bgmValue = bgmProp->GetString("");
-    if (bgmValue.empty())
-    {
-        LOG_DEBUG("PlayBGMFromMapInfo: Empty bgm value");
+    // If bgm property is empty and no custom BGM, bail out
+    std::string sCustom(m_sFieldCustomBgmUOL.begin(), m_sFieldCustomBgmUOL.end());
+    if (bgmValue.empty() && sCustom.empty())
         return;
-    }
 
-    // Build full path: "Sound/" + bgmValue (StringPool 2580 = "Sound/")
-    std::string fullPath = "Sound/" + bgmValue;
-    ChangeBGM(fullPath);
+    // Build UOL: "Sound/" (StringPool 2580) + bgm path
+    std::string sUOL = "Sound/";
+    if (!sCustom.empty())
+        sUOL += sCustom;
+    else
+        sUOL += bgmValue;
+
+    // PlayBGM(sUOL, nLoop=1, nStartVolume=600, 0, 0, 0)
+    SoundMan::GetInstance().PlayBGM(sUOL, 1, 600, 0, 0, 0);
+
+    // Clear m_sChangedBgmUOL
+    m_sChangedBgmUOL.clear();
 }
 
 void MapLoadable::SetCameraMoveInfo(std::int32_t tStart, const Point2D& velocity,
@@ -428,10 +483,10 @@ void MapLoadable::SetCameraMoveInfo(std::int32_t tStart, const Point2D& velocity
     m_cameraMoveInfo.bOn = true;
     m_cameraMoveInfo.tStart = tStart;
     m_cameraMoveInfo.tEnd = tStart + duration;
-    m_cameraMoveInfo.ptVelocityFirst = velocity;
-    m_cameraMoveInfo.ptAcceleration = acceleration;
-    m_cameraMoveInfo.ptVelocityAdjustRate = velocityAdjust;
-    m_cameraMoveInfo.ptAccelerationAdjustRate = accelAdjust;
+    m_cameraMoveInfo.ptVelocity_First = velocity;
+    m_cameraMoveInfo.ptAccelation = acceleration;
+    m_cameraMoveInfo.ptVelocity_AdjustRate = velocityAdjust;
+    m_cameraMoveInfo.ptAccelation_AdjustRate = accelAdjust;
     m_cameraMoveInfo.bClipInViewRange = clipInViewRange;
 }
 
@@ -440,9 +495,9 @@ void MapLoadable::ClearCameraMove()
     m_cameraMoveInfo.bOn = false;
 }
 
-auto MapLoadable::GetViewRangeRect() const -> Rect
+auto MapLoadable::GetViewRangeRect() const -> const Rect*
 {
-    return m_viewRangeRect;
+    return &m_rcViewRange;
 }
 
 void MapLoadable::LoadObjects(const std::shared_ptr<WzProperty>& prop, std::int32_t baseZ)
@@ -627,10 +682,10 @@ void MapLoadable::RestoreViewRange()
     if (!m_pPropFieldInfo)
     {
         // Use screen-based defaults
-        m_viewRangeRect.left = -nScaledHalfWidth;
-        m_viewRangeRect.top = -nScaledHalfHeight;
-        m_viewRangeRect.right = nScaledHalfWidth;
-        m_viewRangeRect.bottom = nScaledHalfHeight;
+        m_rcViewRange.left = -nScaledHalfWidth;
+        m_rcViewRange.top = -nScaledHalfHeight;
+        m_rcViewRange.right = nScaledHalfWidth;
+        m_rcViewRange.bottom = nScaledHalfHeight;
         m_nMinZoomOutScale = 1000;
         LOG_DEBUG("RestoreViewRange: Using default view range (no field info)");
         return;
@@ -654,14 +709,14 @@ void MapLoadable::RestoreViewRange()
     auto vrRightProp = m_pPropFieldInfo->GetChild("VRRight");
     auto vrBottomProp = m_pPropFieldInfo->GetChild("VRBottom");
 
-    m_viewRangeRect.left = vrLeftProp ? vrLeftProp->GetInt(DEFAULT_LEFT) : DEFAULT_LEFT;
-    m_viewRangeRect.top = vrTopProp ? vrTopProp->GetInt(DEFAULT_TOP) : DEFAULT_TOP;
-    m_viewRangeRect.right = vrRightProp ? vrRightProp->GetInt(DEFAULT_RIGHT) : DEFAULT_RIGHT;
-    m_viewRangeRect.bottom = vrBottomProp ? vrBottomProp->GetInt(DEFAULT_BOTTOM) : DEFAULT_BOTTOM;
+    m_rcViewRange.left = vrLeftProp ? vrLeftProp->GetInt(DEFAULT_LEFT) : DEFAULT_LEFT;
+    m_rcViewRange.top = vrTopProp ? vrTopProp->GetInt(DEFAULT_TOP) : DEFAULT_TOP;
+    m_rcViewRange.right = vrRightProp ? vrRightProp->GetInt(DEFAULT_RIGHT) : DEFAULT_RIGHT;
+    m_rcViewRange.bottom = vrBottomProp ? vrBottomProp->GetInt(DEFAULT_BOTTOM) : DEFAULT_BOTTOM;
 
     // Calculate min zoom out scale
-    auto nMarginX = (m_viewRangeRect.left + m_viewRangeRect.right) / 2 - m_viewRangeRect.left;
-    auto nMarginY = (m_viewRangeRect.top + m_viewRangeRect.bottom) / 2 - m_viewRangeRect.top;
+    auto nMarginX = (m_rcViewRange.left + m_rcViewRange.right) / 2 - m_rcViewRange.left;
+    auto nMarginY = (m_rcViewRange.top + m_rcViewRange.bottom) / 2 - m_rcViewRange.top;
 
     if (nMarginX > 0 && nMarginY > 0)
     {
@@ -685,28 +740,28 @@ void MapLoadable::RestoreViewRange()
     }
 
     // Adjust view range by scaled half dimensions
-    m_viewRangeRect.left += nScaledHalfWidth;
-    m_viewRangeRect.right -= nScaledHalfWidth;
-    m_viewRangeRect.top += nScaledHalfHeight;
-    m_viewRangeRect.bottom -= nScaledHalfHeight;
+    m_rcViewRange.left += nScaledHalfWidth;
+    m_rcViewRange.right -= nScaledHalfWidth;
+    m_rcViewRange.top += nScaledHalfHeight;
+    m_rcViewRange.bottom -= nScaledHalfHeight;
 
     // Clamp if dimensions become negative (map smaller than screen)
-    if (m_viewRangeRect.right - m_viewRangeRect.left <= 0)
+    if (m_rcViewRange.right - m_rcViewRange.left <= 0)
     {
-        auto mid = (m_viewRangeRect.right + m_viewRangeRect.left) / 2;
-        m_viewRangeRect.left = mid;
-        m_viewRangeRect.right = mid;
+        auto mid = (m_rcViewRange.right + m_rcViewRange.left) / 2;
+        m_rcViewRange.left = mid;
+        m_rcViewRange.right = mid;
     }
-    if (m_viewRangeRect.bottom - m_viewRangeRect.top <= 0)
+    if (m_rcViewRange.bottom - m_rcViewRange.top <= 0)
     {
-        auto mid = (m_viewRangeRect.bottom + m_viewRangeRect.top) / 2;
-        m_viewRangeRect.top = mid;
-        m_viewRangeRect.bottom = mid;
+        auto mid = (m_rcViewRange.bottom + m_rcViewRange.top) / 2;
+        m_rcViewRange.top = mid;
+        m_rcViewRange.bottom = mid;
     }
 
     LOG_DEBUG("RestoreViewRange: ({},{}) - ({},{}), minScale={}",
-              m_viewRangeRect.left, m_viewRangeRect.top,
-              m_viewRangeRect.right, m_viewRangeRect.bottom,
+              m_rcViewRange.left, m_rcViewRange.top,
+              m_rcViewRange.right, m_rcViewRange.bottom,
               m_nMinZoomOutScale);
 }
 
@@ -1119,7 +1174,7 @@ void MapLoadable::MakeBack(std::int32_t nPageIdx, const std::shared_ptr<WzProper
     }
 
     // Add to background layer list
-    m_lpLayerBack.push_back(layer);
+    m_mlLayerBack.push_back(layer);
 #ifdef MS_DEBUG_CANVAS
     DebugOverlay::GetInstance().RegisterLayer(layer, "back_" + std::to_string(nPageIdx));
 #endif
@@ -1137,14 +1192,14 @@ void MapLoadable::ClearBackLayers()
 {
     auto& gr = get_gr();
 
-    for (auto& layer : m_lpLayerBack)
+    for (auto& layer : m_mlLayerBack)
     {
         if (layer)
         {
             gr.RemoveLayer(layer);
         }
     }
-    m_lpLayerBack.clear();
+    m_mlLayerBack.clear();
 }
 
 void MapLoadable::ClearAllLayers()
@@ -1615,6 +1670,21 @@ void MapLoadable::SetFootStepSound(const std::string& sound)
     LOG_DEBUG("SetFootStepSound: Footstep sound set (stub)");
 }
 
+void MapLoadable::PlayFootStepSound()
+{
+    if (m_nFootStepSoundCount <= 0)
+        return;
+
+    auto nRand = static_cast<std::uint32_t>(detail::GetSecureRand().Random());
+    auto nIndex = nRand % static_cast<std::uint32_t>(m_nFootStepSoundCount);
+
+    // Original: ZXString<unsigned short>::Format(L"%s/%d", m_wsFootStepSound, index)
+    std::string sPath(m_wsFootStepSound.begin(), m_wsFootStepSound.end());
+    sPath += "/" + std::to_string(nIndex);
+
+    SoundMan::GetInstance().PlaySE(sPath, 100);
+}
+
 void MapLoadable::MakeCloud()
 {
     // Based on CMapLoadable::MakeCloud at 0xbe3230
@@ -1639,10 +1709,10 @@ void MapLoadable::MakeCloud()
     }
 
     // Get map bounds (from view range or default)
-    auto lLeft = m_viewRangeRect.left - 200;
-    auto lTop = m_viewRangeRect.top - 200;
-    auto lWidth = m_viewRangeRect.Width() + 400;
-    auto lHeight = m_viewRangeRect.Height() + 400;
+    auto lLeft = m_rcViewRange.left - 200;
+    auto lTop = m_rcViewRange.top - 200;
+    auto lWidth = m_rcViewRange.Width() + 400;
+    auto lHeight = m_rcViewRange.Height() + 400;
 
     // Calculate cloud count based on map size (larger maps = more clouds)
     auto mapArea = static_cast<float>(lWidth * lHeight);

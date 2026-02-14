@@ -44,6 +44,9 @@ public:
     [[nodiscard]] auto GetDataSize() -> std::int32_t override { return 147; }
     [[nodiscard]] auto GetItemNumber() -> std::int32_t override { return 1; }
 
+    [[nodiscard]] auto GetItemTitle() -> std::string override { return {}; }
+    void SetItemTitle(const std::string& /*s*/) override {}
+
     [[nodiscard]] auto GetItemAttribute() -> std::int16_t override
     {
         return nAttribute.Get();
@@ -84,6 +87,10 @@ public:
     {
         return (nAttribute.Get() & PetAttr::NotPossibleSetEvolution) == 0;
     }
+
+    void BackwardUpdateCashItem(GW_ItemSlotBase* pOther) override;
+    void RawDecode(InPacket& iPacket) override;
+    void RawEncode(OutPacket& oPacket, bool bForInternal) override;
 
     [[nodiscard]] auto IsSetItem() -> std::int32_t override;
     [[nodiscard]] auto GetSetItemID() -> std::int32_t override;

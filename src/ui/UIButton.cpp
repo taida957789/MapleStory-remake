@@ -1,5 +1,5 @@
 #include "UIButton.h"
-#include "audio/SoundSystem.h"
+#include "audio/SoundMan.h"
 #include "graphics/WzGr2D.h"
 #include "graphics/WzGr2DLayer.h"
 #include "util/Logger.h"
@@ -311,7 +311,7 @@ void UIButton::OnMouseMove(std::int32_t x, std::int32_t y)
         // Based on CCtrlButton::OnMouseMove using StringPool 0x9A5 (BtMouseOver)
         if (m_state == UIState::MouseOver)
         {
-            SoundSystem::GetInstance().PlaySE(SOUND_BUTTON_HOVER, 100);
+            SoundMan::GetInstance().PlaySE(SOUND_BUTTON_HOVER, 100);
         }
 
         UpdateLayerCanvas();
@@ -345,7 +345,7 @@ void UIButton::OnMouseUp(std::int32_t x, std::int32_t y, std::int32_t button)
         {
             // Play click sound
             // Based on CCtrlButton::OnKey using StringPool 0x9A4 (BtMouseClick)
-            SoundSystem::GetInstance().PlaySE(SOUND_BUTTON_CLICK, 100);
+            SoundMan::GetInstance().PlaySE(SOUND_BUTTON_CLICK, 100);
 
             // Toggle checked state if in checkbox mode
             if (m_bCheckMode)

@@ -52,6 +52,14 @@ void OutPacket::EncodeBuffer(const std::uint8_t* buffer, std::size_t length)
     m_data.insert(m_data.end(), buffer, buffer + length);
 }
 
+void OutPacket::Set4At(std::size_t offset, std::int32_t value)
+{
+    m_data[offset]     = static_cast<std::uint8_t>(value & 0xFF);
+    m_data[offset + 1] = static_cast<std::uint8_t>((value >> 8) & 0xFF);
+    m_data[offset + 2] = static_cast<std::uint8_t>((value >> 16) & 0xFF);
+    m_data[offset + 3] = static_cast<std::uint8_t>((value >> 24) & 0xFF);
+}
+
 void OutPacket::Reset(std::int16_t opcode)
 {
     m_data.clear();

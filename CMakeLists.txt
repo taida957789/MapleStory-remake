@@ -127,6 +127,8 @@ set(SOURCES
     src/models/GW_ItemSlotBase.cpp
     src/models/GW_ItemSlotBundle.cpp
     src/models/GW_ItemSlotEquip.cpp
+    src/models/GW_ItemSlotEquipBase.cpp
+    src/models/GW_CashItemOption.cpp
     src/models/GW_ItemSlotPet.cpp
 )
 
@@ -204,7 +206,7 @@ set(HEADERS
     src/constants/JobConstants.h
     src/templates/morph/MorphTemplate.h
     src/templates/item/ItemInfo.h
-    src/templates/item/ItemInfoTypes.h
+    src/templates/item/ItemHelper.h
     src/templates/item/ItemName.h
     src/constants/WeaponConstants.h
 )

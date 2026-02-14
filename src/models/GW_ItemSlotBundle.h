@@ -3,10 +3,8 @@
 #include "GW_ItemSlotBase.h"
 #include "util/security/ZtlSecureTear.h"
 
-#include <algorithm>
 #include <array>
 #include <cstdint>
-#include <cstring>
 #include <string>
 
 namespace ms
@@ -70,12 +68,7 @@ public:
         return std::string(sTitle.data());
     }
 
-    void SetItemTitle(const std::string& s) override
-    {
-        auto len = std::min(s.size(), sTitle.size() - 1);
-        std::memcpy(sTitle.data(), s.data(), len);
-        sTitle[len] = '\0';
-    }
+    void SetItemTitle(const std::string& s) override;
 
     // --- Flag queries ---
     [[nodiscard]] auto IsUsedItem() -> std::int32_t override
@@ -109,12 +102,11 @@ public:
         return (nAttribute.Get() & BundleAttr::NonCombatStatExpUp) == 0;
     }
 
-    [[nodiscard]] auto IsBindedItem() -> std::int32_t override
-    {
-        auto nCategory = static_cast<std::int32_t>(nItemID) / 10000;
-        return (nCategory == 265 || nCategory == 308 || nCategory == 433 || nCategory == 223)
-            && (nAttribute.Get() & BundleAttr::Binded) != 0;
-    }
+    void BackwardUpdateCashItem(GW_ItemSlotBase* pOther) override;
+    void RawDecode(InPacket& iPacket) override;
+    void RawEncode(OutPacket& oPacket, bool bForInternal) override;
+
+    [[nodiscard]] auto IsBindedItem() -> std::int32_t override;
 
     // --- Flag set/reset ---
     void SetUsed() override { nAttribute.Put(nAttribute.Get() | BundleAttr::Used); }
@@ -130,12 +122,7 @@ public:
     void SetNonCombatStatExpUpItem() override { nAttribute.Put(nAttribute.Get() | BundleAttr::NonCombatStatExpUp); }
     void ResetNonCombatStatExpUpItem() override { nAttribute.Put(nAttribute.Get() & ~BundleAttr::NonCombatStatExpUp); }
 
-    void SetBinded() override
-    {
-        auto nCategory = static_cast<std::int32_t>(nItemID) / 10000;
-        if (nCategory == 265 || nCategory == 308 || nCategory == 433 || nCategory == 223)
-            nAttribute.Put(nAttribute.Get() | BundleAttr::Binded);
-    }
+    void SetBinded() override;
 
     // --- Set item ---
     [[nodiscard]] auto IsSetItem() -> std::int32_t override { return GetSetItemID() != 0; }

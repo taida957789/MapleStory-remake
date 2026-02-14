@@ -51,6 +51,19 @@ public:
     [[nodiscard]] auto GetOpcode() const noexcept -> std::int16_t { return m_nOpcode; }
 
     /**
+     * @brief Get current write offset (for deferred patching)
+     */
+    [[nodiscard]] auto GetOffset() const noexcept -> std::size_t { return m_data.size(); }
+
+    /**
+     * @brief Patch a 4-byte value at a previous offset
+     *
+     * Used by GW_ItemSlotEquipBase::Encode to write the stat bitmask
+     * after determining which fields are non-zero.
+     */
+    void Set4At(std::size_t offset, std::int32_t value);
+
+    /**
      * @brief Reset packet
      */
     void Reset(std::int16_t opcode);

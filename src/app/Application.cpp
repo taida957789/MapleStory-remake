@@ -3,7 +3,7 @@
 #include "WvsContext.h"
 #include "animation/ActionFrame.h"
 #include "animation/ActionMan.h"
-#include "audio/SoundSystem.h"
+#include "audio/SoundMan.h"
 #include "graphics/WzGr2D.h"
 #include "input/InputSystem.h"
 #include "stage/Logo.h"
@@ -318,7 +318,7 @@ auto Application::InitializeInput() -> bool
 
 auto Application::InitializeSound() -> bool
 {
-    return SoundSystem::GetInstance().Initialize();
+    return SoundMan::GetInstance().Initialize();
 }
 
 auto Application::InitializeResMan() -> bool

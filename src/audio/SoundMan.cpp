@@ -1,4 +1,4 @@
-#include "SoundSystem.h"
+#include "SoundMan.h"
 #include "util/Logger.h"
 #include "wz/WzProperty.h"
 #include "wz/WzResMan.h"
@@ -14,14 +14,14 @@
 namespace ms
 {
 
-SoundSystem::SoundSystem() = default;
+SoundMan::SoundMan() = default;
 
-SoundSystem::~SoundSystem()
+SoundMan::~SoundMan()
 {
     Shutdown();
 }
 
-auto SoundSystem::Initialize(std::uint32_t nChannels,
+auto SoundMan::Initialize(std::uint32_t nChannels,
                               std::uint32_t nSampleRate,
                               std::uint32_t nBitsPerSample) -> bool
 {
@@ -69,7 +69,7 @@ auto SoundSystem::Initialize(std::uint32_t nChannels,
     return true;
 }
 
-void SoundSystem::Shutdown()
+void SoundMan::Shutdown()
 {
     // Based on CSoundMan::Term (0xfb91f0)
 
@@ -101,7 +101,7 @@ void SoundSystem::Shutdown()
 
 // ========== BGM ==========
 
-void SoundSystem::PlayBGM(const std::string& sPath,
+void SoundMan::PlayBGM(const std::string& sPath,
                            std::int32_t nLoop,
                            std::uint32_t nStartVolume128,
                            std::uint32_t nEndVolume128,
@@ -178,7 +178,7 @@ void SoundSystem::PlayBGM(const std::string& sPath,
     }
 }
 
-void SoundSystem::StopBGM(std::uint32_t nFadeOutTime)
+void SoundMan::StopBGM(std::uint32_t nFadeOutTime)
 {
     if (!m_pBGMState)
     {
@@ -212,7 +212,7 @@ void SoundSystem::StopBGM(std::uint32_t nFadeOutTime)
     }
 }
 
-void SoundSystem::SetBGMVolume(std::uint32_t nVolume, std::uint32_t nFadingDuration)
+void SoundMan::SetBGMVolume(std::uint32_t nVolume, std::uint32_t nFadingDuration)
 {
     // Based on CSoundMan::SetBGMVolume (0xfb9670)
     // Also updates ambient sound volumes
@@ -239,13 +239,13 @@ void SoundSystem::SetBGMVolume(std::uint32_t nVolume, std::uint32_t nFadingDurat
     }
 }
 
-auto SoundSystem::GetBGMPosition() const -> std::uint32_t
+auto SoundMan::GetBGMPosition() const -> std::uint32_t
 {
     // TODO: Actual position tracking
     return 0;
 }
 
-void SoundSystem::SetBGMPosition(std::uint32_t nMs)
+void SoundMan::SetBGMPosition(std::uint32_t nMs)
 {
     // TODO: Actual seek implementation
     (void)nMs;
@@ -253,7 +253,7 @@ void SoundSystem::SetBGMPosition(std::uint32_t nMs)
 
 // ========== Sound Effects ==========
 
-auto SoundSystem::PlaySE(const std::string& sPath,
+auto SoundMan::PlaySE(const std::string& sPath,
                           std::uint32_t nStartVolume128,
                           std::int32_t nLoop,
                           std::int32_t nPan,
@@ -322,7 +322,7 @@ auto SoundSystem::PlaySE(const std::string& sPath,
     return cookie;
 }
 
-auto SoundSystem::PlaySafeSE(const std::string& sPath,
+auto SoundMan::PlaySafeSE(const std::string& sPath,
                               std::int32_t& rCookie,
                               std::uint32_t nStartVolume128,
                               std::int32_t nLoop) -> std::uint32_t
@@ -341,7 +341,7 @@ auto SoundSystem::PlaySafeSE(const std::string& sPath,
     return cookie;
 }
 
-void SoundSystem::StopSE(std::uint32_t nCookie, std::uint32_t nFadeOutTime)
+void SoundMan::StopSE(std::uint32_t nCookie, std::uint32_t nFadeOutTime)
 {
     // Based on CSoundMan::StopSE (0xfb9da0)
 
@@ -378,7 +378,7 @@ void SoundSystem::StopSE(std::uint32_t nCookie, std::uint32_t nFadeOutTime)
     (void)nFadeOutTime;
 }
 
-void SoundSystem::SetSEVolume(std::uint32_t nVolume)
+void SoundMan::SetSEVolume(std::uint32_t nVolume)
 {
     // Based on CSoundMan::SetSEVolume (0xfb9aa0)
 
@@ -399,7 +399,7 @@ void SoundSystem::SetSEVolume(std::uint32_t nVolume)
     }
 }
 
-void SoundSystem::FlushSECache(std::uint32_t nCount)
+void SoundMan::FlushSECache(std::uint32_t nCount)
 {
     // Based on CSoundMan::FlushSECache (0x5183a0)
     // Removes oldest entries from cache using min-heap
@@ -435,7 +435,7 @@ void SoundSystem::FlushSECache(std::uint32_t nCount)
 
 // ========== Ambient Sounds ==========
 
-auto SoundSystem::PlayAmbient(const std::string& sPath,
+auto SoundMan::PlayAmbient(const std::string& sPath,
                                std::uint32_t nVolumeRate,
                                std::uint32_t nFadeInTime) -> std::uint32_t
 {
@@ -516,7 +516,7 @@ auto SoundSystem::PlayAmbient(const std::string& sPath,
     return cookie;
 }
 
-void SoundSystem::StopAmbient(std::uint32_t nCookie, std::uint32_t nFadeOutTime)
+void SoundMan::StopAmbient(std::uint32_t nCookie, std::uint32_t nFadeOutTime)
 {
     // Based on CSoundMan::StopAmbient (0xfb9880)
 
@@ -582,7 +582,7 @@ void SoundSystem::StopAmbient(std::uint32_t nCookie, std::uint32_t nFadeOutTime)
     }
 }
 
-auto SoundSystem::IsAmbientSound(std::uint32_t nCookie) const -> bool
+auto SoundMan::IsAmbientSound(std::uint32_t nCookie) const -> bool
 {
     // Based on CSoundMan::IsAmbientSound (0xfb99e0)
     return m_mAmbientSound.find(nCookie) != m_mAmbientSound.end();
@@ -590,7 +590,7 @@ auto SoundSystem::IsAmbientSound(std::uint32_t nCookie) const -> bool
 
 // ========== Exclusive Sound Effects ==========
 
-void SoundSystem::PlayExclSE(const std::string& sPath, std::uint32_t nVolume128, bool bLoop)
+void SoundMan::PlayExclSE(const std::string& sPath, std::uint32_t nVolume128, bool bLoop)
 {
     // Based on CSoundMan::PlayExclSE (0x949e20)
 
@@ -630,7 +630,7 @@ void SoundSystem::PlayExclSE(const std::string& sPath, std::uint32_t nVolume128,
                                               bLoop);
 }
 
-void SoundSystem::StopExclSE()
+void SoundMan::StopExclSE()
 {
     // Based on CSoundMan::StopExclSE (0xfb7f50)
 
@@ -649,7 +649,7 @@ void SoundSystem::StopExclSE()
     }
 }
 
-auto SoundSystem::IsExclSEPlaying() const -> bool
+auto SoundMan::IsExclSEPlaying() const -> bool
 {
     // Based on CSoundMan::IsExclSEPlaying (0xfb7fd0)
     return m_pExclSEState && m_pExclSEState->bPlaying;
@@ -657,7 +657,7 @@ auto SoundSystem::IsExclSEPlaying() const -> bool
 
 // ========== Skill Voice ==========
 
-void SoundSystem::PlaySkillVoice(const std::string& sPath, std::uint32_t nVolume128, bool bLoop)
+void SoundMan::PlaySkillVoice(const std::string& sPath, std::uint32_t nVolume128, bool bLoop)
 {
     // Based on CSoundMan::PlaySkillVoice (0x19d3de0)
 
@@ -697,7 +697,7 @@ void SoundSystem::PlaySkillVoice(const std::string& sPath, std::uint32_t nVolume
                                              bLoop);
 }
 
-void SoundSystem::StopSkillVoice()
+void SoundMan::StopSkillVoice()
 {
     // Based on CSoundMan::StopSkillVoice (0xfb83b0)
 
@@ -716,13 +716,13 @@ void SoundSystem::StopSkillVoice()
     }
 }
 
-auto SoundSystem::IsSkillVoicePlaying() const -> bool
+auto SoundMan::IsSkillVoicePlaying() const -> bool
 {
     // Based on CSoundMan::IsSkillVoicePlaying (0xfb8080)
     return m_pVoiceState && m_pVoiceState->bPlaying;
 }
 
-void SoundSystem::SetSkillVoiceVolume(std::uint32_t nVolume)
+void SoundMan::SetSkillVoiceVolume(std::uint32_t nVolume)
 {
     // Based on CSoundMan::SetSkillVoiceVolume (0xfb8030)
 
@@ -743,7 +743,7 @@ void SoundSystem::SetSkillVoiceVolume(std::uint32_t nVolume)
 
 // ========== Update ==========
 
-void SoundSystem::Update()
+void SoundMan::Update()
 {
     // Called each frame to update sound states
     // Handle looping by refilling audio buffers
@@ -816,7 +816,7 @@ void SoundSystem::Update()
     UpdateFadeEffects();
 }
 
-void SoundSystem::UpdateFadeEffects()
+void SoundMan::UpdateFadeEffects()
 {
     auto currentTime = static_cast<std::uint32_t>(SDL_GetTicks());
 
@@ -917,7 +917,7 @@ void SoundSystem::UpdateFadeEffects()
 
 // ========== Private Methods ==========
 
-auto SoundSystem::LoadSoundFromWZ(const std::string& sPath) -> std::vector<std::uint8_t>
+auto SoundMan::LoadSoundFromWZ(const std::string& sPath) -> std::vector<std::uint8_t>
 {
     // Load audio data from WZ files
     // Sound files in WZ are typically in "Sound/..." paths
@@ -956,7 +956,7 @@ auto SoundSystem::LoadSoundFromWZ(const std::string& sPath) -> std::vector<std::
     return data;
 }
 
-auto SoundSystem::GetOrCreateCachedSE(const std::string& sPath) -> SECacheItem*
+auto SoundMan::GetOrCreateCachedSE(const std::string& sPath) -> SECacheItem*
 {
     // Check if already cached
     auto it = m_mposSECache.find(sPath);
@@ -994,7 +994,7 @@ auto SoundSystem::GetOrCreateCachedSE(const std::string& sPath) -> SECacheItem*
     return &m_heapSECache.back();
 }
 
-auto SoundSystem::DecodeMP3(const std::vector<std::uint8_t>& mp3Data) -> DecodedAudio
+auto SoundMan::DecodeMP3(const std::vector<std::uint8_t>& mp3Data) -> DecodedAudio
 {
     DecodedAudio result;
 
@@ -1050,7 +1050,7 @@ auto SoundSystem::DecodeMP3(const std::vector<std::uint8_t>& mp3Data) -> Decoded
     return result;
 }
 
-auto SoundSystem::PlayAudio(const DecodedAudio& audio, int volume, bool loop) -> SDL_AudioStream*
+auto SoundMan::PlayAudio(const DecodedAudio& audio, int volume, bool loop) -> SDL_AudioStream*
 {
     if (audio.samples.empty() || audio.channels == 0 || audio.sampleRate == 0)
     {
@@ -1103,7 +1103,7 @@ auto SoundSystem::PlayAudio(const DecodedAudio& audio, int volume, bool loop) ->
     return stream;
 }
 
-void SoundSystem::DestroyAudioStream(SDL_AudioStream* stream)
+void SoundMan::DestroyAudioStream(SDL_AudioStream* stream)
 {
     if (stream)
     {

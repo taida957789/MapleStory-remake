@@ -5,10 +5,8 @@
 #include "GW_ItemSlotEquipBase.h"
 #include "GW_ItemSlotEquipOpt.h"
 
-#include <algorithm>
 #include <array>
 #include <cstdint>
-#include <cstring>
 #include <string>
 
 namespace ms
@@ -56,12 +54,7 @@ public:
         return std::string(sTitle.data());
     }
 
-    void SetItemTitle(const std::string& s) override
-    {
-        auto len = std::min(s.size(), sTitle.size() - 1);
-        std::memcpy(sTitle.data(), s.data(), len);
-        sTitle[len] = '\0';
-    }
+    void SetItemTitle(const std::string& s) override;
 
     // === Grade / Look ===
     [[nodiscard]] auto GetItemGrade() -> std::uint8_t override
@@ -69,14 +62,7 @@ public:
         return option.nGrade.Get() & EquipGradeFlag::GradeMask;
     }
 
-    [[nodiscard]] auto GetLookItemID() -> std::int32_t override
-    {
-        auto nOpt5 = option.nOption5.Get();
-        if (nOpt5 == 0)
-            return static_cast<std::int32_t>(nItemID);
-        auto nID = static_cast<std::int32_t>(nItemID);
-        return 10000 * (nID / 10000) + nOpt5 % 10000;
-    }
+    [[nodiscard]] auto GetLookItemID() -> std::int32_t override;
 
     [[nodiscard]] auto IsLookChangeItem() -> std::int32_t override
     {
@@ -88,44 +74,12 @@ public:
         return option.nOption4.Get() != 0;
     }
 
-    [[nodiscard]] auto GetAdditionalGrade() -> std::int32_t override
-    {
-        auto nOpt4 = option.nOption4.Get();
-        if (nOpt4 >= 10)
-            return nOpt4 / 10000;
-        return nOpt4;
-    }
+    [[nodiscard]] auto GetAdditionalGrade() -> std::int32_t override;
 
     // === Growth / PS enchant ===
-    [[nodiscard]] auto GetGrowthEnchantID() -> std::int32_t override
-    {
-        auto nVal = item.nGrowthEnchant.Get();
-        if (nVal == 0)
-            return 0;
-        if (nVal <= 100)
-            return nVal + 2048499;
-        return nVal - 100 + 2048499;
-    }
-
-    void SetGrowthEnchantID(std::int32_t nGrowthEnchantID, std::int32_t nLevelUpType) override
-    {
-        if (nGrowthEnchantID != 0 && item.nLevel.Get() == 0)
-        {
-            item.nGrowthEnchant.Put(static_cast<std::uint8_t>(nGrowthEnchantID + 13));
-            item.nLevel.Put(1);
-            item.nLevelUpType.Put(static_cast<std::uint8_t>(nLevelUpType));
-        }
-    }
-
-    [[nodiscard]] auto GetPSEnchantID() -> std::int32_t override
-    {
-        auto nVal = item.nPSEnchant.Get();
-        if (nVal == 0)
-            return 0;
-        if (nVal <= 100)
-            return nVal + 2048599;
-        return nVal - 100 + 2048599;
-    }
+    [[nodiscard]] auto GetGrowthEnchantID() -> std::int32_t override;
+    void SetGrowthEnchantID(std::int32_t nGrowthEnchantID, std::int32_t nLevelUpType) override;
+    [[nodiscard]] auto GetPSEnchantID() -> std::int32_t override;
 
     void SetPSEnchantID(std::int32_t nPSEnchantID) override
     {
@@ -263,13 +217,7 @@ public:
         return item.nCuttable.Get() != 0 && item.nCuttable.Get() <= 20;
     }
 
-    auto DecCuttableCount() -> bool override
-    {
-        if (item.nCuttable.Get() == 0)
-            return false;
-        item.nCuttable.Put(item.nCuttable.Get() - 1);
-        return true;
-    }
+    auto DecCuttableCount() -> bool override;
 
     // === nItemState — gacha/refund ===
     [[nodiscard]] auto IsRefunableGachaponItem() -> bool override
@@ -292,6 +240,10 @@ public:
         item.nItemState.Put(item.nItemState.Get() | EquipItemStateFlag::RefunableEventGachapon);
     }
 
+    // === Serialization ===
+    void RawDecode(InPacket& iPacket) override;
+    void RawEncode(OutPacket& oPacket, bool bToClient) override;
+
     // === Set item ===
     [[nodiscard]] auto IsSetItem() -> std::int32_t override;
     [[nodiscard]] auto GetSetItemID() -> std::int32_t override;
@@ -307,14 +259,7 @@ public:
         return (option.nGrade.Get() & EquipGradeFlag::AdditionalNotReleased) == 0;
     }
 
-    virtual void SetReleased(std::int32_t bReleased)
-    {
-        auto nGrade = option.nGrade.Get();
-        if (bReleased)
-            option.nGrade.Put(nGrade | EquipGradeFlag::Released);
-        else
-            option.nGrade.Put(nGrade & ~EquipGradeFlag::Released);
-    }
+    virtual void SetReleased(std::int32_t bReleased);
 
     [[nodiscard]] virtual auto GetIUC() const -> std::int32_t
     {
@@ -391,72 +336,15 @@ public:
     }
 
     // === Non-virtual methods — grade manipulation ===
-    void SetAdditionalReleased(std::int32_t bReleased)
-    {
-        auto nGrade = option.nGrade.Get();
-        if (bReleased)
-            option.nGrade.Put(nGrade & ~EquipGradeFlag::AdditionalNotReleased);
-        else
-            option.nGrade.Put(nGrade | EquipGradeFlag::AdditionalNotReleased);
-    }
-
-    [[nodiscard]] auto GetCubeExOptLv() const -> std::int32_t
-    {
-        if (item.nAttribute.Get() & EquipAttr::CubeExOpt2)
-            return 2;
-        return (item.nAttribute.Get() & EquipAttr::CubeExOpt1) >> 10;
-    }
+    void SetAdditionalReleased(std::int32_t bReleased);
+    [[nodiscard]] auto GetCubeExOptLv() const -> std::int32_t;
 
     // === Non-virtual methods — potential options ===
-    [[nodiscard]] auto GetPotentialOption(std::int32_t nIdx) const -> std::uint16_t
-    {
-        switch (nIdx)
-        {
-        case 0: return option.nOption1.Get();
-        case 1: return option.nOption2.Get();
-        case 2: return option.nOption3.Get();
-        case 3: return option.nOption4.Get();
-        case 4: return option.nOption6.Get();
-        case 5: return option.nOption7.Get();
-        default: return 0;
-        }
-    }
-
-    void SetPotentialOption(std::int32_t nIdx, std::uint16_t usOption)
-    {
-        switch (nIdx)
-        {
-        case 0: option.nOption1.Put(usOption); break;
-        case 1: option.nOption2.Put(usOption); break;
-        case 2: option.nOption3.Put(usOption); break;
-        case 3: option.nOption4.Put(usOption); break;
-        case 4: option.nOption6.Put(usOption); break;
-        case 5: option.nOption7.Put(usOption); break;
-        default: break;
-        }
-    }
-
-    void ResetItemGrade()
-    {
-        SetReleased(0);
-        option.nGrade.Put(option.nGrade.Get() & 0xF0); // clear grade, keep flags
-        for (std::int32_t i = 0; i < 3; ++i)
-            SetPotentialOption(i, 0);
-    }
-
-    void ResetAdditionalGrade()
-    {
-        option.nGrade.Put(option.nGrade.Get() & ~EquipGradeFlag::AdditionalNotReleased);
-        for (std::int32_t i = 3; i < 6; ++i)
-            SetPotentialOption(i, 0);
-    }
-
-    void ResetSoulSocketAndOption()
-    {
-        option.nSoulOption.Put(0);
-        option.nSoulOptionID.Put(0);
-        option.nSoulSocketID.Put(0);
-    }
+    [[nodiscard]] auto GetPotentialOption(std::int32_t nIdx) const -> std::uint16_t;
+    void SetPotentialOption(std::int32_t nIdx, std::uint16_t usOption);
+    void ResetItemGrade();
+    void ResetAdditionalGrade();
+    void ResetSoulSocketAndOption();
 
     // === Non-virtual methods — nItemState queries ===
     [[nodiscard]] auto IsRedLabelItem() const -> bool

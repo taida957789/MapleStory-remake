@@ -2,7 +2,7 @@
 
 #include "util/FileTime.h"
 #include "util/security/TSecType.h"
-
+#include "templates/item/ItemHelper.h"
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -146,33 +146,9 @@ public:
     [[nodiscard]] auto IsCashItem() const noexcept -> bool { return liCashItemSN != 0; }
     [[nodiscard]] auto IsTimeLimitedItem() const noexcept -> bool { return dateExpire < kDbDate20790101; }
     [[nodiscard]] auto GetBagIndex() const noexcept -> std::int32_t { return nBagIndex; }
-    [[nodiscard]] auto GetTypeIndex() const -> std::int32_t { return static_cast<std::int32_t>(nItemID) / 1000000; }
+    [[nodiscard]] auto GetTypeIndex() const -> std::int32_t { return helper::GetItemType(nItemID); }
 
-    [[nodiscard]] auto IsBagOpened() const -> bool
-    {
-        auto nID = static_cast<std::int32_t>(nItemID);
-        auto nCategory = nID / 10000;
-        if ((nCategory == 265 || nCategory == 308 || nCategory == 433) && nBagIndex > -1)
-        {
-            std::int32_t nMaxBag;
-            auto nType = nID / 1000000;
-            switch (nType)
-            {
-            case 2: // Consume
-            case 3: // Setup
-                nMaxBag = 2;
-                break;
-            case 4: // Etc
-                nMaxBag = 7;
-                break;
-            default:
-                nMaxBag = 0;
-                break;
-            }
-            return nBagIndex < nMaxBag;
-        }
-        return false;
-    }
+    [[nodiscard]] auto IsBagOpened() const -> bool;
 
     // === Data members ===
     TSecType<std::int32_t> nItemID;

@@ -16,7 +16,7 @@ class Stage;
 class WvsContext;
 class Configuration;
 class InputSystem;
-class SoundSystem;
+class SoundMan;
 class WzResMan;
 class ClientSocket;
 class WzGr2D;

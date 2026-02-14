@@ -76,9 +76,66 @@ struct EquipItemStateFlag
  * Based on GW_ItemSlotEquipBase from the original MapleStory client.
  * Size: 310 bytes (0x136). All fields are ZtlSecureTear-protected.
  */
+class InPacket;
+class OutPacket;
+
 class GW_ItemSlotEquipBase
 {
 public:
+    struct StatFlag1
+    {
+        enum : std::uint32_t
+        {
+            RUC              = 0x00000001,
+            CUC              = 0x00000002,
+            iSTR             = 0x00000004,
+            iDEX             = 0x00000008,
+            iINT             = 0x00000010,
+            iLUK             = 0x00000020,
+            iMaxHP           = 0x00000040,
+            iMaxMP           = 0x00000080,
+            iPAD             = 0x00000100,
+            iMAD             = 0x00000200,
+            iPDD             = 0x00000400,
+            iMDD             = 0x00000800,
+            iACC             = 0x00001000,
+            iEVA             = 0x00002000,
+            iCraft           = 0x00004000,
+            iSpeed           = 0x00008000,
+            iJump            = 0x00010000,
+            Attribute        = 0x00020000,
+            LevelUpType      = 0x00040000,
+            Level            = 0x00080000,
+            EXP64            = 0x00100000,
+            Durability       = 0x00200000,
+            IUC              = 0x00400000,
+            iPVPDamage       = 0x00800000,
+            iReduceReq       = 0x01000000,
+            SpecialAttribute = 0x02000000,
+            DurabilityMax    = 0x04000000,
+            iIncReq          = 0x08000000,
+            GrowthEnchant    = 0x10000000,
+            PSEnchant        = 0x20000000,
+            BDR              = 0x40000000,
+            IMDR             = 0x80000000,
+        };
+    };
+
+    struct StatFlag2
+    {
+        enum : std::uint32_t
+        {
+            DamR           = 0x01,
+            StatR          = 0x02,
+            Cuttable       = 0x04,
+            ExGradeOption  = 0x08,
+            ItemState      = 0x10,
+        };
+    };
+
+    void Decode(InPacket& iPacket);
+    void Encode(OutPacket& oPacket) const;
+
     ZtlSecureTear<std::uint8_t> nRUC;              // Remaining upgrade count
     ZtlSecureTear<std::uint8_t> nCUC;              // Completed upgrade count
     ZtlSecureTear<std::int16_t> niSTR;

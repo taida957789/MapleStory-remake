@@ -36,9 +36,9 @@ void Login::Init(void* param)
     MapLoadable::Init(param);
 
     // Reset state
-    m_nMagLevelObj = 0;
-    m_nMagLevelBack = 0;
-    m_nMagLevelSkillEffect = 0;
+    m_nMagLevel_Obj = 0;
+    m_nMagLevel_Back = 0;
+    m_nMagLevel_SkillEffect = 0;
 
     // Load login resources (UI/LoginBack.img and UI/Login.img)
     LoadLoginResources();

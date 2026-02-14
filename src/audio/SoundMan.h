@@ -128,9 +128,9 @@ struct SoundState
  * - m_mposSECache: Map for SE cache positions
  * - m_mpLoopingStates: Map of looping sound states
  */
-class SoundSystem final : public Singleton<SoundSystem>
+class SoundMan final : public Singleton<SoundMan>
 {
-    friend class Singleton<SoundSystem>;
+    friend class Singleton<SoundMan>;
 
 public:
     /**
@@ -378,8 +378,8 @@ public:
     void Update();
 
 private:
-    SoundSystem();
-    ~SoundSystem() override;
+    SoundMan();
+    ~SoundMan() override;
 
     /**
      * @brief Load sound data from WZ
