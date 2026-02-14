@@ -278,12 +278,44 @@ auto WzResMan::GetProperty(const std::string& path) -> std::shared_ptr<WzPropert
 {
     auto node = GetNode(path);
     if (!node)
-    {
         return nullptr;
+
+    // Direct WzProperty match
+    if (auto prop = std::dynamic_pointer_cast<WzProperty>(node))
+        return prop;
+
+    // WzImage: load and wrap as root WzProperty
+    // This handles paths like "Character/Weapon/01302000.img" where the
+    // terminal node is a WzImage rather than a WzProperty.
+    auto img = std::dynamic_pointer_cast<WzImage>(node);
+    if (!img)
+        return nullptr;
+
+    if (!img->IsLoaded())
+    {
+        // Parse WZ source name from path (first segment)
+        std::string wzName;
+        auto slashPos = path.find('/');
+        if (slashPos != std::string::npos)
+            wzName = path.substr(0, slashPos);
+        else
+            wzName = path;
+
+        if (wzName.size() > 3 && wzName.substr(wzName.size() - 3) == ".wz")
+            wzName = wzName.substr(0, wzName.size() - 3);
+
+        auto wzSource = GetWzSource(wzName);
+        if (!wzSource || !wzSource->LoadImage(img.get()))
+            return nullptr;
     }
 
-    // Use dynamic_pointer_cast for type-safe downcasting
-    return std::dynamic_pointer_cast<WzProperty>(node);
+    // Create a root WzProperty wrapping the image's properties
+    auto rootProp = std::make_shared<WzProperty>(img->GetName());
+    for (const auto& [name, child] : img->GetProperties())
+    {
+        rootProp->AddChild(child);
+    }
+    return rootProp;
 }
 
 auto WzResMan::LoadWzFile(const std::string& name) -> bool

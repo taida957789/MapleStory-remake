@@ -51,17 +51,14 @@ TEST_F(ItemInfoTest, GetItemProp_Equip_ReturnsNonNull)
     auto& info = ItemInfo::GetInstance();
     // 1302000 = common one-handed sword (Blue Duo)
     auto pProp = info.GetItemProp(1302000);
-    if (!pProp)
-        GTEST_SKIP() << "WzResMan cannot resolve Character sub-package paths";
-    EXPECT_NE(pProp, nullptr);
+    ASSERT_NE(pProp, nullptr) << "GetItemProp(1302000) should return a valid WZ property";
 }
 
 TEST_F(ItemInfoTest, GetItemProp_Equip_HasInfoChild)
 {
     auto& info = ItemInfo::GetInstance();
     auto pProp = info.GetItemProp(1302000);
-    if (!pProp)
-        GTEST_SKIP() << "WzResMan cannot resolve Character sub-package paths";
+    ASSERT_NE(pProp, nullptr);
 
     auto pInfo = pProp->GetChild("info");
     EXPECT_NE(pInfo, nullptr) << "Equip property should have an 'info' child";
@@ -108,8 +105,7 @@ TEST_F(ItemInfoTest, GetEquipItem_ValidSword)
 {
     auto& info = ItemInfo::GetInstance();
     auto* pEquip = info.GetEquipItem(1302000);
-    if (!pEquip)
-        GTEST_SKIP() << "WzResMan cannot resolve Character sub-package paths";
+    ASSERT_NE(pEquip, nullptr) << "GetEquipItem(1302000) should return non-null";
 
     EXPECT_EQ(pEquip->nItemID, 1302000);
 }
@@ -118,8 +114,7 @@ TEST_F(ItemInfoTest, GetEquipItem_HasBasicStats)
 {
     auto& info = ItemInfo::GetInstance();
     auto* pEquip = info.GetEquipItem(1302000);
-    if (!pEquip)
-        GTEST_SKIP() << "WzResMan cannot resolve Character sub-package paths";
+    ASSERT_NE(pEquip, nullptr);
 
     // A weapon should have some PAD (physical attack)
     EXPECT_GT(pEquip->niPAD, 0) << "Weapon should have positive physical attack";
@@ -129,10 +124,9 @@ TEST_F(ItemInfoTest, GetEquipItem_CacheConsistency)
 {
     auto& info = ItemInfo::GetInstance();
     auto* pFirst = info.GetEquipItem(1302000);
-    if (!pFirst)
-        GTEST_SKIP() << "WzResMan cannot resolve Character sub-package paths";
-
     auto* pSecond = info.GetEquipItem(1302000);
+
+    ASSERT_NE(pFirst, nullptr);
     EXPECT_EQ(pFirst, pSecond) << "Cache should return the same pointer";
 }
 
@@ -330,8 +324,7 @@ TEST_F(ItemInfoTest, EquipItem_FieldsPopulated)
 {
     auto& info = ItemInfo::GetInstance();
     auto* pEquip = info.GetEquipItem(1302000);
-    if (!pEquip)
-        GTEST_SKIP() << "Item 1302000 not found in WZ data";
+    ASSERT_NE(pEquip, nullptr) << "Item 1302000 should be loadable from WZ data";
 
     // Print discovered values for debugging
     std::cout << "=== Equip 1302000 ===" << std::endl;
