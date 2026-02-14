@@ -1,6 +1,6 @@
 #pragma once
 
-#include "ItemInfoTypes.h"
+#include "ItemHelper.h"
 
 #include "util/Point.h"
 #include "util/Singleton.h"

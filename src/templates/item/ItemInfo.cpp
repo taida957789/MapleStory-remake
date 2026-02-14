@@ -5,6 +5,7 @@
 #include "wz/WzProperty.h"
 #include "wz/WzResMan.h"
 
+#include <algorithm>
 #include <cstdio>
 
 namespace ms
@@ -25,15 +26,15 @@ auto format_item_id(std::int32_t nItemID) -> std::string
 /// Pattern: "Item/{Consume,Install,Etc,Cash}/0{prefix}.img/0{itemID}"
 auto get_bundle_data_path(std::int32_t nItemID) -> std::string
 {
-    auto nType = ItemType::GetItemType(nItemID);
+    auto nType = helper::GetItemType(nItemID);
 
     const char* sCategory = nullptr;
     switch (nType)
     {
-    case ItemType::kConsume: sCategory = "Consume"; break;
-    case ItemType::kInstall: sCategory = "Install"; break;
-    case ItemType::kEtc:     sCategory = "Etc";     break;
-    case ItemType::kCash:    sCategory = "Cash";    break;
+    case helper::kConsume: sCategory = "Consume"; break;
+    case helper::kInstall: sCategory = "Install"; break;
+    case helper::kEtc:     sCategory = "Etc";     break;
+    case helper::kCash:    sCategory = "Cash";    break;
     default: return {};
     }
 
@@ -89,9 +90,9 @@ auto get_pet_data_path(std::int32_t nItemID) -> std::string
 auto ItemInfo::GetItemProp(std::int32_t nItemID) const -> std::shared_ptr<WzProperty>
 {
     auto& wzResMan = WzResMan::GetInstance();
-    auto nType = ItemType::GetItemType(nItemID);
+    auto nType = helper::GetItemType(nItemID);
 
-    if (nType == ItemType::kEquip)
+    if (nType == helper::kEquip)
     {
         // Equip items and face/hair: resolve via equip data path
         auto sPath = get_equip_data_path(nItemID);
@@ -101,7 +102,7 @@ auto ItemInfo::GetItemProp(std::int32_t nItemID) const -> std::shared_ptr<WzProp
     }
 
     // Pet items (cash type, slot type 3): "Item/Pet/%07d.img"
-    if (nType == ItemType::kCash && nItemID / 10000 > 3)
+    if (nType == helper::kCash && nItemID / 10000 > 3)
     {
         auto sPath = get_pet_data_path(nItemID);
         auto pProp = wzResMan.GetProperty(sPath);
@@ -291,8 +292,15 @@ auto ItemInfo::GetBundleItem(std::int32_t nItemID) -> const BundleItem*
     pBundle->nBagType = get_child_int(pInfo, "bagType");
 
     // --- Level / Time limits ---
-    pBundle->nLimitMin = get_child_int(pInfo, "limitMin");
-    pBundle->nLimitSec = get_child_int(pInfo, "limitSec");
+    // Original @ 0xAF57A0: only read for Use items (type 2), category 414,
+    // or get_etc_cash_item_type() == 7. Values clamped to >= 0.
+    auto nCategory = nItemID / 10000;
+    if (helper::GetItemType(nItemID) == helper::kConsume || nCategory == 414
+        /* TODO: || get_etc_cash_item_type(nItemID) == 7 */)
+    {
+        pBundle->nLimitMin = std::max(0, get_child_int(pInfo, "limitMin"));
+        pBundle->nLimitSec = std::max(0, get_child_int(pInfo, "limitSec"));
+    }
 
     // Insert into cache and return
     auto [inserted, _] = m_mBundleItem.emplace(nItemID, std::move(pBundle));
@@ -304,7 +312,7 @@ auto ItemInfo::GetBundleItem(std::int32_t nItemID) -> const BundleItem*
 // ============================================================
 auto ItemInfo::GetSetItemID(std::int32_t nItemID) -> std::int32_t
 {
-    if (ItemType::IsEquipItemID(nItemID))
+    if (helper::IsEquipItemID(nItemID))
     {
         auto* pEquip = GetEquipItem(nItemID);
         return pEquip ? pEquip->nSetItemID : 0;
@@ -317,7 +325,7 @@ auto ItemInfo::GetSetItemID(std::int32_t nItemID) -> std::int32_t
 // ============================================================
 auto ItemInfo::GetItemName(std::int32_t nItemID) -> std::string
 {
-    if (ItemType::IsEquipItemID(nItemID))
+    if (helper::IsEquipItemID(nItemID))
     {
         auto* pEquip = GetEquipItem(nItemID);
         return pEquip ? pEquip->sItemName : std::string{};
@@ -332,7 +340,7 @@ auto ItemInfo::GetItemName(std::int32_t nItemID) -> std::string
 // ============================================================
 auto ItemInfo::IsCashItem(std::int32_t nItemID) -> bool
 {
-    if (ItemType::IsEquipItemID(nItemID))
+    if (helper::IsEquipItemID(nItemID))
     {
         auto* pEquip = GetEquipItem(nItemID);
         return pEquip ? pEquip->bCash != 0 : false;
@@ -347,7 +355,7 @@ auto ItemInfo::IsCashItem(std::int32_t nItemID) -> bool
 // ============================================================
 auto ItemInfo::IsQuestItem(std::int32_t nItemID) -> bool
 {
-    if (ItemType::IsEquipItemID(nItemID))
+    if (helper::IsEquipItemID(nItemID))
     {
         auto* pEquip = GetEquipItem(nItemID);
         return pEquip ? pEquip->bQuest != 0 : false;
@@ -362,7 +370,7 @@ auto ItemInfo::IsQuestItem(std::int32_t nItemID) -> bool
 // ============================================================
 auto ItemInfo::IsTradeBlockItem(std::int32_t nItemID) -> bool
 {
-    if (ItemType::IsEquipItemID(nItemID))
+    if (helper::IsEquipItemID(nItemID))
     {
         auto* pEquip = GetEquipItem(nItemID);
         return pEquip ? pEquip->bTradeBlock != 0 : false;
@@ -377,7 +385,7 @@ auto ItemInfo::IsTradeBlockItem(std::int32_t nItemID) -> bool
 // ============================================================
 auto ItemInfo::GetRequiredLEV(std::int32_t nItemID) -> std::int32_t
 {
-    if (ItemType::IsEquipItemID(nItemID))
+    if (helper::IsEquipItemID(nItemID))
     {
         auto* pEquip = GetEquipItem(nItemID);
         return pEquip ? pEquip->nrLevel : 0;
@@ -416,7 +424,7 @@ auto ItemInfo::GetItemInfo(std::int32_t nItemID) const -> std::shared_ptr<WzProp
 auto ItemInfo::GetItemDesc(std::int32_t nItemID) -> std::string
 {
     // TODO: replace with GetItemString(nItemID, "desc") when implemented
-    if (ItemType::IsEquipItemID(nItemID))
+    if (helper::IsEquipItemID(nItemID))
     {
         auto* pEquip = GetEquipItem(nItemID);
         return pEquip ? pEquip->sDesc : std::string{};
@@ -493,7 +501,7 @@ auto ItemInfo::IsCashItem(const GW_ItemSlotBase& item) -> bool
 // ============================================================
 auto ItemInfo::GetItemCoolTime(std::int32_t nItemID, std::int32_t& nLimitMin, std::int32_t& nLimitSec) -> bool
 {
-    if (ItemType::GetItemType(nItemID) == ItemType::kCash)
+    if (helper::GetItemType(nItemID) == helper::kCash)
     {
         auto pInfo = GetItemInfo(nItemID);
         if (!pInfo)

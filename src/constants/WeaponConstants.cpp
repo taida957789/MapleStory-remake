@@ -1,12 +1,14 @@
 #include "WeaponConstants.h"
 
+#include "templates/item/ItemHelper.h"
+
 namespace ms
 {
 
 std::int32_t get_weapon_type(std::int32_t nItemID)
 {
     // Only equipment items (1xxxxxxx)
-    if (nItemID / 1000000 != 1)
+    if (helper::GetItemType(nItemID) != helper::kEquip)
         return 0;
 
     auto weaponCode = nItemID / 10000 % 100;
