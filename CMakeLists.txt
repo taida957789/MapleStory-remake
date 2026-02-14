@@ -133,6 +133,7 @@ set(SOURCES
     src/models/GW_ItemSlotEquip.cpp
     src/models/GW_ItemSlotPet.cpp
     src/sdk/spine-c/SkeletonAnimation.cpp
+    src/sdk/spine-c/SpineSkeletonBinary.cpp
     src/sdk/spine-c/SpineExtension.cpp
 )
 
@@ -214,6 +215,8 @@ set(HEADERS
     src/templates/item/ItemName.h
     src/constants/WeaponConstants.h
     src/sdk/spine-c/SkeletonAnimation.h
+    src/sdk/spine-c/BufferedStream.h
+    src/sdk/spine-c/SpineSkeletonBinary.h
 )
 
 add_executable(${PROJECT_NAME} ${SOURCES} ${HEADERS})
