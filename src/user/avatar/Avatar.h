@@ -65,6 +65,7 @@ public:
         std::vector<std::int32_t> aFrameDelay;
         std::int32_t tTotFrameDelay{0};
         std::int32_t nCurFrameIndex{0};
+        std::int32_t nCurTMFrameIndex{0};
         std::int32_t tCurFrameRemain{0};
         std::int32_t nRepeatFrame{0};
 
@@ -239,7 +240,14 @@ public:
         std::int32_t nRidingVehicleID,
         std::vector<std::int32_t>& aCustomRiding);
     [[nodiscard]] bool IsRidingEx() const;
+    [[nodiscard]] bool IsRidingWildHunterJaguar() const;
     void SetRidingEmotion(std::int32_t nVehicleID, CharacterAction nAction);
+
+    /// Convert a character action for the current riding state.
+    [[nodiscard]] auto ConvertCharacterAction(std::int32_t nAction) const -> std::int32_t;
+
+    /// Set flip state on all avatar rendering layers.
+    void AvatarLayerFlip(std::int32_t nFlip);
 
     // ========================================================================
     // Instance members (from decompiled CAvatar struct)

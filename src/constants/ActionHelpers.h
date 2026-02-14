@@ -48,6 +48,18 @@ void action_mapping_for_ghost(std::int32_t& nAction);
 /// Check if the action is a BattlePvP basic attack action.
 [[nodiscard]] bool is_battle_pvp_basic_attack_action(std::int32_t nAction);
 
+/// Check if the action is a BattlePvP rope action.
+[[nodiscard]] bool is_battle_pvp_rope_action(std::int32_t nAction);
+
+/// Check if the action is a BattlePvP walk action.
+[[nodiscard]] bool is_battle_pvp_walk_action(std::int32_t nAction);
+
+/// Check if the action is a BattlePvP stand action.
+[[nodiscard]] bool is_battle_pvp_stand_action(std::int32_t nAction);
+
+/// Check if the action is any stand-type action (Stand1, Stand2, ride stand, ghost stand, PvP stand).
+[[nodiscard]] bool is_stand_action(std::int32_t nAction);
+
 /// Check if a one-time action can be performed on a taming mob.
 [[nodiscard]] bool IsAbleTamingMobOneTimeAction(
     CharacterAction nAction, std::int32_t nVehicleID);

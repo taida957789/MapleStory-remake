@@ -211,6 +211,76 @@ bool is_battle_pvp_basic_attack_action(std::int32_t nAction)
     }
 }
 
+bool is_battle_pvp_rope_action(std::int32_t nAction)
+{
+    switch (nAction)
+    {
+    case 1053:
+    case 1066:
+    case 1078:
+    case 1091:
+    case 1102:
+    case 1115:
+    case 1127:
+    case 1141:
+        return true;
+    default:
+        return false;
+    }
+}
+
+bool is_battle_pvp_walk_action(std::int32_t nAction)
+{
+    switch (nAction)
+    {
+    case 1051:
+    case 1064:
+    case 1076:
+    case 1089:
+    case 1100:
+    case 1113:
+    case 1125:
+    case 1139:
+        return true;
+    default:
+        return false;
+    }
+}
+
+bool is_battle_pvp_stand_action(std::int32_t nAction)
+{
+    switch (nAction)
+    {
+    case 1052:
+    case 1065:
+    case 1077:
+    case 1090:
+    case 1101:
+    case 1114:
+    case 1126:
+    case 1140:
+        return true;
+    default:
+        return false;
+    }
+}
+
+bool is_stand_action(std::int32_t nAction)
+{
+    if (nAction >= 2 && nAction <= 3)
+        return true;
+    switch (nAction)
+    {
+    case 29:
+    case 133:
+    case 849:
+        return true;
+    default:
+        break;
+    }
+    return is_battle_pvp_stand_action(nAction);
+}
+
 bool IsAbleTamingMobOneTimeAction(
     CharacterAction /*nAction*/, std::int32_t /*nVehicleID*/)
 {

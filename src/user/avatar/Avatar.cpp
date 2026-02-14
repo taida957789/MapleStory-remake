@@ -1282,8 +1282,8 @@ void Avatar::SetEmotion(std::int32_t nEmotion, std::int32_t nDuration)
         if (this == static_cast<Avatar*>(pLocal))
         {
             auto& stat = WvsContext::GetInstance().GetSecondaryStat();
-            if (stat._ZtlSecureGet_nAttract_()
-                && stat._ZtlSecureGet_rAttract_() == 188)
+            if (stat.nAttract_.Get()
+                && stat.rAttract_.Get() == 188)
             {
                 return;
             }
@@ -1363,9 +1363,204 @@ void Avatar::PrepareJaguarCannonLayer()
     // TODO: implement jaguar cannon layer for Wild Hunter
 }
 
+// ============================================================================
+// IsRidingWildHunterJaguar — from CAvatar::IsRidingWildHunterJaguar @ 0x4b4420
+// ============================================================================
+
+bool Avatar::IsRidingWildHunterJaguar() const
+{
+    static constexpr std::int32_t kJaguarVehicles[] = {
+        1932015, 1932030, 1932031, 1932032, 1932033,
+        1932036, 1932100, 1932149, 1932215,
+    };
+    for (auto id : kJaguarVehicles)
+    {
+        if (m_nRidingVehicleID == id)
+            return true;
+    }
+    return false;
+}
+
+// ============================================================================
+// ConvertCharacterAction — from CAvatar::ConvertCharacterAction @ 0x5e91f0
+// ============================================================================
+
+auto Avatar::ConvertCharacterAction(std::int32_t nAction) const -> std::int32_t
+{
+    const auto u = static_cast<std::uint32_t>(nAction);
+
+    if (m_nRidingVehicleID == 1932051 || m_nRidingVehicleID == 1932085)
+    {
+        if (u < 2)
+            return 842;
+        if (nAction == 132)
+            return 842;
+        if (is_battle_pvp_walk_action(nAction))
+            return 842;
+        if (is_stand_action(nAction))
+            return 842;
+        return nAction;
+    }
+
+    // General riding mount
+    if ((u >= 2 && u <= 3)
+        || nAction == 849
+        || nAction == 29
+        || nAction == 133
+        || is_battle_pvp_stand_action(nAction)
+        || u < 2
+        || nAction == 132
+        || is_battle_pvp_walk_action(nAction)
+        || nAction == 25
+        || nAction == 59)
+    {
+        return 29;
+    }
+
+    if (IsRidingWildHunterJaguar() && nAction == 24)
+        return 60;
+
+    return nAction;
+}
+
+// ============================================================================
+// AvatarLayerFlip — from CAvatar::AvatarLayerFlip @ 0x5ea6e0
+// ============================================================================
+
+void Avatar::AvatarLayerFlip(std::int32_t nFlip)
+{
+    if (m_pLayerUnderFace)
+        m_pLayerUnderFace->put_flip(nFlip);
+    if (m_pLayerOverFace)
+        m_pLayerOverFace->put_flip(nFlip);
+    if (m_pLayerFace)
+        m_pLayerFace->put_flip(nFlip);
+    if (m_pLayerUnderCharacter)
+        m_pLayerUnderCharacter->put_flip(nFlip);
+    if (m_pLayerOverCharacter)
+        m_pLayerOverCharacter->put_flip(nFlip);
+    if (m_pLayerJaguarCannon)
+        m_pLayerJaguarCannon->put_flip(nFlip);
+    if (m_pLayerRocketBooster)
+        m_pLayerRocketBooster->put_flip(nFlip);
+}
+
+// ============================================================================
+// FixCharacterPosition — from CAvatar::FixCharacterPosition @ 0x5ec720
+// ============================================================================
+
 void Avatar::FixCharacterPosition()
 {
-    // TODO: implement character position fix after riding layer setup
+    if (m_bDelayedLoad)
+        return;
+
+    std::int32_t nDir = 0;
+    auto nCurrentAction = GetCurrentAction(&nDir, false);
+    auto nCharAction = ConvertCharacterAction(static_cast<std::int32_t>(nCurrentAction));
+
+    // Determine taming mob action
+    auto nTMAction = (m_nTamingMobOneTimeAction >= 0)
+        ? m_nTamingMobOneTimeAction
+        : m_nTamingMobAction;
+
+    // Select action info slots
+    auto nOneTime = GetOneTimeAction();
+    auto& aiChar = m_aiAction[static_cast<std::size_t>(
+        nOneTime != static_cast<CharacterAction>(-1) ? 1 : 0)];
+    auto& aiTM = m_aiAction[static_cast<std::size_t>(
+        m_nTamingMobOneTimeAction >= 0 ? 1 : 0)];
+
+    // Look up character action frames
+    auto itChar = aiChar.aaAction.find(nCharAction);
+    if (itChar == aiChar.aaAction.end() || itChar->second.empty())
+        return;
+    auto& aCharFrames = itChar->second;
+
+    // Look up taming mob action frames
+    auto itTM = aiTM.aaTamingMobAction.find(nTMAction);
+    if (itTM == aiTM.aaTamingMobAction.end() || itTM->second.empty())
+        return;
+    auto& aTMFrames = itTM->second;
+
+    // Get current character frame entry
+    auto nCharIdx = static_cast<std::size_t>(aiChar.nCurFrameIndex);
+    if (nCharIdx >= aCharFrames.size() || !aCharFrames[nCharIdx])
+        return;
+    auto& charFE = *aCharFrames[nCharIdx];
+
+    // Read character brow point
+    auto ptBrow = charFE.ptBrow;
+
+    // Compute body offset from taming mob
+    std::int32_t dx = 0;
+    std::int32_t dy = 0;
+    Point2D ptMuzzle{};
+    Point2D ptHand{};
+    Point2D ptNavel{};
+    Point2D ptTMNavel{};
+    Point2D ptTMHead{};
+    Point2D ptTMMuzzle{};
+
+    auto nTMIdx = static_cast<std::size_t>(aiTM.nCurTMFrameIndex);
+    if (nTMIdx < aTMFrames.size() && aTMFrames[nTMIdx])
+    {
+        auto& tmFE = *aTMFrames[nTMIdx];
+
+        dx = tmFE.ptNavel.x - charFE.ptNavel.x;
+        dy = tmFE.ptNavel.y - charFE.ptNavel.y;
+        m_rcTamingMobBody = tmFE.rcBody;
+
+        ptTMNavel = tmFE.ptNavel;
+        ptTMHead = tmFE.ptHead;
+        ptTMMuzzle = tmFE.ptMuzzle;
+        ptMuzzle = charFE.ptMuzzle;
+        ptHand = charFE.ptHand;
+        ptNavel = charFE.ptNavel;
+    }
+
+    // Determine flip direction
+    bool bFlipRight = (nDir != 0)
+        || nCharAction == 30
+        || nCharAction == 31
+        || nCharAction == 138
+        || nCharAction == 137
+        || is_battle_pvp_rope_action(nCharAction)
+        || nCharAction == 1011
+        || nCharAction == 1012
+        || nCharAction == 67
+        || nCharAction == 68;
+
+    if (bFlipRight)
+    {
+        AvatarLayerFlip(0);
+        m_pFaceOrigin->RelMove(ptBrow.x, ptBrow.y);
+        m_pBodyOrigin->RelMove(dx, dy);
+        m_ptBodyRelMove.x = dx;
+        m_ptBodyRelMove.y = dy;
+        m_bFlip = false;
+    }
+    else
+    {
+        AvatarLayerFlip(1);
+        m_pFaceOrigin->RelMove(-ptBrow.x, ptBrow.y);
+        m_pBodyOrigin->RelMove(-dx, dy);
+        m_ptBodyRelMove.x = -dx;
+        m_ptBodyRelMove.y = dy;
+        m_bFlip = true;
+    }
+
+    // Position remaining origins (negate x if flipped)
+    auto flipX = [this](std::int32_t x) { return m_bFlip ? -x : x; };
+
+    m_pMuzzleOrigin->RelMove(flipX(ptMuzzle.x), ptMuzzle.y);
+    m_pHandOrigin->RelMove(flipX(ptHand.x), ptHand.y);
+    m_pTailOrigin->RelMove(flipX(ptNavel.x), ptNavel.y);
+    m_pTMNavelOrigin->RelMove(flipX(ptTMNavel.x), ptTMNavel.y);
+    m_pTMHeadOrigin->RelMove(flipX(ptTMHead.x), ptTMHead.y);
+    m_pTMMuzzleOrigin->RelMove(flipX(ptTMMuzzle.x), ptTMMuzzle.y);
+
+    // Reset origin position and speed
+    m_pOrigin->RelMove(0, 0);
 }
 
 void Avatar::SetMechanicHUE(

@@ -24,6 +24,9 @@ struct TamingMobActionFrameEntry
     /// Frame display duration in milliseconds
     std::int32_t tDelay{150};
 
+    /// Body collision rectangle
+    Rect rcBody{};
+
     /// Attachment point origins
     Point2D ptNavel{0, 0};
     Point2D ptHead{0, 0};
