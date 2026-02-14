@@ -1324,9 +1324,12 @@ void Avatar::SetEmotion(std::int32_t nEmotion, std::int32_t nDuration)
         3, 0);
 }
 
-void Avatar::ClearActionLayer([[maybe_unused]] std::int32_t nSlot)
+void Avatar::ClearActionLayer(std::int32_t nSlot)
 {
-    // TODO: clear all cached frame data for the given slot
+    auto& ai = m_aiAction[static_cast<std::size_t>(nSlot)];
+    ai.aaAction.clear();
+    ai.aaTamingMobAction.clear();
+    ai.aAlpha.clear();
 }
 
 void Avatar::PrepareMorphActionLayer(

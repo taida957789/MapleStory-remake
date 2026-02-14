@@ -26,75 +26,6 @@ class WzGr2DCanvas;
 class WzGr2DLayer;
 
 /**
- * @brief Per-action rendering state (frame index, speed, layer info)
- *
- * Based on CAvatar::ACTIONINFO from the original MapleStory client.
- * Holds the current animation state for one action slot,
- * including cached frame data for all loaded actions.
- */
-struct ActionInfo
-{
-    // --- Current animation parameters ---
-    std::int32_t nActionSpeed{0};
-    std::int32_t nWalkSpeed{0};
-    std::int32_t nKeyDown{0};
-    std::int32_t nChangeWeapon{0};
-
-    // --- Per-action cached frame data ---
-    // Key: action code (CharacterAction enum value)
-    // Value: array of frame entries for that action
-    std::unordered_map<std::int32_t,
-        std::vector<std::shared_ptr<CharacterActionFrameEntry>>> aaAction;
-    std::unordered_map<std::int32_t,
-        std::vector<std::shared_ptr<TamingMobActionFrameEntry>>> aaTamingMobAction;
-
-    // --- Per-action alpha ---
-    std::unordered_map<std::int32_t, std::int32_t> aAlpha;
-
-    // --- Current frame playback state ---
-    std::vector<std::int32_t> aFrameDelay;
-    std::int32_t tTotFrameDelay{0};
-    std::int32_t nCurFrameIndex{0};
-    std::int32_t tCurFrameRemain{0};
-    std::int32_t nRepeatFrame{0};
-
-    /// Check if action frame data is already loaded for a given action
-    [[nodiscard]] bool HasAction(std::int32_t nAction) const
-    {
-        auto it = aaAction.find(nAction);
-        return it != aaAction.end() && !it->second.empty();
-    }
-
-    /// Check if taming mob frame data is already loaded for a given action
-    [[nodiscard]] bool HasTamingMobAction(std::int32_t nAction) const
-    {
-        auto it = aaTamingMobAction.find(nAction);
-        return it != aaTamingMobAction.end() && !it->second.empty();
-    }
-
-    /// Check if frame data uses extended frames (from CharacterImgEntry)
-    [[nodiscard]] bool IsExtendFrame(std::int32_t /*nOrigCount*/) const
-    {
-        // TODO: implement based on equipped item extendFrame flag
-        return false;
-    }
-};
-
-/**
- * @brief Albatross (Cygnus Knight) effect state
- *
- * Based on CAvatar::AlbatrossInfo from the original MapleStory client.
- * Manages the albatross companion rendering for Wind Archer.
- */
-struct AlbatrossInfo
-{
-    std::int32_t nState{0};
-    std::int32_t nAlbatrossID{0};
-    bool bApplied{false};
-    std::int32_t nFaceColor{-1};
-};
-
-/**
  * @brief Character avatar — visual representation and action state
  *
  * Based on CAvatar (__cppobj) from the original MapleStory client.
@@ -104,6 +35,75 @@ struct AlbatrossInfo
 class Avatar
 {
 public:
+    /**
+     * @brief Per-action rendering state (frame index, speed, layer info)
+     *
+     * Based on CAvatar::ACTIONINFO from the original MapleStory client.
+     * Holds the current animation state for one action slot,
+     * including cached frame data for all loaded actions.
+     */
+    struct ActionInfo
+    {
+        // --- Current animation parameters ---
+        std::int32_t nActionSpeed{0};
+        std::int32_t nWalkSpeed{0};
+        std::int32_t nKeyDown{0};
+        std::int32_t nChangeWeapon{0};
+
+        // --- Per-action cached frame data ---
+        // Key: action code (CharacterAction enum value)
+        // Value: array of frame entries for that action
+        std::unordered_map<std::int32_t,
+            std::vector<std::shared_ptr<CharacterActionFrameEntry>>> aaAction;
+        std::unordered_map<std::int32_t,
+            std::vector<std::shared_ptr<TamingMobActionFrameEntry>>> aaTamingMobAction;
+
+        // --- Per-action alpha ---
+        std::unordered_map<std::int32_t, std::int32_t> aAlpha;
+
+        // --- Current frame playback state ---
+        std::vector<std::int32_t> aFrameDelay;
+        std::int32_t tTotFrameDelay{0};
+        std::int32_t nCurFrameIndex{0};
+        std::int32_t tCurFrameRemain{0};
+        std::int32_t nRepeatFrame{0};
+
+        /// Check if action frame data is already loaded for a given action
+        [[nodiscard]] bool HasAction(std::int32_t nAction) const
+        {
+            auto it = aaAction.find(nAction);
+            return it != aaAction.end() && !it->second.empty();
+        }
+
+        /// Check if taming mob frame data is already loaded for a given action
+        [[nodiscard]] bool HasTamingMobAction(std::int32_t nAction) const
+        {
+            auto it = aaTamingMobAction.find(nAction);
+            return it != aaTamingMobAction.end() && !it->second.empty();
+        }
+
+        /// Check if frame data uses extended frames (from CharacterImgEntry)
+        [[nodiscard]] bool IsExtendFrame(std::int32_t /*nOrigCount*/) const
+        {
+            // TODO: implement based on equipped item extendFrame flag
+            return false;
+        }
+    };
+
+    /**
+     * @brief Albatross (Cygnus Knight) effect state
+     *
+     * Based on CAvatar::AlbatrossInfo from the original MapleStory client.
+     * Manages the albatross companion rendering for Wind Archer.
+     */
+    struct AlbatrossInfo
+    {
+        std::int32_t nState{0};
+        std::int32_t nAlbatrossID{0};
+        bool bApplied{false};
+        std::int32_t nFaceColor{-1};
+    };
+
     virtual ~Avatar() = default;
 
     // --- Virtual methods (from CAvatar_vtbl) ---
