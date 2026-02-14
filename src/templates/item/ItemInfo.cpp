@@ -296,7 +296,7 @@ auto ItemInfo::GetBundleItem(std::int32_t nItemID) -> const BundleItem*
     // or get_etc_cash_item_type() == 7. Values clamped to >= 0.
     auto nCategory = nItemID / 10000;
     if (helper::GetItemType(nItemID) == helper::kConsume || nCategory == 414
-        /* TODO: || get_etc_cash_item_type(nItemID) == 7 */)
+        || helper::get_etc_cash_item_type(nItemID) == 7)
     {
         pBundle->nLimitMin = std::max(0, get_child_int(pInfo, "limitMin"));
         pBundle->nLimitSec = std::max(0, get_child_int(pInfo, "limitSec"));

@@ -124,6 +124,7 @@ set(SOURCES
     src/constants/WeaponConstants.cpp
     src/templates/morph/MorphTemplate.cpp
     src/templates/item/ItemInfo.cpp
+    src/templates/item/ItemHelper.cpp
     src/models/GW_ItemSlotBase.cpp
     src/models/GW_ItemSlotBundle.cpp
     src/models/GW_ItemSlotEquip.cpp
