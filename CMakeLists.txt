@@ -54,18 +54,13 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(spdlog)
 
-# spine-c library (2.1.25)
-file(GLOB SPINE_C_SOURCES 3rdparty/spine-c/src/spine/*.c)
-add_library(spine-c STATIC ${SPINE_C_SOURCES})
-target_include_directories(spine-c PUBLIC ${CMAKE_SOURCE_DIR}/3rdparty/spine-c/include)
-# Suppress warnings for third-party C code
-target_compile_options(spine-c PRIVATE
-    $<$<C_COMPILER_ID:GNU,Clang>:-w>
-    $<$<C_COMPILER_ID:MSVC>:/W0>
-)
+# spine-c sources (2.1.25 + Nexon binary reader)
+file(GLOB SPINE_C_SOURCES src/sdk/spine-c/src/spine/*.c)
+set_source_files_properties(${SPINE_C_SOURCES} PROPERTIES COMPILE_OPTIONS "-w")
 
 # Source files
 set(SOURCES
+    ${SPINE_C_SOURCES}
     src/main.cpp
     src/app/Application.cpp
     src/app/Configuration.cpp
@@ -137,8 +132,8 @@ set(SOURCES
     src/models/GW_ItemSlotBase.cpp
     src/models/GW_ItemSlotEquip.cpp
     src/models/GW_ItemSlotPet.cpp
-    src/spine/SkeletonAnimation.cpp
-    src/spine/SpineExtension.cpp
+    src/sdk/spine-c/SkeletonAnimation.cpp
+    src/sdk/spine-c/SpineExtension.cpp
 )
 
 # Header files
@@ -218,13 +213,14 @@ set(HEADERS
     src/templates/item/ItemInfoTypes.h
     src/templates/item/ItemName.h
     src/constants/WeaponConstants.h
-    src/spine/SkeletonAnimation.h
+    src/sdk/spine-c/SkeletonAnimation.h
 )
 
 add_executable(${PROJECT_NAME} ${SOURCES} ${HEADERS})
 
 target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/src/sdk/spine-c/include
     ${CMAKE_SOURCE_DIR}/3rdparty/freetype/include
     ${CMAKE_SOURCE_DIR}/3rdparty/minimp3
     ${CMAKE_SOURCE_DIR}/3rdparty/mio/include
@@ -232,9 +228,9 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 
 # Link SDL3, zlib, spdlog, and FreeType
 if(BUILD_SHARED_LIBS)
-    target_link_libraries(${PROJECT_NAME} PRIVATE SDL3::SDL3 ZLIB::ZLIB spdlog::spdlog freetype spine-c)
+    target_link_libraries(${PROJECT_NAME} PRIVATE SDL3::SDL3 ZLIB::ZLIB spdlog::spdlog freetype)
 else()
-    target_link_libraries(${PROJECT_NAME} PRIVATE SDL3::SDL3-static ZLIB::ZLIB spdlog::spdlog freetype spine-c)
+    target_link_libraries(${PROJECT_NAME} PRIVATE SDL3::SDL3-static ZLIB::ZLIB spdlog::spdlog freetype)
 endif()
 
 # Platform-specific settings
