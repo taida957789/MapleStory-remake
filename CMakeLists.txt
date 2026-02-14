@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(MapleStory VERSION 1.0.0 LANGUAGES CXX)
+project(MapleStory VERSION 1.0.0 LANGUAGES C CXX)
 
 # Modern C++ settings
 set(CMAKE_CXX_STANDARD 20)
@@ -54,6 +54,16 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(spdlog)
 
+# spine-c library (2.1.25)
+file(GLOB SPINE_C_SOURCES 3rdparty/spine-c/src/spine/*.c)
+add_library(spine-c STATIC ${SPINE_C_SOURCES})
+target_include_directories(spine-c PUBLIC ${CMAKE_SOURCE_DIR}/3rdparty/spine-c/include)
+# Suppress warnings for third-party C code
+target_compile_options(spine-c PRIVATE
+    $<$<C_COMPILER_ID:GNU,Clang>:-w>
+    $<$<C_COMPILER_ID:MSVC>:/W0>
+)
+
 # Source files
 set(SOURCES
     src/main.cpp
@@ -93,7 +103,7 @@ set(SOURCES
     src/graphics/Gr2DVector.cpp
     src/graphics/VecCtrl.cpp
     src/input/InputSystem.cpp
-    src/audio/SoundSystem.cpp
+    src/audio/SoundMan.cpp
     src/network/ClientSocket.cpp
     src/network/InPacket.cpp
     src/network/OutPacket.cpp
@@ -127,6 +137,8 @@ set(SOURCES
     src/models/GW_ItemSlotBase.cpp
     src/models/GW_ItemSlotEquip.cpp
     src/models/GW_ItemSlotPet.cpp
+    src/spine/SkeletonAnimation.cpp
+    src/spine/SpineExtension.cpp
 )
 
 # Header files
@@ -166,7 +178,7 @@ set(HEADERS
     src/graphics/WzGr2DCanvas.h
     src/graphics/Gr2DVector.h
     src/input/InputSystem.h
-    src/audio/SoundSystem.h
+    src/audio/SoundMan.h
     src/network/ClientSocket.h
     src/network/InPacket.h
     src/network/OutPacket.h
@@ -202,47 +214,11 @@ set(HEADERS
     src/constants/FieldConstants.h
     src/constants/JobConstants.h
     src/templates/morph/MorphTemplate.h
-    src/templates/item/Addition.h
-    src/templates/item/AreaBuffItem.h
-    src/templates/item/BagInfo.h
-    src/templates/item/BitsCaseItem.h
-    src/templates/item/BridleItem.h
-    src/templates/item/BundleItem.h
-    src/templates/item/CoreItem.h
-    src/templates/item/CoupleChairItem.h
-    src/templates/item/DayOfWeekItemStat.h
-    src/templates/item/DecomposerInstallItem.h
-    src/templates/item/DressUpClothesItem.h
-    src/templates/item/DyeingItem.h
-    src/templates/item/EquipItem.h
-    src/templates/item/EquipSlotLevelMinusItem.h
-    src/templates/item/ExpiredProtectingItem.h
-    src/templates/item/ExtendExpireDateItem.h
-    src/templates/item/FixedOption.h
-    src/templates/item/GachaponAggScope.h
-    src/templates/item/GachaponItemInfo.h
-    src/templates/item/GatheringToolItem.h
-    src/templates/item/GroupEffectInfo.h
-    src/templates/item/GrowthOption.h
     src/templates/item/ItemInfo.h
     src/templates/item/ItemInfoTypes.h
     src/templates/item/ItemName.h
-    src/templates/item/ItemPotCreateItem.h
-    src/templates/item/ItemPotCureItem.h
-    src/templates/item/ItemSkill.h
-    src/templates/item/KarmaScissorsItem.h
-    src/templates/item/ParamEquipStat.h
-    src/templates/item/PetFoodItem.h
-    src/templates/item/PieceItemInfo.h
-    src/templates/item/ProtectOnDieItem.h
-    src/templates/item/RecipeOpenItem.h
-    src/templates/item/SetAction.h
-    src/templates/item/SetEffect.h
-    src/templates/item/SetItemInfo.h
-    src/templates/item/SetTowerChair.h
-    src/templates/item/TextEquipParam.h
-    src/templates/item/VariableStat.h
     src/constants/WeaponConstants.h
+    src/spine/SkeletonAnimation.h
 )
 
 add_executable(${PROJECT_NAME} ${SOURCES} ${HEADERS})
@@ -256,9 +232,9 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 
 # Link SDL3, zlib, spdlog, and FreeType
 if(BUILD_SHARED_LIBS)
-    target_link_libraries(${PROJECT_NAME} PRIVATE SDL3::SDL3 ZLIB::ZLIB spdlog::spdlog freetype)
+    target_link_libraries(${PROJECT_NAME} PRIVATE SDL3::SDL3 ZLIB::ZLIB spdlog::spdlog freetype spine-c)
 else()
-    target_link_libraries(${PROJECT_NAME} PRIVATE SDL3::SDL3-static ZLIB::ZLIB spdlog::spdlog freetype)
+    target_link_libraries(${PROJECT_NAME} PRIVATE SDL3::SDL3-static ZLIB::ZLIB spdlog::spdlog freetype spine-c)
 endif()
 
 # Platform-specific settings

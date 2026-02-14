@@ -1,5 +1,7 @@
 #include "GW_ItemSlotPet.h"
 
+#include "templates/item/ItemInfo.h"
+
 namespace ms
 {
 
@@ -10,7 +12,8 @@ auto GW_ItemSlotPet::IsSetItem() -> std::int32_t
 
 auto GW_ItemSlotPet::GetSetItemID() -> std::int32_t
 {
-    // TODO: CItemInfo::GetItemInfo(nItemID) -> get "setItemID" property
+    // Pet items are bundle items; BundleItem doesn't have setItemID field
+    // Original uses CItemInfo::GetItemInfo which is not yet implemented
     return 0;
 }
 
