@@ -22,6 +22,7 @@ set(TEST_SOURCES
     test_gr2d_vector.cpp
     test_layer_interpolation.cpp
     test_secure_tear.cpp
+    test_item_info.cpp
 )
 
 # Find zlib for WZ decompression
@@ -51,6 +52,9 @@ add_executable(maplestory_tests
     ../src/graphics/Gr2DVector.cpp
     ../src/graphics/WzGr2DLayer.cpp
     ../src/graphics/WzGr2DCanvas.cpp
+    ../src/templates/item/ItemInfo.cpp
+    ../src/constants/EquipDataPath.cpp
+    ../src/constants/WeaponConstants.cpp
 )
 
 target_include_directories(maplestory_tests PRIVATE
