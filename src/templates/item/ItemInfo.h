@@ -19,6 +19,7 @@ namespace ms
 
 // Forward declarations
 class GW_ItemSlotBase;
+class WzProperty;
 
 namespace Additional
 {
@@ -746,6 +747,7 @@ public:
     ~ItemInfo() override = default;
 
     // --- Core Lookup (implemented) ---
+    [[nodiscard]] auto GetItemProp(std::int32_t nItemID) const -> std::shared_ptr<WzProperty>;  // @ 0xaae510
     [[nodiscard]] auto GetEquipItem(std::int32_t nItemID) -> const EquipItem*;   // @ 0xae54c0
     [[nodiscard]] auto GetBundleItem(std::int32_t nItemID) -> const BundleItem*; // @ 0xaf9310
 
@@ -758,7 +760,6 @@ public:
     [[nodiscard]] auto GetRequiredLEV(std::int32_t nItemID) -> std::int32_t;     // @ 0xab23b0
 
     // --- Not yet implemented (address table) ---
-    // GetItemProp(long)const                    @ 0xaae510
     // GetItemInfo(long)                         @ 0xaaede0
     // GetItemSlot(long, int)                    @ 0xae6c00
     // GetItemDesc(long)                         @ 0xacfe90

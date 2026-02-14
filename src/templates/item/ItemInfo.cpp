@@ -66,7 +66,55 @@ auto get_child_string(const std::shared_ptr<WzProperty>& pProp, const std::strin
     return pChild ? pChild->GetString(sDefault) : sDefault;
 }
 
+/// Resolve pet item ID to WZ path.
+/// Pattern: "Item/Pet/{nItemID:07d}.img"
+/// StringPool 0x2AFA = "Item/Pet/%07d.img"
+auto get_pet_data_path(std::int32_t nItemID) -> std::string
+{
+    char buf[32];
+    std::snprintf(buf, sizeof(buf), "Item/Pet/%07d.img", nItemID);
+    return buf;
+}
+
 } // anonymous namespace
+
+// ============================================================
+// GetItemProp @ 0xaae510
+// Returns the WZ property node for any item ID.
+// For equips: the .img root (e.g. "Character/Weapon/01302000.img")
+// For bundles: the item sub-node (e.g. "Item/Consume/0200.img/02000000")
+// For pets: the .img root (e.g. "Item/Pet/5000000.img")
+// ============================================================
+auto ItemInfo::GetItemProp(std::int32_t nItemID) const -> std::shared_ptr<WzProperty>
+{
+    auto& wzResMan = WzResMan::GetInstance();
+    auto nType = ItemType::GetItemType(nItemID);
+
+    if (nType == ItemType::kEquip)
+    {
+        // Equip items and face/hair: resolve via equip data path
+        auto sPath = get_equip_data_path(nItemID);
+        if (sPath.empty())
+            return nullptr;
+        return wzResMan.GetProperty(sPath);
+    }
+
+    // Pet items (cash type, slot type 3): "Item/Pet/%07d.img"
+    if (nType == ItemType::kCash && nItemID / 10000 > 3)
+    {
+        auto sPath = get_pet_data_path(nItemID);
+        auto pProp = wzResMan.GetProperty(sPath);
+        if (pProp)
+            return pProp;
+        // Fall through to bundle path if pet path fails
+    }
+
+    // Bundle items (Consume/Install/Etc/Cash)
+    auto sPath = get_bundle_data_path(nItemID);
+    if (sPath.empty())
+        return nullptr;
+    return wzResMan.GetProperty(sPath);
+}
 
 // ============================================================
 // RegisterEquipItemInfo @ 0xad9ca0
