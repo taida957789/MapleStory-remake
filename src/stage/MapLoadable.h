@@ -5,6 +5,7 @@
 #include "util/Point.h"
 
 #include <cstdint>
+#include <list>
 #include <map>
 #include <memory>
 #include <string>
@@ -13,8 +14,10 @@
 namespace ms
 {
 
+class WzCanvas;
 class WzGr2DLayer;
 class WzProperty;
+class WvsPhysicalSpace2D;
 
 /**
  * @brief Background layer type
@@ -51,19 +54,77 @@ enum class BackgroundType : std::int32_t
 class MapLoadable : public Stage
 {
 public:
-    /**
-     * @brief Camera movement info
-     */
+    struct ObjectState
+    {
+        std::int32_t nRepeat;
+        std::string bsSfx;
+        std::shared_ptr<WzGr2DLayer> pLayer;
+    };
+    struct ChangingObject
+    {
+        std::int32_t nState;
+        std::uint32_t dwSN;
+        std::vector<ObjectState> aState;
+    };
+
+    struct DelayInvisibleLayer
+    {
+        std::int32_t tDelayTime;
+        std::int32_t tStartTime;
+        std::int32_t nManual;
+        std::int32_t bVisible;
+        std::int32_t bSmooth;
+        std::string sTag;
+    };
+
+    struct Obstacle
+    {
+        std::shared_ptr<WzGr2DLayer> pLayer;
+        std::int32_t bFlip;
+        std::int32_t nDamage;
+        std::int32_t nMobDamage;
+        std::int32_t nDirection;
+        std::int32_t nMobSkillID;
+        std::int32_t nSLV;
+        std::string sName;
+        std::uint32_t dwTargetField;
+    };
+    struct ObstacleInfo
+    {
+        Rect rcObs;
+        Point2D vecForce;
+        std::int32_t bLinearCheck;
+        const Obstacle* pObstacle;
+    };
+
+    struct ReflectionInfo
+    {
+        std::shared_ptr<WzGr2DLayer> pLayer;
+        std::shared_ptr<WzCanvas> pOriginalCanvas;
+        std::shared_ptr<WzCanvas> pAvatarCanvas;
+        std::shared_ptr<WzCanvas> pRemoverCanvas;
+        Rect rcArea;
+        std::int32_t nAlpha;
+        std::int32_t bLastFrameUpdated;
+    };
+
+    struct VisibleByQuest
+    {
+        std::shared_ptr<WzGr2DLayer> pLayer;
+        std::map<std::int32_t, std::vector<std::pair<std::int32_t, std::string>>> mCond;
+        std::vector<std::pair<std::int32_t, std::int32_t>> aCond;
+    };
+
     struct CameraMoveInfo
     {
-        bool bOn{false};
-        bool bClipInViewRange{true};
-        std::int32_t tStart{0};
-        std::int32_t tEnd{0};
-        Point2D ptVelocityFirst{0, 0};
-        Point2D ptAcceleration{0, 0};
-        Point2D ptVelocityAdjustRate{0, 0};
-        Point2D ptAccelerationAdjustRate{0, 0};
+        std::int32_t bOn{};
+        std::int32_t bClipInViewRange{};
+        std::int32_t tStart{};
+        std::int32_t tEnd{};
+        Point2D ptVelocity_First{};
+        Point2D ptAccelation{};
+        Point2D ptVelocity_AdjustRate{};
+        Point2D ptAccelation_AdjustRate{};
     };
 
     MapLoadable();
@@ -114,6 +175,8 @@ public:
      * @brief Set animation on a named object layer
      */
     void SetObjectAnimation(const std::string& name, Gr2DAnimationType type);
+    void DisableEffectObject(const std::string& sName, bool bCheckPreWord);
+    static void AnimateObjLayer(const std::shared_ptr<WzGr2DLayer>& pLayer, std::int32_t nRepeat);
 
     /**
      * @brief Set animation on a tagged object layer
@@ -168,15 +231,15 @@ public:
     /**
      * @brief Get view range rectangle
      */
-    [[nodiscard]] auto GetViewRangeRect() const -> Rect;
+    [[nodiscard]] auto GetViewRangeRect() const -> const Rect*;
 
     // Properties
-    [[nodiscard]] auto GetMagLevelObj() const noexcept -> std::int32_t { return m_nMagLevelObj; }
-    [[nodiscard]] auto GetMagLevelBack() const noexcept -> std::int32_t { return m_nMagLevelBack; }
+    [[nodiscard]] auto GetMagLevelObj() const noexcept -> std::int32_t { return m_nMagLevel_Obj; }
+    [[nodiscard]] auto GetMagLevelBack() const noexcept -> std::int32_t { return m_nMagLevel_Back; }
     [[nodiscard]] auto IsQuarterViewMap() const noexcept -> bool { return m_bQuarterView; }
     [[nodiscard]] auto GetMinScaleForZoomOut() const noexcept -> std::int32_t { return m_nMinZoomOutScale; }
 
-    void SetSysTrembleOpt(bool enable) noexcept { m_bSysTrembleOpt = enable; }
+    void SetSysTrembleOpt(bool enable) noexcept { m_bSysOptTremble = enable; }
 
 protected:
     /**
@@ -328,6 +391,7 @@ protected:
      * @brief Set footstep sound
      */
     void SetFootStepSound(const std::string& sound);
+    void PlayFootStepSound();
 
     /**
      * @brief Create a single tile layer
@@ -382,67 +446,122 @@ protected:
      */
     void AddLetterBox(std::int32_t w, std::int32_t h, std::int32_t l, std::int32_t t);
 
-    // Color flow name
-    std::string m_sColorFlowName;
-
-    // Background layers
-    std::vector<std::shared_ptr<WzGr2DLayer>> m_lpLayerBack; // Background layers
-
 protected:
-    // BGM
-    std::string m_sChangedBgmUOL;
-    std::string m_sFieldCustomBgmUOL;
-    std::int32_t m_nJukeBoxItemID{0};
-    bool m_bJukeBoxPlaying{false};
-    std::uint32_t m_unWeatherSoundCookie{0};
+    // --- BGM ---
+    std::int32_t m_nJukeBoxItemID{};
+    std::int32_t m_tNextMusic{};
+    std::int32_t m_bJukeBoxPlaying{};
+    std::uint32_t m_unWeatherSoundCookie{};
+    std::u16string m_sChangedBgmUOL;
+    std::u16string m_sFieldCustomBgmUOL;
 
-    // Properties from WZ
+    // --- WZ Properties ---
     std::shared_ptr<WzProperty> m_pPropFieldInfo;
     std::shared_ptr<WzProperty> m_pPropField;
     std::shared_ptr<WzProperty> m_pPropFieldRefBack;
 
-    // Layer lists
-    std::vector<std::shared_ptr<WzGr2DLayer>> m_lpLayerGen;       // General layers
-    std::vector<std::shared_ptr<WzGr2DLayer>> m_lpLayerObj;       // Object layers
-    std::vector<std::shared_ptr<WzGr2DLayer>> m_lpLayerTransient; // Transient layers
-    std::vector<std::shared_ptr<WzGr2DLayer>> m_lpLayerLetterBox; // Letterbox layers
+    // --- Physical space ---
+    std::shared_ptr<WvsPhysicalSpace2D> m_pSpace2D;
 
-    // Named layer maps
+    // --- Layer lists ---
+    std::list<std::shared_ptr<WzGr2DLayer>> m_lpLayerGen;
+    std::list<std::shared_ptr<WzGr2DLayer>> m_lpLayerObj;
     std::map<std::string, std::shared_ptr<WzGr2DLayer>> m_mpLayerObj;
+    std::list<std::shared_ptr<WzGr2DLayer>> m_lpLayerTransient;
+
+    // --- Obstacle / Reflection / Quest visibility ---
+    std::list<std::shared_ptr<Obstacle>> m_lpObstacle;
+    std::list<std::shared_ptr<ReflectionInfo>> m_lpRefInfo;
+    std::list<VisibleByQuest> m_lVisibleByQuest;
+
+    // --- Named/tagged objects ---
+    std::map<std::string, ChangingObject> m_mNamedObj;
     std::map<std::string, std::shared_ptr<WzGr2DLayer>> m_mTaggedLayer;
+    std::map<std::string, std::shared_ptr<std::list<std::shared_ptr<WzGr2DLayer>>>> m_mTagedObj;
+    std::map<std::string, std::shared_ptr<std::list<std::shared_ptr<WzGr2DLayer>>>> m_mTagedBack;
 
-    // Mag levels (zoom/scale)
-    std::int32_t m_nMagLevelObj{0};
-    std::int32_t m_nMagLevelBack{0};
-    std::int32_t m_nMagLevelSkillEffect{0};
-    std::int32_t m_nMinZoomOutScale{1000};
-    bool m_bMagLevelModifying{false};
+    // --- Background layers ---
+    std::map<std::int32_t, std::shared_ptr<std::list<std::shared_ptr<WzGr2DLayer>>>> m_mlLayerBack;
+    std::list<std::int32_t> m_lBackEffect;
 
-    // Scale
-    std::int32_t m_nScaleField{1000};
+    // --- Awesomium ---
+    struct AwesomiumInfo
+    {
+        std::shared_ptr<WzGr2DLayer> pAwesomiumBackgrnd;
+        std::shared_ptr<WzCanvas> pAwesomiumCanvas;
+        std::string sURL;
+        std::uint32_t dwIndex;
+        std::int32_t nWebWidth;
+        std::int32_t nWebHeight;
+        std::int32_t nWebX;
+        std::int32_t nWebY;
+    };
+    std::list<AwesomiumInfo> m_lAwesomiumInfo;
 
-    // Weather
-    std::int32_t m_nWeatherFadeInTime{0};
-    std::int32_t m_tForceFadeOutTime{0};
+    // --- Letterbox ---
+    std::list<std::shared_ptr<WzGr2DLayer>> m_lpLayerLetterBox;
 
-    // Map properties
-    bool m_bNeedZoomOutMap{false};
-    bool m_bNoFollowCharacter{false};
-    bool m_bStandAlone{false};
-    bool m_bPartyStandAlone{false};
-    bool m_bQuarterView{false};
-    bool m_bBGMVolumeOnly{false};
-    bool m_bSysTrembleOpt{false};
+    // --- Mag levels ---
+    std::int32_t m_nMagLevel_Obj{};
+    std::int32_t m_nMagLevel_Back{};
+    std::int32_t m_nMagLevel_SkillEffect{};
 
-    // BGM restore
-    std::int32_t m_tRestoreBgmVolume{0};
-    std::int32_t m_nRestoreBgmVolume{0};
+    // --- View range ---
+    Rect m_rcViewRange;
+    std::int32_t m_nMinZoomOutScale{};
+    std::int32_t m_bSysOptTremble{};
+    std::int32_t m_bMagLevelModifying{};
 
-    // Camera
+    // --- Obstacle info ---
+    std::vector<ObstacleInfo> m_aObstacleInfo;
+
+    // --- Weather ---
+    std::int32_t m_nWeatherFadeInTime{};
+    std::int32_t m_tForceFadeOutTime{};
+
+    // --- Scale ---
+    std::int32_t m_nScaleField{};
+
+    // --- Map properties ---
+    std::int32_t m_bNeedZoomOutMap{};
+    bool m_bNoFollowCharacter{};
+    bool m_bStandAlone{};
+    bool m_bPartyStandAlone{};
+    bool m_bQuarterView{};
+
+    // --- BGM restore ---
+    std::int32_t m_tRestoreBgmVolume{};
+    std::int32_t m_nRestoreBgmVolume{};
+    bool m_bBGMVolumeOnly{};
+
+    // --- Camera ---
     CameraMoveInfo m_cameraMoveInfo;
 
-    // View range
-    Rect m_viewRangeRect;
+    // --- Rect event / zone data ---
+    std::map<std::string, std::shared_ptr<void>> m_mpRectEventData;    // RectEventData
+    std::map<std::string, std::shared_ptr<void>> m_mpFadeData;         // FadeData
+    std::map<std::string, std::shared_ptr<void>> m_mpBgmZoneData;      // BgmZoneData
+    std::map<std::string, std::shared_ptr<void>> m_mpAmbienceZoneData; // AmbienceZoneData
+    std::map<std::string, std::shared_ptr<void>> m_mpFootstepZoneData; // FootStepZoneData
+    std::map<std::string, std::shared_ptr<void>> m_mpEffectZoneData;   // EffectZoneData
+    std::map<std::string, std::shared_ptr<void>> m_mpScriptRunZoneData;// ScriptRunZoneData
+    std::map<std::string, std::shared_ptr<void>> m_mpSpineEventZoneData;// SpineEventZone
+    std::map<std::string, std::shared_ptr<void>> m_mpCameraCtrlZoneData;// CameraCtrlZone
+
+    // --- Sub BGM ---
+    std::map<std::int32_t, std::string> m_mSubBgm;
+
+    // --- Footstep sound ---
+    std::u16string m_wsFootStepSound;
+    std::int32_t m_nFootStepSoundCount{};
+    std::shared_ptr<WzProperty> m_pFootStepSoundProp;
+
+    // --- Color flow ---
+    std::string m_sColorFlowName;
+
+    // --- Delay invisible ---
+    std::vector<DelayInvisibleLayer> m_aDelayInvisibleLayer;
+
 };
 
 } // namespace ms

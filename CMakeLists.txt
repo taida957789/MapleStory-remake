@@ -54,13 +54,8 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(spdlog)
 
-# spine-c sources (2.1.25 + Nexon binary reader)
-file(GLOB SPINE_C_SOURCES src/sdk/spine-c/src/spine/*.c)
-set_source_files_properties(${SPINE_C_SOURCES} PROPERTIES COMPILE_OPTIONS "-w")
-
 # Source files
 set(SOURCES
-    ${SPINE_C_SOURCES}
     src/main.cpp
     src/app/Application.cpp
     src/app/Configuration.cpp
@@ -130,11 +125,9 @@ set(SOURCES
     src/templates/morph/MorphTemplate.cpp
     src/templates/item/ItemInfo.cpp
     src/models/GW_ItemSlotBase.cpp
+    src/models/GW_ItemSlotBundle.cpp
     src/models/GW_ItemSlotEquip.cpp
     src/models/GW_ItemSlotPet.cpp
-    src/sdk/spine-c/SkeletonAnimation.cpp
-    src/sdk/spine-c/SpineSkeletonBinary.cpp
-    src/sdk/spine-c/SpineExtension.cpp
 )
 
 # Header files
@@ -214,16 +207,12 @@ set(HEADERS
     src/templates/item/ItemInfoTypes.h
     src/templates/item/ItemName.h
     src/constants/WeaponConstants.h
-    src/sdk/spine-c/SkeletonAnimation.h
-    src/sdk/spine-c/BufferedStream.h
-    src/sdk/spine-c/SpineSkeletonBinary.h
 )
 
 add_executable(${PROJECT_NAME} ${SOURCES} ${HEADERS})
 
 target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/src/sdk/spine-c/include
     ${CMAKE_SOURCE_DIR}/3rdparty/freetype/include
     ${CMAKE_SOURCE_DIR}/3rdparty/minimp3
     ${CMAKE_SOURCE_DIR}/3rdparty/mio/include
