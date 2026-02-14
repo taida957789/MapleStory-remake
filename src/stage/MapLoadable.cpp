@@ -33,9 +33,8 @@ void MapLoadable::Init(void* param)
 
     auto& gr = get_gr();
 
-    // Reset camera to world origin (0,0)
-    // The renderer adds screen center offset, so camera at (0,0) shows world (0,0) at screen center
-    gr.SetCameraPosition(0, 0);
+    // Reset camera to world origin — clears any active animation chain (tremble, etc.)
+    gr.ResetCameraPosition(0, 0);
 
     // Clear any existing layers
     ClearAllLayers();
@@ -204,21 +203,13 @@ void MapLoadable::ClipCameraToViewRange()
 
     // Clamp to view range
     if (viewLeft < m_rcViewRange.left)
-    {
         pos.x = m_rcViewRange.left;
-    }
     if (viewRight > m_rcViewRange.right)
-    {
         pos.x = m_rcViewRange.right - screenWidth;
-    }
     if (viewTop < m_rcViewRange.top)
-    {
         pos.y = m_rcViewRange.top;
-    }
     if (viewBottom > m_rcViewRange.bottom)
-    {
         pos.y = m_rcViewRange.bottom - screenHeight;
-    }
 
     gr.SetCameraPosition(pos);
 }
@@ -408,7 +399,7 @@ void MapLoadable::ChangeBGM(const std::string& bgmPath)
         return;
     }
 
-    m_sChangedBgmUOL = bgmPath;
+    m_sChangedBgmUOL = std::u16string(bgmPath.begin(), bgmPath.end());
 
     if (bgmPath.empty())
     {
@@ -426,7 +417,8 @@ void MapLoadable::ChangeBGM(const std::string& bgmPath)
 
 auto MapLoadable::IsSameChangeBGM(const std::string& bgmPath) const -> bool
 {
-    return m_sChangedBgmUOL == bgmPath;
+    auto w = std::u16string(bgmPath.begin(), bgmPath.end());
+    return m_sChangedBgmUOL == w;
 }
 
 void MapLoadable::PrepareNextBGM()
@@ -533,12 +525,12 @@ auto MapLoadable::LoadAnimatedLayer(const std::shared_ptr<WzGr2DLayer>& layer,
 
         // Get canvas from frame property
         auto wzCanvas = frameProp->GetCanvas();
-        auto canvas = wzCanvas ? std::make_shared<WzGr2DCanvas>(wzCanvas) : nullptr;
+        auto canvas = wzCanvas ? std::make_shared<WzGr2DCanvas>(wzCanvas, frameProp) : nullptr;
         if (!canvas)
         {
             // Frame might be the canvas itself
             auto frameWzCanvas = prop->GetChild(std::to_string(i))->GetCanvas();
-            canvas = frameWzCanvas ? std::make_shared<WzGr2DCanvas>(frameWzCanvas) : nullptr;
+            canvas = frameWzCanvas ? std::make_shared<WzGr2DCanvas>(frameWzCanvas, frameProp) : nullptr;
             if (!canvas)
             {
                 continue; // Skip frames without canvas
@@ -567,14 +559,6 @@ auto MapLoadable::LoadAnimatedLayer(const std::shared_ptr<WzGr2DLayer>& layer,
             alpha1 = static_cast<std::uint8_t>(a1Prop->GetInt(255));
         }
 
-        // Get origin from canvas or property
-        auto originProp = frameProp->GetChild("origin");
-        if (originProp)
-        {
-            auto vec = originProp->GetVector();
-            canvas->SetOrigin({vec.x, vec.y});
-        }
-
         // Insert canvas into layer
         layer->InsertCanvas(canvas, delay, alpha0, alpha1);
         ++frameCount;
@@ -601,7 +585,7 @@ auto MapLoadable::LoadStaticLayer(const std::shared_ptr<WzGr2DLayer>& layer,
 
     // Try to get canvas directly
     auto wzCanvas = prop->GetCanvas();
-    auto canvas = wzCanvas ? std::make_shared<WzGr2DCanvas>(wzCanvas) : nullptr;
+    auto canvas = wzCanvas ? std::make_shared<WzGr2DCanvas>(wzCanvas, prop) : nullptr;
     if (!canvas)
     {
         LOG_DEBUG("LoadStaticLayer: No direct canvas, trying child '0'");
@@ -610,7 +594,7 @@ auto MapLoadable::LoadStaticLayer(const std::shared_ptr<WzGr2DLayer>& layer,
         if (firstChild)
         {
             auto childWzCanvas = firstChild->GetCanvas();
-            canvas = childWzCanvas ? std::make_shared<WzGr2DCanvas>(childWzCanvas) : nullptr;
+            canvas = childWzCanvas ? std::make_shared<WzGr2DCanvas>(childWzCanvas, firstChild) : nullptr;
             if (canvas)
             {
                 LOG_DEBUG("LoadStaticLayer: Found canvas in child '0'");
@@ -626,19 +610,6 @@ auto MapLoadable::LoadStaticLayer(const std::shared_ptr<WzGr2DLayer>& layer,
     {
         LOG_WARN("LoadStaticLayer: No canvas found in property '{}'", prop->GetName());
         return false;
-    }
-
-    // Get origin if available
-    auto originProp = prop->GetChild("origin");
-    if (originProp)
-    {
-        auto vec = originProp->GetVector();
-        canvas->SetOrigin({vec.x, vec.y});
-        LOG_DEBUG("LoadStaticLayer: origin=({}, {})", vec.x, vec.y);
-    }
-    else
-    {
-        LOG_DEBUG("LoadStaticLayer: no origin property, using (0, 0)");
     }
 
     // Insert canvas into layer (static, no animation)
@@ -988,9 +959,10 @@ void MapLoadable::MakeBack(std::int32_t nPageIdx, const std::shared_ptr<WzProper
         return;
     }
 
-    // Determine z-order based on front flag and page index
-    // Front layers are rendered above objects (high z), back layers are behind (low z)
-    std::int32_t z = front ? (1000 + nPageIdx) : nPageIdx;
+    // Z-order from 0xbf3447. All constants anchored at Z_BASE = 0x40000000:
+    //   Front: 0x40000000 - 271200 = 0x3FFBDCA0 (in front of tiles/objects)
+    //   Back:  0x40000000 + 128000 = 0x4001F400 (behind tiles)
+    std::int32_t z = 1000 * nPageIdx - (front ? 0x3FFBDCA0 : 0x4001F400);
 
     // Create the layer
     auto& gr = get_gr();
@@ -1173,8 +1145,11 @@ void MapLoadable::MakeBack(std::int32_t nPageIdx, const std::shared_ptr<WzProper
         LOG_DEBUG("MakeBack[{}]: Type {} parallax rx={}, ry={}", nPageIdx, type, rx, ry);
     }
 
-    // Add to background layer list
-    m_mlLayerBack.push_back(layer);
+    // Add to background layer map (keyed by page index)
+    auto& layerList = m_mlLayerBack[nPageIdx];
+    if (!layerList)
+        layerList = std::make_shared<std::list<std::shared_ptr<WzGr2DLayer>>>();
+    layerList->push_back(layer);
 #ifdef MS_DEBUG_CANVAS
     DebugOverlay::GetInstance().RegisterLayer(layer, "back_" + std::to_string(nPageIdx));
 #endif
@@ -1192,11 +1167,14 @@ void MapLoadable::ClearBackLayers()
 {
     auto& gr = get_gr();
 
-    for (auto& layer : m_mlLayerBack)
+    for (auto& [key, pList] : m_mlLayerBack)
     {
-        if (layer)
+        if (!pList)
+            continue;
+        for (auto& layer : *pList)
         {
-            gr.RemoveLayer(layer);
+            if (layer)
+                gr.RemoveLayer(layer);
         }
     }
     m_mlLayerBack.clear();
@@ -1675,7 +1653,7 @@ void MapLoadable::PlayFootStepSound()
     if (m_nFootStepSoundCount <= 0)
         return;
 
-    auto nRand = static_cast<std::uint32_t>(detail::GetSecureRand().Random());
+    auto nRand = static_cast<std::uint32_t>(detail::get_rand().Random());
     auto nIndex = nRand % static_cast<std::uint32_t>(m_nFootStepSoundCount);
 
     // Original: ZXString<unsigned short>::Format(L"%s/%d", m_wsFootStepSound, index)
@@ -1852,20 +1830,27 @@ void MapLoadable::MakeTile(std::int32_t nPageIdx,
         return;
     }
 
-    // Build property path: "{u}/{no}" (e.g., "bsc/0", "edD/1")
-    // Format string is from StringPool 0x9D5
-    std::string propPath = u + "/" + std::to_string(no);
-
-    // Get canvas from tile set
-    auto tileProp = pTileSet->GetChild(propPath);
-    if (!tileProp)
+    // Tile set hierarchy: pTileSet/{u}/{no} (e.g., "bsc" -> "0")
+    // GetChild only does flat lookup, so resolve in two steps.
+    auto uChild = pTileSet->GetChild(u);
+    if (!uChild)
     {
-        LOG_DEBUG("MakeTile[{}]: Tile property not found: {}", nPageIdx, propPath);
+        LOG_DEBUG("MakeTile[{}]: Tile type not found in tileset: {}", nPageIdx, u);
         return;
     }
 
+    std::string noStr = std::to_string(no);
+    auto tileProp = uChild->GetChild(noStr);
+    if (!tileProp)
+    {
+        LOG_DEBUG("MakeTile[{}]: Tile number not found: {}/{}", nPageIdx, u, noStr);
+        return;
+    }
+
+    std::string propPath = u + "/" + noStr;  // For debug logging only
+
     auto wzCanvas = tileProp->GetCanvas();
-    auto canvas = wzCanvas ? std::make_shared<WzGr2DCanvas>(wzCanvas) : nullptr;
+    auto canvas = wzCanvas ? std::make_shared<WzGr2DCanvas>(wzCanvas, tileProp) : nullptr;
     if (!canvas)
     {
         LOG_DEBUG("MakeTile[{}]: No canvas in tile: {}", nPageIdx, propPath);
@@ -1906,8 +1891,7 @@ void MapLoadable::MakeTile(std::int32_t nPageIdx,
     // Insert the canvas into the layer
     layer->InsertCanvas(canvas, 0, 255, 255);
 
-    // Calculate z-order: z + 10 * (3000 * nPageIdx - zMass) - 0x3FFFB1EA
-    // 0x3FFFB1EA = 1073692138 (this is a large negative offset to place tiles behind objects)
+    // Z-order from 0xbe2841: 0x40000000 - 19990 = 0x3FFFB1EA
     std::int32_t zOrder = z + 10 * (3000 * nPageIdx - zMass) - 0x3FFFB1EA;
     layer->SetZ(zOrder);
 
@@ -2013,14 +1997,14 @@ void MapLoadable::MakeObj(std::int32_t nPageIdx,
         return;
     }
 
-    // Calculate z-order: 30000 * nPageIdx + z - 0x3FFF4C30
-    // 0x3FFF4C30 = 1073692720 - places objects in front of tiles but respects page order
-    std::int32_t zOrder = 30000 * nPageIdx + z - 0x3FFF4C30;
+    // Calculate z-order (from MakeObjLayer at 0xbeda65)
+    // Z_BASE (0x40000000) - 2000 places objects slightly behind tiles at same page
+    std::int32_t zOrder = 30000 * nPageIdx + z - 0x3FFFF830;
 
-    // For quarter view maps, use y-based z-ordering
+    // For quarter view maps, use y-based z-ordering (from 0xbeda86)
     if (m_bQuarterView)
     {
-        zOrder = 10 * y - 0x3FFE2CB0;  // 0x3FFE2CB0 = 1073619120
+        zOrder = 10 * y - 0x3FFCCBB0;  // 0x40000000 - 210000
     }
 
     // Create the layer
@@ -2105,6 +2089,984 @@ void MapLoadable::UpdateObjectTagLayer()
 
     LOG_DEBUG("UpdateObjectTagLayer: {} named layers, {} tagged layers",
               m_mpLayerObj.size(), m_mTaggedLayer.size());
+}
+
+// ========================================================================
+// Properties / Getters
+// ========================================================================
+
+auto MapLoadable::IsFadeObject(const std::string& sGroupName, std::int32_t nShowType) const -> bool
+{
+    // 0xbdf9f0 — CMapLoadable::IsFadeObject
+    // Check if the named rect event exists and has fade data with matching state
+    auto itRect = m_mpRectEventData.find(sGroupName);
+    if (itRect == m_mpRectEventData.end() || !itRect->second)
+        return false;
+
+    auto itFade = m_mpFadeData.find(sGroupName);
+    if (itFade == m_mpFadeData.end() || !itFade->second)
+        return false;
+
+    // In IDA: return p->nState == nShowType
+    // We don't have the full RectEventData struct yet, so just return true if fade data exists
+    (void)nShowType;
+    return true;
+}
+
+auto MapLoadable::GetCollideObstacleRect(const Point2D& pt, Point2D* pvecForce) const
+    -> const ObstacleInfo*
+{
+    // 0xbd9ab0 — CMapLoadable::GetCollideObstacleRect
+    // Iterate m_aObstacleInfo, find first obstacle whose rect contains pt
+    for (auto& info : m_aObstacleInfo)
+    {
+        if (pt.x >= info.rcObs.left && pt.x <= info.rcObs.right &&
+            pt.y >= info.rcObs.top && pt.y <= info.rcObs.bottom)
+        {
+            if (pvecForce)
+                *pvecForce = info.vecForce;
+            return &info;
+        }
+    }
+    return nullptr;
+}
+
+auto MapLoadable::GetNpcRectEventType(const std::string& sName) const -> std::int32_t
+{
+    // 0xbdceb0 — CMapLoadable::GetNpcRectEventType
+    // Iterate m_mpFadeData looking for NPC name match, return event type
+    (void)sName;
+    return 0;
+}
+
+auto MapLoadable::GetCurrentObject(const std::string& sName) const -> std::shared_ptr<WzGr2DLayer>
+{
+    // 0xbf5d00 — CMapLoadable::GetCurrentObject
+    auto it = m_mNamedObj.find(sName);
+    if (it == m_mNamedObj.end())
+        return nullptr;
+
+    auto& obj = it->second;
+    if (obj.nState < 0 || static_cast<std::size_t>(obj.nState) >= obj.aState.size())
+        return nullptr;
+
+    return obj.aState[obj.nState].pLayer;
+}
+
+auto MapLoadable::GetObjectSN(const std::string& sName) const -> std::uint32_t
+{
+    // 0xbf6460 — CMapLoadable::GetObjectSN
+    auto it = m_mNamedObj.find(sName);
+    if (it == m_mNamedObj.end())
+        return 0;
+    return it->second.dwSN;
+}
+
+auto MapLoadable::GetObjectState(const std::string& sName) const -> std::int32_t
+{
+    // 0xbf6490 — CMapLoadable::GetObjectState
+    auto it = m_mNamedObj.find(sName);
+    if (it == m_mNamedObj.end())
+        return -1;
+    return it->second.nState;
+}
+
+auto MapLoadable::GetObjectRect(const std::string& sName) const -> Rect
+{
+    // 0xbf64c0 — CMapLoadable::GetObjectRect
+    // Get bounding rect from object's current state layer
+    auto it = m_mNamedObj.find(sName);
+    if (it == m_mNamedObj.end())
+        return {};
+
+    auto& obj = it->second;
+    if (obj.nState < 0 || static_cast<std::size_t>(obj.nState) >= obj.aState.size())
+        return {};
+
+    auto& layer = obj.aState[obj.nState].pLayer;
+    if (!layer)
+        return {};
+
+    auto lt = layer->GetLeftTop();
+    auto rb = layer->GetRightBottom();
+    return {lt.x, lt.y, rb.x, rb.y};
+}
+
+auto MapLoadable::TransientLayer_Exist() const -> bool
+{
+    // 0x1aa2fe0 — CMapLoadable::TransientLayer_Exist
+    // IDA: return this->m_lpLayerTransient._m_uCount != 0
+    return !m_lpLayerTransient.empty();
+}
+
+// ========================================================================
+// Layer / Visual
+// ========================================================================
+
+void MapLoadable::SetGrayBackGround(bool bGray)
+{
+    // 0xbdd070 — CMapLoadable::SetGrayBackGround
+    // Iterate all background layer lists and set gray filter on each layer
+    for (auto& [key, pList] : m_mlLayerBack)
+    {
+        if (!pList) continue;
+        for (auto& layer : *pList)
+        {
+            if (!layer) continue;
+            if (bGray)
+                layer->setFlags(8); // gray flag
+            else
+                layer->clearFlags(8);
+        }
+    }
+}
+
+void MapLoadable::SetBackGroundColor(std::int32_t nR, std::int32_t nG, std::int32_t nB,
+                                      std::int32_t tDelay)
+{
+    // 0xbdd3c0 — CMapLoadable::SetBackGroundColor
+    // Apply pixel shader color change to all background layers
+    // In IDA: iterates m_mlLayerBack, calls FieldObjectLayerPixelShader::PushPixelShader
+    // for each layer. We store the color for later application.
+    (void)nR;
+    (void)nG;
+    (void)nB;
+    (void)tDelay;
+    // TODO: Requires FieldObjectLayerPixelShader infrastructure
+}
+
+void MapLoadable::SetBackGroundColorByTag(const std::string& sTag, std::int32_t nR,
+                                           std::int32_t nG, std::int32_t nB, std::int32_t tDelay)
+{
+    // 0xbdfab0 — CMapLoadable::SetBackGroundColorByTag
+    // Apply pixel shader color change only to tagged background layers
+    auto it = m_mTagedBack.find(sTag);
+    if (it == m_mTagedBack.end() || !it->second || it->second->empty())
+        return;
+
+    (void)nR;
+    (void)nG;
+    (void)nB;
+    (void)tDelay;
+    // TODO: Requires FieldObjectLayerPixelShader infrastructure
+}
+
+void MapLoadable::SetObjectVisible(const std::string& sName, bool bVisible)
+{
+    // 0xbdfc50 — CMapLoadable::SetObjectVisible
+    // Look up named layer in m_mpLayerObj and set its visibility
+    auto it = m_mpLayerObj.find(sName);
+    if (it == m_mpLayerObj.end() || !it->second)
+        return;
+
+    it->second->SetVisible(bVisible);
+}
+
+void MapLoadable::SetObjectMove(const std::string& sName, std::int32_t nX,
+                                 std::int32_t nY, std::int32_t tTime)
+{
+    // 0xbdfd20 — CMapLoadable::SetObjectMove
+    // Look up named layer, get current position, then RelMove to target offset
+    auto it = m_mpLayerObj.find(sName);
+    if (it == m_mpLayerObj.end() || !it->second)
+        return;
+
+    auto& layer = it->second;
+    auto curTime = layer->GetCurrentTime();
+    auto curX = layer->GetX();
+    auto curY = layer->GetY();
+
+    // RelMove: animate from current position to (nX + curX, nY + curY) over tTime
+    layer->RelMove(nX + curX, nY + curY, curTime, curTime + tTime);
+}
+
+void MapLoadable::SetObjectCreateLayer(const std::string& sKeyName, const std::string& sPath,
+                                        std::uint32_t nX, std::uint32_t nY)
+{
+    // 0xbe8570 — CMapLoadable::SetObjectCreateLayer
+    // Creates a new object layer from the given property path and adds to transient list
+    if (sKeyName.empty() || sPath.empty())
+        return;
+
+    // Resolve the property from the path
+    auto& rm = WzResMan::GetInstance();
+    auto pProp = rm.GetProperty(sPath);
+    if (!pProp) return;
+
+    // Create layer and load animation frames
+    auto layer = CreateLayer(0);
+    if (!layer) return;
+
+    auto frameCount = LoadAnimatedLayer(layer, pProp);
+    if (frameCount == 0)
+    {
+        LoadStaticLayer(layer, pProp);
+    }
+
+    layer->SetPosition(static_cast<std::int32_t>(nX), static_cast<std::int32_t>(nY));
+
+    if (frameCount > 1)
+        layer->Animate(Gr2DAnimationType::Repeat);
+
+    m_lpLayerTransient.push_back(layer);
+}
+
+void MapLoadable::SetObjectState(const std::string& sName, std::int32_t nState)
+{
+    // 0xbf5840 — CMapLoadable::SetObjectState
+    // Switch named object state: fade old state alpha to 0, set new state alpha to 255
+    auto it = m_mNamedObj.find(sName);
+    if (it == m_mNamedObj.end())
+        return;
+
+    auto& obj = it->second;
+
+    if (nState != -1)
+    {
+        if (nState < 0 || static_cast<std::size_t>(nState) >= obj.aState.size())
+            return;
+
+        // Fade out old state layer: set alpha to 0 immediately
+        if (obj.nState >= 0 && static_cast<std::size_t>(obj.nState) < obj.aState.size())
+        {
+            auto& oldLayer = obj.aState[obj.nState].pLayer;
+            if (oldLayer)
+            {
+                auto* alphaVec = oldLayer->get_alpha();
+                if (alphaVec) alphaVec->Move(0, 0);
+            }
+        }
+
+        obj.nState = nState;
+    }
+
+    // Set new state alpha to 255 and animate
+    if (obj.nState >= 0 && static_cast<std::size_t>(obj.nState) < obj.aState.size())
+    {
+        auto& state = obj.aState[obj.nState];
+        if (state.pLayer)
+        {
+            auto* alphaVec = state.pLayer->get_alpha();
+            if (alphaVec) alphaVec->Move(255, 0);
+
+            // Play sound effect if set
+            if (!state.bsSfx.empty())
+            {
+                SoundMan::GetInstance().PlayFieldSound(state.bsSfx, 100);
+            }
+
+            // Animate the layer
+            AnimateObjLayer(state.pLayer, state.nRepeat);
+        }
+    }
+}
+
+void MapLoadable::SetLayerInvisible(const std::string& sTag, std::int32_t tDelay,
+                                     std::int32_t bVisible, std::int32_t nManual,
+                                     std::int32_t bSmooth)
+{
+    // 0xbf8700 — CMapLoadable::SetLayerInvisible
+    // Enqueue a delayed visibility change for a tagged layer
+    DelayInvisibleLayer entry;
+    entry.sTag = sTag;
+    entry.tDelayTime = tDelay;
+    entry.tStartTime = static_cast<std::int32_t>(get_gr().GetCurrentTime());
+    entry.bVisible = bVisible;
+    entry.nManual = nManual;
+    entry.bSmooth = bSmooth;
+
+    m_aDelayInvisibleLayer.push_back(std::move(entry));
+}
+
+void MapLoadable::SetLayerListVisible(
+    const std::shared_ptr<std::list<std::shared_ptr<WzGr2DLayer>>>& plLayer,
+    std::int32_t bVisible, bool bSmooth, std::int32_t nManual,
+    const std::string& sTag)
+{
+    // 0xbf8e00 — CMapLoadable::SetLayerListVisible
+    // Iterate layer list, set visibility with optional smooth alpha animation
+    if (!plLayer) return;
+
+    auto tSmooth = bSmooth ? 2000 : 0;
+
+    for (auto& layer : *plLayer)
+    {
+        if (!layer) continue;
+
+        if (bVisible)
+        {
+            layer->SetVisible(true);
+
+            // Animate alpha to 255 (fully visible)
+            auto curTime = layer->GetCurrentTime();
+            auto* alphaVec = layer->get_alpha();
+            if (alphaVec)
+                alphaVec->RelMove(255, 255, curTime, curTime + tSmooth);
+        }
+        else
+        {
+            // Animate alpha to 0 (invisible)
+            auto curTime = layer->GetCurrentTime();
+            auto* alphaVec = layer->get_alpha();
+            if (alphaVec)
+                alphaVec->RelMove(0, 0, curTime, curTime + tSmooth);
+
+            // If nManual == 2, enqueue delayed full hide
+            if (nManual == 2 && tSmooth > 0)
+            {
+                SetLayerInvisible(sTag, tSmooth, 0, 2, bSmooth ? 1 : 0);
+            }
+            else if (tSmooth == 0)
+            {
+                layer->SetVisible(false);
+            }
+        }
+    }
+}
+
+void MapLoadable::SetLayerListVisibleByTag(
+    const std::string& sTag,
+    const std::shared_ptr<std::list<std::shared_ptr<WzGr2DLayer>>>& plObjs)
+{
+    // 0xbfb180 — CMapLoadable::SetLayerListVisibleByTag
+    // Quest-aware visibility: checks quest state for the tag and calls SetLayerListVisible
+    // For now, just make layers visible (quest system not yet implemented)
+    SetLayerListVisible(plObjs, 1, false, 0, sTag);
+}
+
+void MapLoadable::SetMapTagedObjectVisible(const std::string& sTag, std::int32_t bVisible,
+                                            std::int32_t bSmooth, std::int32_t tDuration)
+{
+    // 0xbfb440 — CMapLoadable::SetMapTagedObjectVisible
+    // Find tagged object list and set visibility on all layers in it
+    (void)tDuration;
+
+    // Check tagged objects (m_mTagedObj)
+    auto itObj = m_mTagedObj.find(sTag);
+    if (itObj != m_mTagedObj.end() && itObj->second)
+    {
+        SetLayerListVisible(itObj->second, bVisible, bSmooth != 0, 0, sTag);
+    }
+
+    // Check tagged back (m_mTagedBack)
+    auto itBack = m_mTagedBack.find(sTag);
+    if (itBack != m_mTagedBack.end() && itBack->second)
+    {
+        SetLayerListVisible(itBack->second, bVisible, bSmooth != 0, 0, sTag);
+    }
+}
+
+void MapLoadable::SetFieldMagLevel()
+{
+    // 0xbffcc0 — CMapLoadable::SetFieldMagLevel
+    // Read mag level from config, if changed flush cache and re-restore
+    if (!m_pPropField) return;
+
+    // TODO: Read nMagLevel_Obj and nMagLevel_Back from CConfig when available
+    // For now, keep current values
+    std::int32_t nMagLevel_Obj = m_nMagLevel_Obj;
+    std::int32_t nMagLevel_Back = m_nMagLevel_Back;
+
+    bool bCacheFlushed = false;
+
+    if (m_nMagLevel_Obj != nMagLevel_Obj)
+    {
+        m_nMagLevel_Obj = nMagLevel_Obj;
+        m_lpLayerObj.clear();
+        bCacheFlushed = true;
+        m_bMagLevelModifying = true;
+        RestoreObj(false);
+        m_bMagLevelModifying = false;
+    }
+
+    if (m_nMagLevel_Back != nMagLevel_Back)
+    {
+        m_nMagLevel_Back = nMagLevel_Back;
+        m_mlLayerBack.clear();
+
+        auto& gr = get_gr();
+        gr.ResetCameraPosition(0, 0);
+
+        RestoreBack(false);
+        RestoreBackEffect();
+    }
+}
+
+void MapLoadable::TransientLayer_Clear()
+{
+    // 0xbd9850 — CMapLoadable::TransientLayer_Clear
+    // Fade out transient layers with random timing, then conditionally remove all
+    if (m_lpLayerTransient.empty())
+        return;
+
+    auto& gr = get_gr();
+
+    for (auto& layer : m_lpLayerTransient)
+    {
+        if (!layer) continue;
+
+        // Get current time and add random offset for staggered fade
+        auto curTime = layer->GetCurrentTime();
+        auto fadeEndTime = curTime + 1000 + (detail::get_rand().Random() % 1000);
+
+        // Animate alpha from current to 0
+        auto* alphaVec = layer->get_alpha();
+        if (alphaVec)
+            alphaVec->RelMove(0, 255, curTime, fadeEndTime);
+    }
+
+    // If weather fade-in is still active, remove all immediately
+    if (m_nWeatherFadeInTime > static_cast<std::int32_t>(gr.GetCurrentTime()))
+    {
+        for (auto& layer : m_lpLayerTransient)
+        {
+            if (layer) gr.RemoveLayer(layer);
+        }
+        m_lpLayerTransient.clear();
+    }
+}
+
+void MapLoadable::TransientLayer_Weather(std::int32_t nItemID, const std::string& sMsg)
+{
+    // 0xbe3da0 — CMapLoadable::TransientLayer_Weather
+    // TODO: Complex — creates weather effect from item property, adds transient layers
+    (void)nItemID;
+    (void)sMsg;
+}
+
+// ========================================================================
+// BGM / Sound
+// ========================================================================
+
+void MapLoadable::PlayNextMusic()
+{
+    // 0xbee210 — CMapLoadable::PlayNextMusic
+    // Stop current BGM, then either restore from map or play jukebox item
+    auto& sm = SoundMan::GetInstance();
+    sm.StopBGM();
+
+    if (m_nJukeBoxItemID == -1)
+    {
+        // Restore normal BGM
+        RestoreBGM(true);
+        m_bJukeBoxPlaying = 0;
+        m_nJukeBoxItemID = 0;
+    }
+    else if (m_nJukeBoxItemID != 0)
+    {
+        // TODO: Look up jukebox item BGM path from CItemInfo and play it
+        // For now, just mark as playing and clear
+        m_bJukeBoxPlaying = 1;
+        m_nJukeBoxItemID = 0;
+    }
+}
+
+void MapLoadable::PlaySoundWithMuteBgm(const std::string& sName, bool bExcl,
+                                        bool bDown, std::uint32_t uVolume128)
+{
+    // 0xbee8d0 — CMapLoadable::PlaySoundWithMuteBgm
+    // Play a sound effect while temporarily reducing BGM volume
+    if (sName.empty()) return;
+
+    auto& sm = SoundMan::GetInstance();
+
+    if (!m_bBGMVolumeOnly)
+    {
+        // Calculate muted volume
+        std::uint32_t mutedVol = 0;
+        if (bDown)
+            mutedVol = 60 * m_nRestoreBgmVolume / 100;
+
+        sm.SetBGMVolume(mutedVol, 0);
+
+        // Schedule BGM volume restore
+        auto& gr = get_gr();
+        m_tRestoreBgmVolume = static_cast<std::int32_t>(gr.GetCurrentTime()) + 500;
+    }
+
+    // Play the sound
+    sm.PlayFieldSound(sName, uVolume128);
+    (void)bExcl;
+}
+
+void MapLoadable::SetCameraMoveInfo(const std::string& sMoveType)
+{
+    // 0xbe8430 — CMapLoadable::SetCameraMoveInfo (string overload)
+    // Look up camera move info by name from CCameraMoveMan and apply
+    if (sMoveType.empty()) return;
+
+    // TODO: Requires CCameraMoveMan singleton
+    // When available, look up RawCameraMoveInfo by sMoveType and apply to m_cameraMoveInfo
+    (void)sMoveType;
+}
+
+// ========================================================================
+// IDA Stubs — Foothold
+// ========================================================================
+
+void MapLoadable::FootHoldMove(std::int32_t nSN, std::int32_t nX, std::int32_t nY)
+{
+    // 0xbf54a0 — CMapLoadable::FootHoldMove
+    // TODO: stub — move foothold position
+    (void)nSN;
+    (void)nX;
+    (void)nY;
+}
+
+void MapLoadable::FootHoldStateChange(std::int32_t nSN, std::int32_t nState)
+{
+    // 0xbf56d0 — CMapLoadable::FootHoldStateChange
+    // TODO: stub — change foothold state (enable/disable)
+    (void)nSN;
+    (void)nState;
+}
+
+// ========================================================================
+// IDA Stubs — Rendering
+// ========================================================================
+
+void MapLoadable::RenderAvatar()
+{
+    // 0xbde930 — CMapLoadable::RenderAvatar
+    // TODO: stub — render avatar into reflection canvas
+}
+
+void MapLoadable::ProcessReflection()
+{
+    // 0xbdf2b0 — CMapLoadable::ProcessReflection
+    // TODO: stub — process reflection info list
+}
+
+// ========================================================================
+// IDA Stubs — Fade
+// ========================================================================
+
+void MapLoadable::SetFadeData(const std::shared_ptr<WzGr2DLayer>& pLayer,
+                               std::int32_t nAlpha, std::int32_t tDuration)
+{
+    // 0xbef2e0 — CMapLoadable::SetFadeData (layer overload)
+    // TODO: stub — set fade alpha on layer
+    (void)pLayer;
+    (void)nAlpha;
+    (void)tDuration;
+}
+
+void MapLoadable::SetFadeData(std::int32_t nIndex, std::int32_t nAlpha, std::int32_t tDuration)
+{
+    // 0xbef560 — CMapLoadable::SetFadeData (index overload)
+    // TODO: stub
+    (void)nIndex;
+    (void)nAlpha;
+    (void)tDuration;
+}
+
+// ========================================================================
+// IDA Stubs — Event Handlers
+// ========================================================================
+
+void MapLoadable::OnLeaveDirectionMode()
+{
+    // 0xbd5140 — CMapLoadable::OnLeaveDirectionMode
+    // If jukebox is idle, set it to -1 to trigger restore on next music call
+    if (m_nJukeBoxItemID == 0)
+        m_nJukeBoxItemID = -1;
+
+    // Mute BGM with fade out (1500ms)
+    SoundMan::GetInstance().SetBGMVolume(0, 1500);
+
+    // Schedule next music in 2500ms
+    m_tNextMusic = static_cast<std::int32_t>(get_gr().GetCurrentTime()) + 2500;
+}
+
+void MapLoadable::OnSetBackEffect(const std::string& sName, std::int32_t nEffect)
+{
+    // 0xbe14e0 — CMapLoadable::OnSetBackEffect
+    // nEffect == 0: add back effect (fade alpha from current to 255)
+    // nEffect == 1: remove back effect (fade alpha from current to 0)
+    // IDA shows BackEffect struct with nPageID and tDuration decoded from packet
+    // Since we take already-decoded parameters, interpret sName as a page identifier
+
+    // TODO: Full implementation requires BackEffect packet decoding
+    // For now, the effect name and type are noted for future implementation
+    (void)sName;
+    (void)nEffect;
+}
+
+void MapLoadable::OnSetSpineBackEffect(const std::string& sName)
+{
+    // 0xbeb210 — CMapLoadable::OnSetSpineBackEffect
+    // TODO: stub
+    (void)sName;
+}
+
+void MapLoadable::OnSetSpineObjectEffect(const std::string& sName)
+{
+    // 0xbeb430 — CMapLoadable::OnSetSpineObjectEffect
+    // TODO: stub
+    (void)sName;
+}
+
+void MapLoadable::OnRemoveSpineRectEvent(const std::string& sName)
+{
+    // 0xbeb5f0 — CMapLoadable::OnRemoveSpineRectEvent
+    // Remove spine event zone and associated rect event data
+    m_mpSpineEventZoneData.erase(sName);
+    m_mpRectEventData.erase(sName);
+}
+
+void MapLoadable::OnRemoveCameraCtrlZone(const std::string& sName)
+{
+    // 0xbeb730 — CMapLoadable::OnRemoveCameraCtrlZone
+    // Remove camera control zone and associated rect event data
+    m_mpCameraCtrlZoneData.erase(sName);
+    m_mpRectEventData.erase(sName);
+}
+
+void MapLoadable::OnSetMapObjectAnimation(const std::string& sName, std::int32_t nAniType)
+{
+    // 0xbec280 — CMapLoadable::OnSetMapObjectAnimation
+    SetObjectAnimation(sName, static_cast<Gr2DAnimationType>(nAniType));
+}
+
+void MapLoadable::OnSetMapTaggedObjectAnimation(const std::string& sTag, std::int32_t nAniType)
+{
+    // 0xbec320 — CMapLoadable::OnSetMapTaggedObjectAnimation
+    SetTaggedObjectAnimation(sTag, static_cast<Gr2DAnimationType>(nAniType));
+}
+
+void MapLoadable::OnSetMapObjectVisible(const std::string& sName, bool bVisible)
+{
+    // 0xbec3e0 — CMapLoadable::OnSetMapObjectVisible
+    SetObjectVisible(sName, bVisible);
+}
+
+void MapLoadable::OnSetMapObjectMove(const std::string& sName, std::int32_t nX,
+                                      std::int32_t nY, std::int32_t tDuration)
+{
+    // 0xbec4a0 — CMapLoadable::OnSetMapObjectMove
+    SetObjectMove(sName, nX, nY, tDuration);
+}
+
+void MapLoadable::OnSetMapObjectCreateLayer(const std::string& sKeyName,
+                                              const std::string& sPath,
+                                              std::uint32_t nX, std::uint32_t nY)
+{
+    // 0xbec570 — CMapLoadable::OnSetMapObjectCreateLayer
+    if (sKeyName.empty()) return;
+    SetObjectCreateLayer(sKeyName, sPath, nX, nY);
+}
+
+void MapLoadable::OnClearBackEffect()
+{
+    // 0xbfc160 — CMapLoadable::OnClearBackEffect
+    // IDA shows this is a thunk that just calls ReloadBack
+    ReloadBack();
+}
+
+void MapLoadable::OnSetMapTagedObjectVisible(const std::string& sTag,
+                                               std::int32_t bVisible,
+                                               std::int32_t tDuration,
+                                               std::int32_t tDelay)
+{
+    // 0xbfc170 — CMapLoadable::OnSetMapTagedObjectVisible
+    // IDA: if tDelay != 0, enqueue delayed visibility change; else immediate
+    if (tDelay != 0)
+    {
+        SetLayerInvisible(sTag, tDelay, bVisible, tDuration, 0);
+    }
+    else
+    {
+        SetMapTagedObjectVisible(sTag, bVisible, 0, tDuration);
+    }
+}
+
+void MapLoadable::OnSetMapTaggedObjectSmoothVisible(const std::string& sTag,
+                                                     std::int32_t bVisible,
+                                                     std::int32_t tDuration,
+                                                     std::int32_t tDelay)
+{
+    // 0xbfc270 — CMapLoadable::OnSetMapTaggedObjectSmoothVisible
+    // Same as OnSetMapTagedObjectVisible but with bSmooth=1
+    if (tDelay != 0)
+    {
+        SetLayerInvisible(sTag, tDelay, bVisible, tDuration, 1);
+    }
+    else
+    {
+        SetMapTagedObjectVisible(sTag, bVisible, 1, tDuration);
+    }
+}
+
+void MapLoadable::OnEventChangeScreenResolution()
+{
+    // 0xbfc370 — CMapLoadable::OnEventChangeScreenResolution
+    if (!m_pPropField) return;
+
+    // IDA: calls g_gr->raw_SetFrameSkip() — skip for now, not in our WzGr2D API
+
+    RestoreViewRange();
+    ReloadBack();
+    RestoreBackEffect();
+
+    // Clear and recreate letterbox layers
+    m_lpLayerLetterBox.clear();
+    RestoreLetterBox();
+
+    SetGrayBackGround(false); // TODO: read from CWvsContext::m_bBackGrayScale when available
+}
+
+void MapLoadable::OnPacket(std::int32_t nType, const void* pData)
+{
+    // 0xbfc460 — CMapLoadable::OnPacket
+    // TODO: stub — dispatch packet by type
+    (void)nType;
+    (void)pData;
+}
+
+void MapLoadable::OnCreateSpineRectEvent(const std::string& sName)
+{
+    // 0xbf8a60 — CMapLoadable::OnCreateSpineRectEvent
+    // TODO: stub
+    (void)sName;
+}
+
+void MapLoadable::OnCreateCameraCtrlZone(const std::string& sName)
+{
+    // 0xbf8bf0 — CMapLoadable::OnCreateCameraCtrlZone
+    // TODO: stub
+    (void)sName;
+}
+
+void MapLoadable::OnSpineRE_AddBackEvent(const std::string& sName)
+{
+    // 0xbee530 — CMapLoadable::OnSpineRE_AddBackEvent
+    // TODO: stub
+    (void)sName;
+}
+
+void MapLoadable::OnSpineRE_AddObjectEvent(const std::string& sName)
+{
+    // 0xbee700 — CMapLoadable::OnSpineRE_AddObjectEvent
+    // TODO: stub
+    (void)sName;
+}
+
+// ========================================================================
+// IDA Stubs — Make / Create (protected)
+// ========================================================================
+
+void MapLoadable::MakeObjSkeleton(std::int32_t nPageIdx,
+                                   const std::shared_ptr<WzProperty>& pPiece,
+                                   bool bLoad)
+{
+    // 0xbe07c0 — CMapLoadable::MakeObjSkeleton
+    // TODO: stub — create skeleton-animated object layer
+    (void)nPageIdx;
+    (void)pPiece;
+    (void)bLoad;
+}
+
+void MapLoadable::MakeObjLayer(std::int32_t nPageIdx,
+                                const std::shared_ptr<WzProperty>& pPiece,
+                                std::shared_ptr<WzGr2DLayer>& pOutLayer)
+{
+    // 0xbed9b0 — CMapLoadable::MakeObjLayer
+    // TODO: stub — create object layer, output layer pointer
+    (void)nPageIdx;
+    (void)pPiece;
+    pOutLayer = nullptr;
+}
+
+void MapLoadable::MakeVectorAnimate(const std::shared_ptr<WzGr2DLayer>& pLayer,
+                                     const std::shared_ptr<WzProperty>& pProp)
+{
+    // 0xbe2990 — CMapLoadable::MakeVectorAnimate
+    // TODO: stub — set up vector animation on layer from property
+    (void)pLayer;
+    (void)pProp;
+}
+
+void MapLoadable::MakeObstacles()
+{
+    // 0xbea8c0 — CMapLoadable::MakeObstacles
+    // TODO: stub — create obstacle objects from m_pPropField
+}
+
+void MapLoadable::MakeGrid(std::int32_t nPageIdx,
+                            const std::shared_ptr<WzProperty>& pPiece,
+                            bool bLoad)
+{
+    // 0xbeff40 — CMapLoadable::MakeGrid
+    // TODO: stub — create grid-tiled object
+    (void)nPageIdx;
+    (void)pPiece;
+    (void)bLoad;
+}
+
+void MapLoadable::MakeGridSkeleton(std::int32_t nPageIdx,
+                                    const std::shared_ptr<WzProperty>& pPiece,
+                                    bool bLoad)
+{
+    // 0xbf1640 — CMapLoadable::MakeGridSkeleton
+    // TODO: stub — create grid-tiled skeleton object
+    (void)nPageIdx;
+    (void)pPiece;
+    (void)bLoad;
+}
+
+// ========================================================================
+// IDA Stubs — Restore / Load / Reload (protected)
+// ========================================================================
+
+void MapLoadable::RestoreBackEffect()
+{
+    // 0xbdcb60 — CMapLoadable::RestoreBackEffect
+    // Iterate back effect page IDs, look up their layer lists, and animate alpha to 255
+    for (auto nPageID : m_lBackEffect)
+    {
+        auto it = m_mlLayerBack.find(nPageID);
+        if (it == m_mlLayerBack.end() || !it->second) continue;
+
+        for (auto& layer : *it->second)
+        {
+            if (!layer) continue;
+
+            auto* alphaVec = layer->get_alpha();
+            if (!alphaVec) continue;
+
+            // Get current alpha value, then animate from current to 255 (instant)
+            alphaVec->Move(255, 0);
+        }
+    }
+}
+
+void MapLoadable::RestoreBGM(bool bForceRestart)
+{
+    // 0xbeb070 — CMapLoadable::RestoreBGM
+    // If no changed BGM, play from map info
+    if (m_sChangedBgmUOL.empty())
+    {
+        PlayBGMFromMapInfo();
+        return;
+    }
+
+    // Convert u16string to narrow string for SoundMan API
+    std::string sPath(m_sChangedBgmUOL.begin(), m_sChangedBgmUOL.end());
+
+    // Play the changed BGM
+    auto& sm = SoundMan::GetInstance();
+    // IDA: PlayBGM(path, repeat=true, vol=1000, vol=1000, bForceRestart, 0)
+    // Map to our API: (sPath, nLoop=-1, startVol=128, endVol=128, fadeInTime, fadeOutTime)
+    sm.PlayBGM(sPath, -1, 128, 128, bForceRestart ? 0 : 1000, 0);
+}
+
+void MapLoadable::ReloadBack()
+{
+    // 0xbfc000 — CMapLoadable::ReloadBack
+    // Clear all back layers
+    m_mlLayerBack.clear();
+
+    // Reset camera center position
+    auto& gr = get_gr();
+    gr.ResetCameraPosition(0, 0);
+
+    // Restore back layers without loading resources (they are cached)
+    RestoreBack(false);
+}
+
+void MapLoadable::LoadBgmSubInfo(const std::shared_ptr<WzProperty>& pProp)
+{
+    // 0xbf83d0 — CMapLoadable::LoadBgmSubInfo
+    // TODO: stub — parse sub-BGM info from property
+    (void)pProp;
+}
+
+void MapLoadable::LoadBgmSub()
+{
+    // 0xbfadc0 — CMapLoadable::LoadBgmSub
+    // TODO: stub — load sub-BGM tracks from m_mSubBgm
+}
+
+void MapLoadable::InsertbackLayerByTag(const std::vector<std::string>& tags,
+                                        const std::shared_ptr<WzGr2DLayer>& pLayer)
+{
+    // 0xbef690 — CMapLoadable::InsertbackLayerByTag
+    // Iterate tag list, for each tag get or create a list in m_mTagedBack and add the layer
+    if (!pLayer) return;
+
+    for (const auto& sTag : tags)
+    {
+        if (sTag.empty()) continue;
+
+        auto& pList = m_mTagedBack[sTag];
+        if (!pList)
+            pList = std::make_shared<std::list<std::shared_ptr<WzGr2DLayer>>>();
+
+        pList->push_back(pLayer);
+    }
+}
+
+void MapLoadable::InsertbackSkeletonByTag(const std::vector<std::string>& tags,
+                                           const std::shared_ptr<WzGr2DLayer>& pLayer)
+{
+    // 0xbef8b0 — CMapLoadable::InsertbackSkeletonByTag
+    // Same pattern as InsertbackLayerByTag for skeleton layers
+    if (!pLayer) return;
+
+    for (const auto& sTag : tags)
+    {
+        if (sTag.empty()) continue;
+
+        auto& pList = m_mTagedBack[sTag];
+        if (!pList)
+            pList = std::make_shared<std::list<std::shared_ptr<WzGr2DLayer>>>();
+
+        pList->push_back(pLayer);
+    }
+}
+
+// ========================================================================
+// IDA Stubs — Update (protected)
+// ========================================================================
+
+void MapLoadable::UpdateObstacleInfo()
+{
+    // 0xbe7410 — CMapLoadable::UpdateObstacleInfo
+    // TODO: stub — rebuild m_aObstacleInfo from m_lpObstacle
+    m_aObstacleInfo.clear();
+}
+
+void MapLoadable::UpdateTagLayer()
+{
+    // 0xbfc3f0 — CMapLoadable::UpdateTagLayer
+    // TODO: stub — update both object and back tag layers
+    UpdateObjectTagLayer();
+    UpdateBackTagLayer();
+}
+
+void MapLoadable::UpdateLayerInvisible()
+{
+    // 0xbfba10 — CMapLoadable::UpdateLayerInvisible
+    // Iterate delayed invisible entries, process those whose delay has elapsed
+    auto tCur = static_cast<std::int32_t>(get_gr().GetCurrentTime());
+
+    auto it = m_aDelayInvisibleLayer.begin();
+    while (it != m_aDelayInvisibleLayer.end())
+    {
+        // Check if delay time has elapsed: tCur >= tStartTime + tDelayTime
+        if ((tCur - it->tStartTime) >= it->tDelayTime)
+        {
+            // Apply the visibility change
+            SetMapTagedObjectVisible(it->sTag, it->bVisible, it->bSmooth != 0, it->nManual);
+
+            // Remove this entry
+            it = m_aDelayInvisibleLayer.erase(it);
+        }
+        else
+        {
+            ++it;
+        }
+    }
 }
 
 } // namespace ms

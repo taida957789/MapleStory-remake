@@ -17,6 +17,8 @@ class WzDirectory;
 class WzImage;
 class WzNode;
 class WzProperty;
+class WzRaw;
+class WzVideo;
 
 /**
  * @brief WZ File parser
@@ -149,6 +151,16 @@ private:
     [[nodiscard]] auto ParseCanvasProperty() -> WzCanvasData;
 
     /**
+     * @brief Parse raw data property
+     */
+    [[nodiscard]] auto ParseRawDataProperty(int type) -> WzRawData;
+
+    /**
+     * @brief Parse video property
+     */
+    [[nodiscard]] auto ParseVideoProperty() -> WzVideoData;
+
+    /**
      * @brief Parse sound property
      */
     [[nodiscard]] auto ParseSoundProperty() -> WzSoundData;
@@ -165,6 +177,16 @@ public:
     [[nodiscard]] auto LoadSoundData(const WzSoundData& soundData) -> std::vector<std::uint8_t>;
 
 private:
+    /**
+     * @brief Load raw data from file
+     */
+    [[nodiscard]] auto LoadRawDataData(const WzRawData& rawData) -> std::shared_ptr<WzRaw>;
+
+    /**
+     * @brief Load video data from file
+     */
+    [[nodiscard]] auto LoadVideoData(const WzVideoData& videoData) -> std::shared_ptr<WzVideo>;
+
     /**
      * @brief Load and decompress canvas data
      */

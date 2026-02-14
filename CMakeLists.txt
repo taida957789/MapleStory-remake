@@ -54,14 +54,15 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(spdlog)
 
-# Source files
-set(SOURCES
-    src/main.cpp
+# Common library sources (everything except entry points)
+set(LIB_SOURCES
     src/app/Application.cpp
     src/app/Configuration.cpp
+    src/app/UpdateManager.cpp
     src/app/WvsContext.cpp
     src/stage/Stage.cpp
     src/stage/MapLoadable.cpp
+    src/stage/MapViewStage.cpp
     src/stage/Logo.cpp
     src/stage/Loading.cpp
     src/stage/Login.cpp
@@ -74,6 +75,12 @@ set(SOURCES
     src/ui/UINewCharRaceSelect.cpp
     src/ui/UISelectChar.cpp
     src/ui/UIWorldSelect.cpp
+    src/ui/CtrlScrollBar.cpp
+    src/ui/CtrlButton.cpp
+    src/ui/CtrlToolTip.cpp
+    src/ui/UIToolTip.cpp
+    src/ui/CtrlWnd.cpp
+    src/ui/Wnd.cpp
     src/ui/WndMan.cpp
     src/wz/WzResMan.cpp
     src/wz/WzCanvas.cpp
@@ -86,12 +93,15 @@ set(SOURCES
     src/wz/WzImage.cpp
     src/wz/WzNode.cpp
     src/wz/WzPackage.cpp
+    src/wz/WzRaw.cpp
+    src/wz/WzVideo.cpp
     src/wz/WzSourceFactory.cpp
     src/graphics/WzGr2D.cpp
     src/graphics/WzGr2DLayer.cpp
     src/graphics/WzGr2DCanvas.cpp
     src/graphics/Gr2DVector.cpp
     src/graphics/VecCtrl.cpp
+    src/graphics/CameraCtrl.cpp
     src/input/InputSystem.cpp
     src/audio/SoundMan.cpp
     src/network/ClientSocket.cpp
@@ -108,7 +118,6 @@ set(SOURCES
     src/animation/ActionData.cpp
     src/animation/ActionMan.cpp
     src/animation/LoadItemAction.cpp
-    src/animation/LoadCharacterAction.cpp
     src/animation/SpriteInstance.cpp
     src/animation/SpriteSource.cpp
     src/life/Life.cpp
@@ -140,6 +149,7 @@ set(HEADERS
     src/app/WvsContext.h
     src/stage/Stage.h
     src/stage/MapLoadable.h
+    src/stage/MapViewStage.h
     src/stage/Logo.h
     src/stage/Loading.h
     src/stage/Login.h
@@ -189,7 +199,6 @@ set(HEADERS
     src/animation/ActionMan.h
     src/animation/CharacterImgEntry.h
     src/animation/LoadItemAction.h
-    src/animation/LoadCharacterAction.h
     src/animation/SpriteInstance.h
     src/animation/SpriteSource.h
     src/animation/CharacterActionFrameEntry.h
@@ -212,25 +221,41 @@ set(HEADERS
     src/constants/WeaponConstants.h
 )
 
-add_executable(${PROJECT_NAME} ${SOURCES} ${HEADERS})
+# Common static library (shared by all executables)
+add_library(MapleStoryLib STATIC ${LIB_SOURCES} ${HEADERS})
 
-target_include_directories(${PROJECT_NAME} PRIVATE
+target_include_directories(MapleStoryLib PUBLIC
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/3rdparty/freetype/include
     ${CMAKE_SOURCE_DIR}/3rdparty/minimp3
     ${CMAKE_SOURCE_DIR}/3rdparty/mio/include
 )
 
-# Link SDL3, zlib, spdlog, and FreeType
 if(BUILD_SHARED_LIBS)
-    target_link_libraries(${PROJECT_NAME} PRIVATE SDL3::SDL3 ZLIB::ZLIB spdlog::spdlog freetype)
+    target_link_libraries(MapleStoryLib PUBLIC SDL3::SDL3 ZLIB::ZLIB spdlog::spdlog freetype)
 else()
-    target_link_libraries(${PROJECT_NAME} PRIVATE SDL3::SDL3-static ZLIB::ZLIB spdlog::spdlog freetype)
+    target_link_libraries(MapleStoryLib PUBLIC SDL3::SDL3-static ZLIB::ZLIB spdlog::spdlog freetype)
 endif()
 
-# Platform-specific settings
 if(WIN32)
-    target_link_libraries(${PROJECT_NAME} PRIVATE ws2_32)
+    target_link_libraries(MapleStoryLib PUBLIC ws2_32)
+endif()
+
+# Debug canvas overlay
+option(MS_DEBUG_CANVAS "Enable debug canvas overlay for development" ON)
+if(MS_DEBUG_CANVAS)
+    target_compile_definitions(MapleStoryLib PUBLIC MS_DEBUG_CANVAS)
+endif()
+
+# --- Main client executable ---
+add_executable(${PROJECT_NAME} src/main.cpp)
+target_link_libraries(${PROJECT_NAME} PRIVATE MapleStoryLib)
+
+# --- Map Viewer tool ---
+option(BUILD_TOOLS "Build tool executables (MapViewer, etc.)" ON)
+if(BUILD_TOOLS)
+    add_executable(MapViewer tools/map_viewer.cpp)
+    target_link_libraries(MapViewer PRIVATE MapleStoryLib)
 endif()
 
 # Symlink resources (avoid copying 77GB+ of WZ data on every build)
@@ -239,6 +264,12 @@ if(EXISTS ${CMAKE_SOURCE_DIR}/resources)
         COMMAND ${CMAKE_COMMAND} -E create_symlink
         ${CMAKE_SOURCE_DIR}/resources $<TARGET_FILE_DIR:${PROJECT_NAME}>/resources
     )
+    if(BUILD_TOOLS)
+        add_custom_command(TARGET MapViewer POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E create_symlink
+            ${CMAKE_SOURCE_DIR}/resources $<TARGET_FILE_DIR:MapViewer>/resources
+        )
+    endif()
 endif()
 
 # Copy SDL3 shared library when using dynamic linking
@@ -247,6 +278,12 @@ if(BUILD_SHARED_LIBS)
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
         $<TARGET_FILE:SDL3::SDL3> $<TARGET_FILE_DIR:${PROJECT_NAME}>
     )
+    if(BUILD_TOOLS)
+        add_custom_command(TARGET MapViewer POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            $<TARGET_FILE:SDL3::SDL3> $<TARGET_FILE_DIR:MapViewer>
+        )
+    endif()
 endif()
 
 # Tests
@@ -254,10 +291,4 @@ option(BUILD_TESTS "Build tests" ON)
 if(BUILD_TESTS)
     enable_testing()
     add_subdirectory(tests)
-endif()
-
-# Debug canvas overlay
-option(MS_DEBUG_CANVAS "Enable debug canvas overlay for development" ON)
-if(MS_DEBUG_CANVAS)
-    target_compile_definitions(${PROJECT_NAME} PRIVATE MS_DEBUG_CANVAS)
 endif()

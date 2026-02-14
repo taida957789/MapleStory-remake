@@ -105,6 +105,11 @@ auto WzGr2D::Initialize(std::uint32_t width, std::uint32_t height,
     m_tLastFrame = m_tCurrent;
     m_tFpsUpdateTime = m_tCurrent;
 
+    // Initialize tone vectors to full brightness (matches CWvsApp::InitializeGr2D)
+    // redTone.put_x(255); greenBlueTone.Move(255, 255);
+    m_vecRedTone.PutX(255);
+    m_vecGreenBlueTone.Move(255, 255);
+
     return true;
 }
 
@@ -238,6 +243,10 @@ auto WzGr2D::RenderFrame(std::int32_t tCur) -> bool
     auto screenCenterX = static_cast<std::int32_t>(m_uWidth / 2);
     auto screenCenterY = static_cast<std::int32_t>(m_uHeight / 2);
 
+    // Evaluate center vector (resolves RelMove/WrapClip chain)
+    auto camX = m_vecCenter.GetX();
+    auto camY = m_vecCenter.GetY();
+
     for (auto& layer : m_layers)
     {
         if (layer)
@@ -246,8 +255,33 @@ auto WzGr2D::RenderFrame(std::int32_t tCur) -> bool
 
             // All layers use world-space coordinates with camera offset
             layer->Render(m_pRenderer,
-                          -m_cameraPos.x + screenCenterX,
-                          -m_cameraPos.y + screenCenterY);
+                          -camX + screenCenterX,
+                          -camY + screenCenterY);
+        }
+    }
+
+    // Apply screen tone modulation (redTone / greenBlueTone)
+    {
+        const auto r = static_cast<std::uint8_t>(
+            std::clamp(m_vecRedTone.GetX(), 0, 255));
+        const auto g = static_cast<std::uint8_t>(
+            std::clamp(m_vecGreenBlueTone.GetX(), 0, 255));
+        const auto b = static_cast<std::uint8_t>(
+            std::clamp(m_vecGreenBlueTone.GetY(), 0, 255));
+
+        if (r != 255 || g != 255 || b != 255)
+        {
+            // Multiply blend: dstRGB = srcRGB * dstRGB (with srcA=255)
+            SDL_SetRenderDrawBlendMode(m_pRenderer, SDL_BLENDMODE_MUL);
+            SDL_SetRenderDrawColor(m_pRenderer, r, g, b, 255);
+
+            const SDL_FRect fullScreen{0.0F, 0.0F,
+                                       static_cast<float>(m_uWidth),
+                                       static_cast<float>(m_uHeight)};
+            SDL_RenderFillRect(m_pRenderer, &fullScreen);
+
+            // Restore default blend mode
+            SDL_SetRenderDrawBlendMode(m_pRenderer, SDL_BLENDMODE_BLEND);
         }
     }
 
@@ -274,24 +308,28 @@ auto WzGr2D::CheckMode(std::uint32_t width, std::uint32_t height,
     return width >= 640 && height >= 480 && (bpp == 16 || bpp == 24 || bpp == 32);
 }
 
-auto WzGr2D::ScreenToWorld(const Point2D& screenPos) const -> Point2D
+auto WzGr2D::ScreenToWorld(const Point2D& screenPos) -> Point2D
 {
     // Convert screen coordinates to world coordinates
     // Screen center = world camera position
     auto screenCenterX = static_cast<std::int32_t>(m_uWidth / 2);
     auto screenCenterY = static_cast<std::int32_t>(m_uHeight / 2);
-    return Point2D{screenPos.x - screenCenterX + m_cameraPos.x,
-                   screenPos.y - screenCenterY + m_cameraPos.y};
+    auto camX = m_vecCenter.GetX();
+    auto camY = m_vecCenter.GetY();
+    return Point2D{screenPos.x - screenCenterX + camX,
+                   screenPos.y - screenCenterY + camY};
 }
 
-auto WzGr2D::WorldToScreen(const Point2D& worldPos) const -> Point2D
+auto WzGr2D::WorldToScreen(const Point2D& worldPos) -> Point2D
 {
     // Convert world coordinates to screen coordinates
     // World at camera position = screen center
     auto screenCenterX = static_cast<std::int32_t>(m_uWidth / 2);
     auto screenCenterY = static_cast<std::int32_t>(m_uHeight / 2);
-    return Point2D{worldPos.x - m_cameraPos.x + screenCenterX,
-                   worldPos.y - m_cameraPos.y + screenCenterY};
+    auto camX = m_vecCenter.GetX();
+    auto camY = m_vecCenter.GetY();
+    return Point2D{worldPos.x - camX + screenCenterX,
+                   worldPos.y - camY + screenCenterY};
 }
 
 void WzGr2D::UpdateFps(std::int32_t tCur)

@@ -131,8 +131,8 @@ public:
     [[nodiscard]] virtual auto DumpString() -> std::string { return {}; }
 
     // === Serialization ===
-    virtual void RawDecode(InPacket& /*iPacket*/) {}
-    virtual void RawEncode(OutPacket& /*oPacket*/, bool /*bForInternal*/) {}
+    virtual void RawDecode(InPacket& iPacket);
+    virtual void RawEncode(OutPacket& oPacket, bool bForInternal);
 
     // === Set item ===
     [[nodiscard]] virtual auto IsSetItem() -> std::int32_t { return 0; }

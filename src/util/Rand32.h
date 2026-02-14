@@ -44,7 +44,7 @@ namespace detail
 {
 
 /// Global Rand32 instance used by security wrappers (equivalent to g_rand)
-inline auto GetSecureRand() -> Rand32&
+inline auto get_rand() -> Rand32&
 {
     static Rand32 instance;
     return instance;

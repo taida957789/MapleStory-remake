@@ -15,6 +15,8 @@ namespace ms
 
 class WzCanvas;
 class WzFile;
+class WzRaw;
+class WzVideo;
 class IWzSource;
 
 /**
@@ -45,6 +47,8 @@ public:
         double,
         std::string,
         std::shared_ptr<WzCanvas>,
+        std::shared_ptr<WzRaw>,
+        std::shared_ptr<WzVideo>,
         WzVector2D,
         WzSoundData>;
 
@@ -88,6 +92,10 @@ public:
     void SetVector(const WzVector2D& vec);
     void SetVector(std::int32_t x, std::int32_t y);
     void SetSound(const WzSoundData& sound);
+    void SetRaw(std::shared_ptr<WzRaw> raw);
+    [[nodiscard]] auto GetRaw() const -> std::shared_ptr<WzRaw>;
+    void SetVideo(std::shared_ptr<WzVideo> video);
+    [[nodiscard]] auto GetVideo() const -> std::shared_ptr<WzVideo>;
 
     // Child access
     [[nodiscard]] auto GetChild(const std::string& name) -> std::shared_ptr<WzProperty>;

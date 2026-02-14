@@ -156,16 +156,6 @@ bool is_accessory(std::int32_t nItemID)
     }
 }
 
-bool is_kaiser_job(std::int32_t nJob)
-{
-    return nJob / 100 == 61 || nJob == 6000;
-}
-
-bool is_luminous_job(std::int32_t nJob)
-{
-    return nJob / 100 == 27 || nJob == 2004;
-}
-
 bool is_davenger_job(std::int32_t nJob)
 {
     return nJob / 100 == 31;

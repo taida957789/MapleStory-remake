@@ -1,13 +1,19 @@
 #include "ActionMan.h"
 
 #include "ActionFrame.h"
+#include "CharacterActionFrameEntry.h"
+#include "LoadItemAction.h"
 #include "SpriteSource.h"
+#include "constants/ActionHelpers.h"
 #include "constants/EquipDataPath.h"
-#include "graphics/WzGr2DCanvas.h"
 #include "constants/WeaponConstants.h"
+#include "enums/BodyPart.h"
 #include "enums/CharacterAction.h"
+#include "graphics/WzGr2DCanvas.h"
+#include "templates/item/ItemInfo.h"
 #include "app/Application.h"
 #include "util/Logger.h"
+#include "util/Rand32.h"
 #include "wz/WzCanvas.h"
 #include "wz/WzProperty.h"
 #include "wz/WzResMan.h"
@@ -747,6 +753,45 @@ auto ActionMan::GetWeaponAfterImage(const std::string& sUOL)
 }
 
 // ---------------------------------------------------------------------------
+// GetRandomMoveActionChange
+// (matches decompiled CActionMan::GetRandomMoveActionChange @ 0x4d0e40)
+// Weighted random selection of an alternative action for the given action ID.
+// ---------------------------------------------------------------------------
+auto ActionMan::GetRandomMoveActionChange(std::int32_t nActionID) -> std::int32_t
+{
+    auto it = m_mMoveActionChange.find(nActionID);
+    if (it == m_mMoveActionChange.end())
+        return -1;
+
+    auto& entries = it->second;
+    if (entries.empty())
+        return -1;
+
+    // Sum all probabilities
+    std::int32_t nTotalProb = 0;
+    for (auto& e : entries)
+        nTotalProb += e.m_nProb;
+
+    if (nTotalProb <= 0)
+        return -1;
+
+    // Pick a random value in [1, nTotalProb]
+    auto nRand = static_cast<std::uint32_t>(detail::get_rand().Random());
+    auto nRoll = static_cast<std::int32_t>((nRand % nTotalProb) + 1);
+
+    // Walk entries, accumulate probability
+    std::int32_t nAccum = 0;
+    for (auto& e : entries)
+    {
+        nAccum += e.m_nProb;
+        if (nRoll <= nAccum)
+            return e.m_nAction;
+    }
+
+    return -1;
+}
+
+// ---------------------------------------------------------------------------
 // LoadRandomMoveActionChange
 // (matches decompiled CActionMan::LoadRandomMoveActionChange)
 // Loads random move action change data from Etc/RandomMoveAction.img.
@@ -1140,6 +1185,722 @@ void ActionMan::LoadFaceLook(
 
     m_lFaceLook.push_back(entry);
     m_mFaceLook[fl] = entry;
+}
+
+// ---------------------------------------------------------------------------
+// load_character_action  (matches CActionMan::load_character_action @ 0x4eefe0)
+// Loads body, face, and all equipment sprites for a character action.
+// ---------------------------------------------------------------------------
+auto ActionMan::load_character_action(
+    std::int32_t nAction,
+    std::int32_t nSkin,
+    std::int32_t nJob,
+    const std::int32_t* aAvatarHairEquip,
+    std::vector<ActionFrame>& aFrame,
+    std::int32_t nWeaponStickerID,
+    std::int32_t nVehicleID,
+    std::int32_t nGhostIndex,
+    std::int32_t nGatherToolID,
+    bool bDrawElfEar,
+    std::int32_t nLarknessState,
+    bool bInvisibleCashCape,
+    std::int32_t nMixedHairId,
+    std::int32_t nMixPercent,
+    bool bZigZag,
+    bool bRemoveBody) -> bool
+{
+    using CA = CharacterAction;
+    constexpr auto I = [](CA a) { return static_cast<std::int32_t>(a); };
+
+    // --- Validate weapon sticker ---
+    if (!is_weapon_sticker_item(nWeaponStickerID))
+        nWeaponStickerID = 0;
+
+    // --- bCanEquip: is a cap equipped? ---
+    bool bCanEquip =
+        (aAvatarHairEquip[static_cast<std::int32_t>(BodyPart::BP_CAP)] != 0);
+
+    // --- Compute body item ID (nSkin + 2000) ---
+    auto nBodyID = nSkin + 2000;
+
+    // Zero body for certain actions
+    if (static_cast<std::uint32_t>(nAction - I(CA::MakingSkill2)) <= 8u
+        || static_cast<std::uint32_t>(nAction - I(CA::Setitem3)) <= 1u
+        || is_dance_action(static_cast<CA>(nAction))
+        || (nGhostIndex == 3
+            && static_cast<std::uint32_t>(nAction - 132) <= 7u)
+        || nAction == I(CA::HideBody)
+        || static_cast<std::uint32_t>(nAction - 1156) <= 3u
+        || static_cast<std::uint32_t>(nAction - 1051) <= 0x64u
+        || static_cast<std::uint32_t>(nAction - 981) <= 0x45u
+        || bRemoveBody)
+    {
+        nBodyID = 2000;
+    }
+
+    // --- Cash cape check ---
+    // v93 (bCashCape) = true if cape is cash item or bInvisibleCashCape
+    auto nCapeID = aAvatarHairEquip[static_cast<std::int32_t>(BodyPart::BP_CAPE)];
+    bool bCashCape = bInvisibleCashCape;
+    if (!bCashCape && nCapeID != 0)
+    {
+        bCashCape = ItemInfo::GetInstance().IsCashItem(nCapeID);
+    }
+
+    // --- Body action override: bRemoveBody → Blink ---
+    auto nBodyAction = nAction;
+    if (bRemoveBody)
+        nBodyAction = I(CA::Blink);
+
+    // --- 1. Load body sprites ---
+    LoadItemAction(
+        nBodyAction, nJob, nBodyID, aFrame,
+        /*nWeaponStickerID=*/0,
+        nVehicleID, nGhostIndex,
+        bCanEquip,
+        /*bGatherEquip=*/false,
+        bDrawElfEar, nLarknessState, bCashCape,
+        /*nMixHairID=*/0,
+        /*nMixPercent=*/100,
+        /*bCapExtendFrame=*/false);
+
+    // --- Ghost action mapping ---
+    action_mapping_for_ghost(nAction);
+
+    // --- Dead/DeadRiding → Jump for face ---
+    auto nFaceAction = nAction;
+    if (nAction == I(CA::DeadRiding))
+        nAction = I(CA::Dead);
+    if (nAction == I(CA::Dead))
+        nFaceAction = I(CA::Jump);
+    else
+        nFaceAction = nAction;
+
+    // --- 2. Load face sprites ---
+    LoadItemAction(
+        nFaceAction, nJob, nSkin + 12000, aFrame,
+        /*nWeaponStickerID=*/0,
+        nVehicleID, nGhostIndex,
+        bCanEquip,
+        /*bGatherEquip=*/false,
+        bDrawElfEar, nLarknessState, bCashCape,
+        /*nMixHairID=*/0,
+        /*nMixPercent=*/100,
+        /*bCapExtendFrame=*/false);
+
+    // --- Action for equipment: Dead → Jump ---
+    auto nEquipAction = I(CA::Jump);
+    if (nAction != I(CA::Dead))
+        nEquipAction = nAction;
+
+    // --- Get action data for extend frame checks ---
+    auto pActionData = GetActionData(nEquipAction);
+
+    // --- Get hair/cap CharacterImgEntry ---
+    auto pHairImgEntry = GetCharacterImgEntry(
+        aAvatarHairEquip[static_cast<std::int32_t>(BodyPart::BP_HAIR)]);
+    auto pCapImgEntry = GetCharacterImgEntry(
+        aAvatarHairEquip[static_cast<std::int32_t>(BodyPart::BP_CAP)]);
+
+    // --- Extend frame checks ---
+    bool bHairExtendFrame = false;
+    bool bCapExtendFrame = false;
+
+    // Hair extend frame check
+    if (pHairImgEntry && pHairImgEntry->m_bExtendFrame
+        && pActionData && !pActionData->m_bPieced
+        && !is_not_pieced_action(nAction))
+    {
+        if (pHairImgEntry->m_pWeeklyImg)
+        {
+            auto sActionName = GetActionName(nAction);
+            auto pHairAction = pHairImgEntry->m_pWeeklyImg->GetChild(sActionName);
+            if (pHairAction)
+            {
+                auto nWzFrameCount = pHairAction->GetChildCount();
+                auto nCurrentCount = aFrame.size();
+                if (nWzFrameCount > nCurrentCount)
+                    bHairExtendFrame = true;
+            }
+        }
+    }
+
+    // Cap extend frame check
+    if (pCapImgEntry && pCapImgEntry->m_bExtendFrame
+        && pActionData && !pActionData->m_bPieced
+        && !is_not_pieced_action(nAction))
+    {
+        if (pCapImgEntry->m_pWeeklyImg)
+        {
+            auto sActionName = GetActionName(nAction);
+            auto pCapAction = pCapImgEntry->m_pWeeklyImg->GetChild(sActionName);
+            if (pCapAction)
+            {
+                auto nWzFrameCount = pCapAction->GetChildCount();
+                auto nCurrentCount = aFrame.size();
+                if (nWzFrameCount > nCurrentCount)
+                    bCapExtendFrame = true;
+            }
+        }
+    }
+
+    // --- 3. Equipment loop ---
+    for (std::int32_t i = 0; i < static_cast<std::int32_t>(BodyPart::BP_COUNT); ++i)
+    {
+        auto ePart = static_cast<BodyPart>(i);
+
+        // Skip logic per body part
+        switch (ePart)
+        {
+        case BodyPart::BP_WEAPON:
+            if (is_weapon_hide_action(static_cast<CA>(nAction)))
+                continue;
+            // Fall through to Pvpko check (shared with BP_SHIELD)
+            if (nAction == I(CA::Pvpko))
+                continue;
+            break;
+
+        case BodyPart::BP_TAMINGMOB:
+        case BodyPart::BP_SADDLE:
+        case BodyPart::BP_MOBEQUIP:
+            continue;
+
+        case BodyPart::BP_SHIELD:
+            if (nAction == I(CA::Pvpko))
+                continue;
+            break;
+
+        default:
+            break;
+        }
+
+        // Hat-dance skip for hair (0) and cap (1)
+        if (static_cast<std::uint32_t>(i) <= 1u
+            && is_hatdance_action(nAction))
+            continue;
+
+        // --- BP_SHIELD special handling ---
+        if (ePart == BodyPart::BP_SHIELD)
+        {
+            // Skip shield if gather tool equipped and shield is zero sub-weapon
+            if (is_gather_tool_item(nGatherToolID)
+                && is_zero_sub_weapon_item(
+                    aAvatarHairEquip[static_cast<std::int32_t>(BodyPart::BP_SHIELD)]))
+                continue;
+
+            // Special case: 1332237 → load 1342085 instead
+            if (nGatherToolID == 1332237)
+            {
+                auto nRealAction = nAction;
+                if (nAction == I(CA::Dead))
+                    nRealAction = I(CA::Jump);
+
+                LoadItemAction(
+                    nRealAction, nJob, 1342085, aFrame,
+                    /*nWeaponStickerID=*/0,
+                    nVehicleID, nGhostIndex,
+                    bCanEquip,
+                    /*bGatherEquip=*/false,
+                    bDrawElfEar, nLarknessState, bCashCape,
+                    /*nMixHairID=*/0,
+                    /*nMixPercent=*/100,
+                    /*bCapExtendFrame=*/false);
+                continue;
+            }
+
+            // Fall through to regular equipment loading
+        }
+
+        // --- BP_HAIR (i == 0) ---
+        if (i == 0)
+        {
+            // Skip if hair has extend frames (loaded later)
+            if (bHairExtendFrame)
+                continue;
+
+            // Mixed hair special path
+            if (nMixedHairId != 0)
+            {
+                auto nRealAction = nAction;
+                if (nAction == I(CA::Dead))
+                    nRealAction = I(CA::Jump);
+
+                LoadItemAction(
+                    nRealAction, nJob,
+                    aAvatarHairEquip[0], aFrame,
+                    /*nWeaponStickerID=*/0,
+                    nVehicleID, nGhostIndex,
+                    bCanEquip,
+                    /*bGatherEquip=*/false,
+                    bDrawElfEar, nLarknessState, bCashCape,
+                    nMixedHairId, nMixPercent,
+                    /*bCapExtendFrame=*/false);
+                continue;
+            }
+
+            // Fall through to regular loading
+        }
+
+        // --- BP_CAP (i == 1) ---
+        if (ePart == BodyPart::BP_CAP)
+        {
+            // Skip if cap has extend frames (loaded later)
+            if (bCapExtendFrame)
+                continue;
+            // Fall through to regular loading
+        }
+
+        // --- BP_WEAPON (i == 11) with gather tool ---
+        if (i == static_cast<std::int32_t>(BodyPart::BP_WEAPON))
+        {
+            if (is_gather_tool_item(nGatherToolID)
+                || is_vari_cane_weapon(nGatherToolID))
+            {
+                auto nRealAction = nAction;
+                if (nAction == I(CA::Dead))
+                    nRealAction = I(CA::Jump);
+
+                LoadItemAction(
+                    nRealAction, nJob,
+                    nGatherToolID, aFrame,
+                    nWeaponStickerID,
+                    nVehicleID, nGhostIndex,
+                    bCanEquip,
+                    /*bGatherEquip=*/true,
+                    bDrawElfEar, nLarknessState, bCashCape,
+                    /*nMixHairID=*/0,
+                    /*nMixPercent=*/100,
+                    /*bCapExtendFrame=*/false);
+                continue;
+            }
+        }
+
+        // --- Regular equipment loading ---
+        auto nEquipID = aAvatarHairEquip[i];
+        if (nEquipID == 0)
+            continue;
+
+        auto nRealAction = nAction;
+        if (nAction == I(CA::Dead))
+            nRealAction = I(CA::Jump);
+
+        auto nStickerForSlot =
+            (ePart == BodyPart::BP_WEAPON) ? nWeaponStickerID : 0;
+
+        LoadItemAction(
+            nRealAction, nJob, nEquipID, aFrame,
+            nStickerForSlot,
+            nVehicleID, nGhostIndex,
+            bCanEquip,
+            /*bGatherEquip=*/false,
+            bDrawElfEar, nLarknessState, bCashCape,
+            /*nMixHairID=*/0,
+            /*nMixPercent=*/100,
+            /*bCapExtendFrame=*/false);
+    }
+
+    // --- 4. No cap: set m_sExclVSlot = "H4H5" on all frames ---
+    if (aAvatarHairEquip[static_cast<std::int32_t>(BodyPart::BP_CAP)] == 0)
+    {
+        // StringPool 1940 = "H4H5"
+        static const std::string s_sCapHairVSlot = "H4H5";
+        for (auto& frame : aFrame)
+        {
+            frame.SetExclusiveVSlot(s_sCapHairVSlot);
+        }
+    }
+
+    // --- 5. Zigzag mirroring: [0,1,2,...,n-1] → [0,1,...,n-1,...,1,0] ---
+    if (bZigZag && aFrame.size() > 1)
+    {
+        auto nOrigSize = aFrame.size();
+        auto nNewSize = 2 * nOrigSize - 2;
+        std::vector<ActionFrame> aZigzag(nNewSize);
+
+        // Copy original frames
+        for (std::size_t i = 0; i < nOrigSize; ++i)
+            aZigzag[i] = aFrame[i];
+
+        // Mirror frames
+        auto dst = nOrigSize;
+        auto src = static_cast<std::ptrdiff_t>(nOrigSize) - 2;
+        while (dst < nNewSize)
+        {
+            aZigzag[dst] = aFrame[static_cast<std::size_t>(src)];
+            ++dst;
+            --src;
+        }
+
+        aFrame = std::move(aZigzag);
+    }
+
+    // --- 6. Extend frame loading for hair ---
+    if (bHairExtendFrame)
+    {
+        auto nHairID = aAvatarHairEquip[static_cast<std::int32_t>(BodyPart::BP_HAIR)];
+
+        if (!bCapExtendFrame)
+        {
+            // Only hair has extend frames → use LoadItemActionExtendFrame
+            LoadItemActionExtendFrame(
+                pHairImgEntry->m_pWeeklyImg,
+                nEquipAction, nJob, nHairID, aFrame,
+                /*nWeaponStickerID=*/0,
+                nVehicleID, nGhostIndex,
+                bCanEquip,
+                /*bGatherEquip=*/false,
+                bDrawElfEar, nLarknessState, bCashCape,
+                nMixedHairId, nMixPercent);
+        }
+        else
+        {
+            // Both have extend frames → regular load with bCapExtendFrame=true
+            LoadItemAction(
+                nEquipAction, nJob, nHairID, aFrame,
+                /*nWeaponStickerID=*/0,
+                nVehicleID, nGhostIndex,
+                bCanEquip,
+                /*bGatherEquip=*/false,
+                bDrawElfEar, nLarknessState, bCashCape,
+                nMixedHairId, nMixPercent,
+                /*bCapExtendFrame=*/true);
+        }
+    }
+
+    // --- 7. Extend frame loading for cap ---
+    if (bCapExtendFrame)
+    {
+        auto nCapID = aAvatarHairEquip[static_cast<std::int32_t>(BodyPart::BP_CAP)];
+
+        LoadItemActionExtendFrame(
+            pCapImgEntry->m_pWeeklyImg,
+            nEquipAction, nJob, nCapID, aFrame,
+            /*nWeaponStickerID=*/0,
+            nVehicleID, nGhostIndex,
+            bCanEquip,
+            /*bGatherEquip=*/false,
+            bDrawElfEar, nLarknessState, bCashCape,
+            /*nMixHairID=*/0,
+            /*nMixPercent=*/100);
+    }
+
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+// MergeCharacterSprite  (matches CActionMan::MergeCharacterSprite @ 0x4d7160)
+// Converts ActionFrame vector into CharacterActionFrameEntry vector.
+// Extracts anchor points (navel, brow, muzzle, hand) and timing data.
+// ---------------------------------------------------------------------------
+void ActionMan::MergeCharacterSprite(
+    const std::vector<ActionFrame>& aFrame,
+    std::vector<std::shared_ptr<CharacterActionFrameEntry>>& apFE)
+{
+    auto nCount = aFrame.size();
+    apFE.resize(nCount);
+
+    for (std::size_t i = 0; i < nCount; ++i)
+    {
+        auto& frame = aFrame[i];
+        auto entry = std::make_shared<CharacterActionFrameEntry>();
+
+        // Copy timing and body rect
+        entry->tDelay = frame.tDelay;
+        entry->rcBody = frame.rcBody;
+
+        // Canvas compositing is deferred — our rendering pipeline handles
+        // sprite layering differently from the original COM-based Draw().
+        entry->pCanvasUnderFace = nullptr;
+        entry->pCanvasOverFace = nullptr;
+
+        // Search all groups for named anchor points.
+        // Original CActionFrame::Draw extracts these relative to body center
+        // after compositing; here we extract raw positions from groups.
+        for (auto& pGroup : frame.m_lGroups)
+        {
+            if (!pGroup)
+                continue;
+
+            for (auto& mapInfo : *pGroup)
+            {
+                if (mapInfo.sName == "navel")
+                    entry->ptNavel = mapInfo.pt;
+                else if (mapInfo.sName == "brow")
+                    entry->ptBrow = mapInfo.pt;
+                else if (mapInfo.sName == "muzzle")
+                    entry->ptMuzzle = mapInfo.pt;
+                else if (mapInfo.sName == "hand")
+                    entry->ptHand = mapInfo.pt;
+                else if (mapInfo.sName == "head")
+                    entry->ptHead = mapInfo.pt;
+                else if (mapInfo.sName == "tail")
+                    entry->ptTail = mapInfo.pt;
+            }
+        }
+
+        apFE[i] = std::move(entry);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// LoadCharacterAction  (matches CActionMan::LoadCharacterAction @ 0x4f1350)
+// Outer public wrapper — preprocesses equipment array, handles special cases,
+// then delegates to load_character_action + MergeCharacterSprite.
+// ---------------------------------------------------------------------------
+void ActionMan::LoadCharacterAction(
+    std::int32_t nAction,
+    std::int32_t nGender,
+    std::int32_t nSkin,
+    std::int32_t nJob,
+    std::int32_t* aAvatarHairEquip,
+    std::vector<std::shared_ptr<CharacterActionFrameEntry>>& apFE,
+    std::int32_t nWeaponStickerID,
+    std::int32_t nVehicleID,
+    bool /*bTamingMobTired*/,
+    std::int32_t nGhostIndex,
+    std::int32_t nGatherToolID,
+    bool bDrawElfEar,
+    std::int32_t nChangeWeaponLook,
+    std::int32_t nLarknessState,
+    std::int32_t nPortableChair,
+    std::int32_t nMixedHairColor,
+    std::int32_t nMixPercent,
+    std::int32_t nBattlePvPAvatar)
+{
+    using CA = CharacterAction;
+    constexpr auto I = [](CA a) { return static_cast<std::int32_t>(a); };
+
+    bool bRemoveBody = false;
+    bool bInvisibleWeapon = false;
+
+    // --- Portable chair: check removeBody / invisibleWeapon ---
+    if (nPortableChair != 0)
+    {
+        auto pInfo = ItemInfo::GetInstance().GetItemInfo(nPortableChair);
+        if (pInfo)
+        {
+            auto pRemoveBody = pInfo->GetChild("removeBody");
+            if (pRemoveBody && pRemoveBody->GetInt(0) != 0)
+                bRemoveBody = true;
+
+            auto pInvisWeapon = pInfo->GetChild("invisibleWeapon");
+            if (pInvisWeapon && pInvisWeapon->GetInt(0) != 0)
+                bInvisibleWeapon = true;
+        }
+    }
+
+    // --- Build local equipment array b[32] ---
+    std::int32_t b[32]{};
+    auto nLocalAction = nAction;
+
+    if (nJob == 13000 || nJob == 13100)
+    {
+        // PB jobs: zero all equipment, clear sticker and skin
+        std::memset(b, 0, sizeof(b));
+        nWeaponStickerID = 0;
+        nSkin = 0;
+    }
+    else if (bRemoveBody
+        || nAction == I(CA::Dead)        // 32
+        || nAction == I(CA::DeadRiding)  // 1165
+        || (nAction >= 856 && nAction <= 857)  // Setitem3-4
+        || is_dance_action(static_cast<CA>(nAction)))
+    {
+        // removeBody/dead/setitem/dance: zero most, keep hair(0), cap(1),
+        // eyeacc(3), earacc(4)
+        std::memset(b, 0, sizeof(b));
+        b[0] = aAvatarHairEquip[0];  // hair
+        b[1] = aAvatarHairEquip[1];  // cap
+        b[3] = aAvatarHairEquip[3];  // eyeacc
+        b[4] = aAvatarHairEquip[4];  // earacc
+    }
+    else
+    {
+        // Normal: copy all, then zero specific slots
+        std::memcpy(b, aAvatarHairEquip, sizeof(b));
+        b[14] = 0;                        // PETWEAR
+        b[2]  = 0;                        // FACEACC
+        b[g_anRingBodyPart[0]] = 0;       // RING1 (12)
+        b[g_anRingBodyPart[1]] = 0;       // RING2 (13)
+        b[g_anRingBodyPart[2]] = 0;       // RING3 (15)
+        b[g_anRingBodyPart[3]] = 0;       // RING4 (16)
+
+        // Default coat/pants by gender if missing
+        auto nCoat = b[5];
+        auto nPants = b[6];
+
+        if (is_long_coat(nCoat) && nPants != 0)
+        {
+            // Long coat with pants: zero pants unless coat is non-cash and pants is cash
+            if (!ItemInfo::GetInstance().IsCashItem(nCoat)
+                && ItemInfo::GetInstance().IsCashItem(nPants))
+            {
+                // Cash overcoat: keep pants, fall through to default coat
+            }
+            else
+            {
+                nPants = 0;
+                b[6] = 0;
+            }
+        }
+
+        if (nCoat == 0)
+        {
+            nCoat = (nGender != 0) ? 1041046 : 1040036;
+            b[5] = nCoat;
+        }
+
+        if (nPants == 0 && !is_long_coat(nCoat))
+        {
+            b[6] = (nGender != 0) ? 1061039 : 1060026;
+        }
+    }
+
+    // --- Transparent item zeroing ---
+    if (b[1] == 1002186)   b[1] = 0;   // Transparent cap
+    if (b[4] == 1032024)   b[4] = 0;   // Transparent earacc
+    if (b[3] == 1022079)   b[3] = 0;   // Transparent faceacc
+    if (b[7] == 1072153)   b[7] = 0;   // Transparent shoes
+    if (b[8] == 1082102)   b[8] = 0;   // Transparent gloves
+
+    bool bCashCape = false;
+    if (b[9] == 1102039)
+    {
+        bCashCape = true;
+        b[9] = 0;                        // Transparent cape
+    }
+
+    if (b[10] == 1092067 || b[10] == 1342069)
+        b[10] = 0;                        // Transparent shield
+
+    if (nWeaponStickerID == 1702099
+        || nWeaponStickerID == 1702190
+        || nWeaponStickerID == 1702653)
+    {
+        b[11] = 0;                        // Transparent sticker
+        nWeaponStickerID = 0;
+    }
+
+    // --- BattlePvP cap override ---
+    if (static_cast<std::uint32_t>(nAction - 1051) <= 0x64u
+        && nBattlePvPAvatar == 7)
+    {
+        b[1] = 1004502;
+    }
+
+    // --- Vehicle action remapping ---
+    if (is_vehicle(nVehicleID))
+    {
+        b[10] = 0;  // shield
+        b[11] = 0;  // weapon
+
+        // Check for special sit/ride actions that don't remap
+        if (nAction != I(CA::Ride2)       // 275
+            && nAction != I(CA::Getoff2)  // 276
+            && nAction != I(CA::TankRide2)   // 972
+            && nAction != I(CA::TankGetoff2) // 971
+            && nAction != I(CA::Ladder2)  // 67
+            && nAction != I(CA::Rope2))   // 68
+        {
+            if (nAction == I(CA::Ladder))     // 30
+                nLocalAction = I(CA::Rope);   // 31
+            else if (nAction == I(CA::Rope))  // 31
+                nLocalAction = I(CA::Rope);   // 31
+            else
+                nLocalAction = I(CA::Sit);    // 29
+        }
+
+        // Special vehicle 1932103 → Blink
+        if (nVehicleID == 1932103)
+            nLocalAction = I(CA::Blink);      // 33
+
+        // PB riding action remap
+        if (nJob == 13000 || nJob == 13100)
+        {
+            if (nAction == I(CA::PinkbeanLadder))    // 1011
+                nLocalAction = I(CA::PinkbeanRope);  // 1012
+            else if (nAction == I(CA::PinkbeanRope)) // 1012
+                nLocalAction = I(CA::PinkbeanRope);  // 1012
+            else
+                nLocalAction = I(CA::PinkbeanSit);   // 1010
+        }
+
+        // TODO: Implement IsSpecialActionRiding / GetActionSpecialActionRiding
+    }
+
+    // --- Invisible weapon: zero weapon and cape ---
+    if (bInvisibleWeapon)
+    {
+        b[11] = 0;  // weapon
+        b[9]  = 0;  // cape
+    }
+
+    // --- Handgun action (108): zero shield and weapon ---
+    if (nAction == I(CA::Handgun)) // 108
+    {
+        b[10] = 0;  // shield
+        b[11] = 0;  // weapon
+    }
+
+    // --- Ghost index: zero most equipment ---
+    if (nGhostIndex != 0
+        && nAction != I(CA::Gather0)       // 285
+        && nAction != I(CA::Gather1)       // 286
+        && nAction != I(CA::MakingSkill0)  // 825
+        && nAction != I(CA::MakingSkill1)) // 826
+    {
+        for (std::int32_t i = 0; i <= 31; ++i)
+        {
+            if (static_cast<std::uint32_t>(i) >= 2
+                && i != 3 && i != 4)
+            {
+                b[i] = 0;
+            }
+        }
+    }
+
+    // --- Zero sticker for shoot morph actions ---
+    if (nWeaponStickerID != 0
+        && (nAction == 83 || nAction == 84))
+    {
+        nWeaponStickerID = 0;
+    }
+
+    // --- Compute nGatherToolID fallback from nChangeWeaponLook ---
+    auto nFinalGatherToolID = nGatherToolID;
+    if (nGatherToolID == 0 && nChangeWeaponLook != 0)
+        nFinalGatherToolID = nChangeWeaponLook;
+
+    // --- Compute mixed hair ---
+    std::int32_t nMixedHairId = 0;
+    if (nMixPercent != 0)
+        nMixedHairId = nMixedHairColor + 10 * (b[0] / 10);
+
+    // --- Compute bZigZag from action data ---
+    bool bZigZag = false;
+    if (nLocalAction >= 0
+        && static_cast<std::size_t>(nLocalAction) < ACTIONDATA_COUNT)
+    {
+        bZigZag = s_aCharacterActionData[static_cast<std::size_t>(nLocalAction)]
+                      .m_bZigzag != 0;
+    }
+
+    // --- Call inner load_character_action ---
+    std::vector<ActionFrame> aCharacterFrame;
+    load_character_action(
+        nLocalAction, nSkin, nJob, b,
+        aCharacterFrame,
+        nWeaponStickerID,
+        nVehicleID,
+        nGhostIndex,
+        nFinalGatherToolID,
+        bDrawElfEar, nLarknessState,
+        bCashCape,
+        nMixedHairId, nMixPercent,
+        bZigZag, bRemoveBody);
+
+    // --- Convert to CharacterActionFrameEntry ---
+    MergeCharacterSprite(aCharacterFrame, apFE);
 }
 
 } // namespace ms

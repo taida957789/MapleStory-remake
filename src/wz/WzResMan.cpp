@@ -4,6 +4,7 @@
 #include "WzImage.h"
 #include "WzNode.h"
 #include "WzProperty.h"
+#include "WzRaw.h"
 #include "WzTypes.h"
 #include "IWzSource.h"
 #include "WzSourceFactory.h"
@@ -385,6 +386,29 @@ auto WzResMan::GetWzSource(const std::string& name) -> std::shared_ptr<IWzSource
         return m_wzSources[name];
 
     return nullptr;
+}
+
+auto WzResMan::LoadFontData(const std::shared_ptr<WzProperty>& prop) -> std::vector<std::uint8_t>
+{
+    if (!prop)
+    {
+        return {};
+    }
+
+    auto sub = prop->GetChild("atlasData");
+
+    if (!sub)
+    {
+        return {};
+    }
+
+    auto fontData = sub->GetRaw();
+    if (!fontData)
+    {
+        return {};
+    }
+
+    return fontData->GetData();
 }
 
 auto WzResMan::LoadSoundData(const std::shared_ptr<WzProperty>& prop) -> std::vector<std::uint8_t>

@@ -70,4 +70,30 @@ void action_mapping_for_ghost(std::int32_t& nAction);
 /// Check if the avatar is holding an action (keydown held on specific frame).
 [[nodiscard]] bool IsActionHold(std::int32_t nAction, std::int32_t nFrame);
 
+/// Check if the action is a backward-movement action (walks, climbs, etc.)
+/// that should freeze frame when position hasn't changed.
+[[nodiscard]] bool is_back_action(std::int32_t nAction, std::int32_t nVehicleID);
+
+/// Check if the job is a Pinkbean job (13000 or 13100).
+[[nodiscard]] bool is_pinkbean_job(std::int32_t nJob);
+
+/// Check if the action is a shoot morph action (18 or 19).
+[[nodiscard]] bool is_shoot_morph_action(std::int32_t nAction);
+
+/// Check if the action is a hat-dance action (Dance1, Dance3, DanceStarplanet0-2).
+[[nodiscard]] bool is_hatdance_action(std::int32_t nAction);
+
+/// Check if the action is a hide-body action (HideBody, SpinoffGuitar range).
+[[nodiscard]] bool is_hide_body_action(std::int32_t nAction);
+
+/// Check if the action is a non-pieced BattlePvP action.
+[[nodiscard]] bool is_battle_pvp_not_pieced_action(std::int32_t nAction);
+
+/// Check if the action should not use pieced mode (ghosts, making skills,
+/// dances, hide body, BattlePvP non-pieced, etc.).
+[[nodiscard]] bool is_not_pieced_action(std::int32_t nAction);
+
+/// Check if item is a long coat (category 105).
+[[nodiscard]] bool is_long_coat(std::int32_t nItemID);
+
 } // namespace ms

@@ -3,6 +3,8 @@
 namespace ms
 {
 
+Stage* g_pStage = nullptr;
+
 Stage::Stage() = default;
 
 Stage::~Stage() = default;

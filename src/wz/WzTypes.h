@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <vector>
 
 namespace ms
 {
@@ -36,6 +37,8 @@ enum class WzNodeType : std::uint8_t
     Convex2D = 0x3A,
     Sound = 0x3B,
     UOL = 0x3C,
+    RawData = 0x3D,
+    Video = 0x3E,
 };
 
 /**
@@ -83,6 +86,26 @@ struct WzCanvasData
     std::int32_t size{};
     std::int32_t uncompressedSize{};
     std::size_t offset{};
+};
+
+/**
+ * @brief WZ RawData metadata
+ */
+struct WzRawData
+{
+    std::int32_t type{};
+    std::size_t offset{};
+    std::size_t size{};
+};
+
+/**
+ * @brief WZ Video metadata
+ */
+struct WzVideoData
+{
+    std::int32_t type{};
+    std::size_t offset{};
+    std::size_t size{};
 };
 
 /**

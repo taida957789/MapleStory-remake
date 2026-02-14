@@ -699,4 +699,81 @@ void LoadItemAction(
     }
 }
 
+void LoadItemActionExtendFrame(
+    const std::shared_ptr<WzProperty>& pProp,
+    std::int32_t nAction,
+    std::int32_t nJob,
+    std::int32_t nID,
+    std::vector<ActionFrame>& aFrame,
+    [[maybe_unused]] std::int32_t nWeaponStickerID,
+    std::int32_t nVehicleID,
+    std::int32_t nGhostIndex,
+    bool bCapEquip,
+    bool bGatherEquip,
+    bool bDrawElfEar,
+    std::int32_t nLarknessState,
+    bool bCashCape,
+    std::int32_t nMixHairID,
+    std::int32_t nMixPercent)
+{
+    if (!pProp)
+        return;
+
+    auto& actionMan = ActionMan::GetInstance();
+
+    // Look up the action property within pProp (weeklyImg)
+    auto sActionName = actionMan.GetActionName(nAction);
+    if (sActionName.empty())
+        return;
+
+    auto pPropAction = pProp->GetChild(sActionName);
+    if (!pPropAction)
+        return;
+
+    // Get extended frame count from WZ
+    auto nExFrameCount = static_cast<std::int32_t>(pPropAction->GetChildCount());
+    if (nExFrameCount <= 0)
+        return;
+
+    // Get current frame count
+    auto nCurrentCount = static_cast<std::int32_t>(aFrame.size());
+    if (nCurrentCount <= 0)
+        return;
+
+    // If current frame count already >= extended count, nothing to do
+    if (static_cast<std::uint32_t>(nCurrentCount)
+        > static_cast<std::uint32_t>(nExFrameCount))
+        return;
+
+    // Build extended frame array by replicating base frames
+    auto nMultipleCount = nExFrameCount / nCurrentCount;
+    std::vector<ActionFrame> aExtendFrame(static_cast<std::size_t>(nExFrameCount));
+
+    for (std::int32_t i = 0; i < nExFrameCount; ++i)
+    {
+        auto nSrcIdx = i / nMultipleCount;
+        if (nSrcIdx < nCurrentCount)
+            aExtendFrame[static_cast<std::size_t>(i)] =
+                aFrame[static_cast<std::size_t>(nSrcIdx)];
+    }
+
+    // Dead → Jump for loading
+    auto nLoadAction = nAction;
+    if (nAction == 32) // ACT_DEAD
+        nLoadAction = 28; // ACT_JUMP
+
+    // Load item action into extended frames
+    LoadItemAction(
+        nLoadAction, nJob, nID, aExtendFrame,
+        /*nWeaponStickerID=*/0,
+        nVehicleID, nGhostIndex,
+        bCapEquip, bGatherEquip, bDrawElfEar,
+        nLarknessState, bCashCape,
+        nMixHairID, nMixPercent,
+        /*bCapExtendFrame=*/false);
+
+    // Copy extended frames back to aFrame
+    aFrame = std::move(aExtendFrame);
+}
+
 } // namespace ms

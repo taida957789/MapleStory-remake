@@ -5,6 +5,8 @@
 #include <gtest/gtest.h>
 #include <filesystem>
 
+#include "constants/JobConstants.h"
+#include "constants/WeaponConstants.h"
 #include "models/GW_ItemSlotBase.h"
 #include "templates/item/ItemInfo.h"
 #include "wz/WzProperty.h"
@@ -566,4 +568,585 @@ TEST_F(ItemInfoTest, GetItemCoolTime_BundleItem_DefaultsZero)
         // Most items default to 0 for limitMin/limitSec
         std::cout << "  limitMin: " << nLimitMin << "  limitSec: " << nLimitSec << std::endl;
     }
+}
+
+// ============================================================
+// IsAbleToEquipSubWeapon @ 0xa7aaf0
+// Pure logic tests — no WZ files required.
+// ============================================================
+
+class SubWeaponTest : public ::testing::Test
+{
+protected:
+    ItemInfo& info = ItemInfo::GetInstance();
+};
+
+// --- Shield tests (nItemID / 10000 == 109) ---
+
+TEST_F(SubWeaponTest, Shield_GenericJob_Allowed)
+{
+    auto& info = ItemInfo::GetInstance();
+    // Generic warrior (job 100) with 1H sword (1302000) equipping a shield (1092000)
+    EXPECT_TRUE(info.IsAbleToEquipSubWeapon(1092000, 1302000, 100, 0, 0));
+}
+
+TEST_F(SubWeaponTest,Shield_DualBlade_Blocked)
+{
+    auto& info = ItemInfo::GetInstance();
+    // Dual Blade: job < 1000 and nSubJob == 1
+    EXPECT_FALSE(info.IsAbleToEquipSubWeapon(1092000, 1302000, 400, 1, 0));
+}
+
+TEST_F(SubWeaponTest,Shield_Mihile_Blocked)
+{
+    auto& info = ItemInfo::GetInstance();
+    // Mihile (5100) cannot equip non-1098 shields
+    EXPECT_FALSE(info.IsAbleToEquipSubWeapon(1092000, 1302000, 5100, 0, 0));
+}
+
+TEST_F(SubWeaponTest,Shield_Mihile_1098_Allowed)
+{
+    auto& info = ItemInfo::GetInstance();
+    // Mihile CAN equip 1098xxx shields
+    EXPECT_TRUE(info.IsAbleToEquipSubWeapon(1098000, 1302000, 5100, 0, 0));
+}
+
+TEST_F(SubWeaponTest,Shield_DemonSlayer_Blocked)
+{
+    auto& info = ItemInfo::GetInstance();
+    // Demon Slayer (3100) cannot equip non-1099 shields
+    EXPECT_FALSE(info.IsAbleToEquipSubWeapon(1092000, 1302000, 3100, 0, 0));
+}
+
+TEST_F(SubWeaponTest,Shield_DemonSlayer_1099_Allowed)
+{
+    auto& info = ItemInfo::GetInstance();
+    // Demon Slayer CAN equip 1099xxx shields
+    EXPECT_TRUE(info.IsAbleToEquipSubWeapon(1099000, 1302000, 3100, 0, 0));
+}
+
+TEST_F(SubWeaponTest,Shield_Xenon_Blocked)
+{
+    auto& info = ItemInfo::GetInstance();
+    // Xenon (3600) cannot equip non-cash shields
+    EXPECT_FALSE(info.IsAbleToEquipSubWeapon(1092000, 1302000, 3600, 0, 0));
+}
+
+TEST_F(SubWeaponTest,Shield_Xenon_Cash_Allowed)
+{
+    auto& info = ItemInfo::GetInstance();
+    // Xenon CAN equip cash shields
+    EXPECT_TRUE(info.IsAbleToEquipSubWeapon(1092000, 1302000, 3600, 0, 1));
+}
+
+// --- Mercedes card tests (1350000-1352099) ---
+
+TEST_F(SubWeaponTest,MercedesCard_Mercedes_1HSword_Allowed)
+{
+    auto& info = ItemInfo::GetInstance();
+    // Mercedes (2300) with 1H sword (1302000) equipping Mercedes card (1350000)
+    // 1302000 = weapon type 30 (1H sword), not 2H
+    EXPECT_TRUE(info.IsAbleToEquipSubWeapon(1350000, 1302000, 2300, 0, 0));
+}
+
+TEST_F(SubWeaponTest,MercedesCard_NonMercedes_Blocked)
+{
+    auto& info = ItemInfo::GetInstance();
+    // Non-Mercedes job cannot equip Mercedes cards
+    EXPECT_FALSE(info.IsAbleToEquipSubWeapon(1350000, 1302000, 100, 0, 0));
+}
+
+TEST_F(SubWeaponTest,MercedesCard_GM_Allowed)
+{
+    auto& info = ItemInfo::GetInstance();
+    // GM (900) can equip Mercedes cards
+    EXPECT_TRUE(info.IsAbleToEquipSubWeapon(1350000, 1302000, 900, 0, 0));
+}
+
+TEST_F(SubWeaponTest,MercedesCard_2HWeapon_Blocked)
+{
+    auto& info = ItemInfo::GetInstance();
+    // Mercedes with 2H sword (1402000, weapon type 40) — blocked
+    EXPECT_FALSE(info.IsAbleToEquipSubWeapon(1350000, 1402000, 2300, 0, 0));
+}
+
+TEST_F(SubWeaponTest,MercedesCard_DualBowgun_Allowed)
+{
+    auto& info = ItemInfo::GetInstance();
+    // Mercedes with dual bowgun (1522000, weapon type 52) — allowed (special exception)
+    EXPECT_TRUE(info.IsAbleToEquipSubWeapon(1350000, 1522000, 2300, 0, 0));
+}
+
+// --- Phantom card tests (1352100-1352199) ---
+
+TEST_F(SubWeaponTest,PhantomCard_Phantom_Allowed)
+{
+    auto& info = ItemInfo::GetInstance();
+    // Phantom (2400) with cane (1352100), equipping phantom card
+    EXPECT_TRUE(info.IsAbleToEquipSubWeapon(1352100, 1302000, 2400, 0, 0));
+}
+
+TEST_F(SubWeaponTest,PhantomCard_NonPhantom_Blocked)
+{
+    auto& info = ItemInfo::GetInstance();
+    EXPECT_FALSE(info.IsAbleToEquipSubWeapon(1352100, 1302000, 100, 0, 0));
+}
+
+TEST_F(SubWeaponTest,PhantomCard_2HWeapon_Blocked)
+{
+    auto& info = ItemInfo::GetInstance();
+    EXPECT_FALSE(info.IsAbleToEquipSubWeapon(1352100, 1402000, 2400, 0, 0));
+}
+
+// --- Job-specific sub-weapons ---
+
+TEST_F(SubWeaponTest,HeroMedal_Hero_Allowed)
+{
+    auto& info = ItemInfo::GetInstance();
+    EXPECT_TRUE(info.IsAbleToEquipSubWeapon(1352200, 0, 112, 0, 0));
+}
+
+TEST_F(SubWeaponTest,HeroMedal_NonHero_Blocked)
+{
+    auto& info = ItemInfo::GetInstance();
+    EXPECT_FALSE(info.IsAbleToEquipSubWeapon(1352200, 0, 122, 0, 0));
+}
+
+TEST_F(SubWeaponTest,PaladinRosario_Paladin_Allowed)
+{
+    auto& info = ItemInfo::GetInstance();
+    EXPECT_TRUE(info.IsAbleToEquipSubWeapon(1352210, 0, 122, 0, 0));
+}
+
+TEST_F(SubWeaponTest,DarkKnightChain_DK_Allowed)
+{
+    auto& info = ItemInfo::GetInstance();
+    EXPECT_TRUE(info.IsAbleToEquipSubWeapon(1352220, 0, 132, 0, 0));
+}
+
+TEST_F(SubWeaponTest,Mage1Book_FPMage_Allowed)
+{
+    auto& info = ItemInfo::GetInstance();
+    EXPECT_TRUE(info.IsAbleToEquipSubWeapon(1352230, 0, 212, 0, 0));
+}
+
+TEST_F(SubWeaponTest,Mage2Book_ILMage_Allowed)
+{
+    auto& info = ItemInfo::GetInstance();
+    EXPECT_TRUE(info.IsAbleToEquipSubWeapon(1352240, 0, 222, 0, 0));
+}
+
+TEST_F(SubWeaponTest,Mage3Book_Bishop_Allowed)
+{
+    auto& info = ItemInfo::GetInstance();
+    EXPECT_TRUE(info.IsAbleToEquipSubWeapon(1352250, 0, 232, 0, 0));
+}
+
+TEST_F(SubWeaponTest,BowmasterFeather_Bowmaster_Allowed)
+{
+    auto& info = ItemInfo::GetInstance();
+    EXPECT_TRUE(info.IsAbleToEquipSubWeapon(1352260, 0, 312, 0, 0));
+}
+
+TEST_F(SubWeaponTest,CrossbowThimble_Marksman_Allowed)
+{
+    auto& info = ItemInfo::GetInstance();
+    EXPECT_TRUE(info.IsAbleToEquipSubWeapon(1352270, 0, 322, 0, 0));
+}
+
+TEST_F(SubWeaponTest,ShadowerSheath_Shadower_Allowed)
+{
+    auto& info = ItemInfo::GetInstance();
+    EXPECT_TRUE(info.IsAbleToEquipSubWeapon(1352280, 0, 422, 0, 0));
+}
+
+TEST_F(SubWeaponTest,NightlordPouch_NL_Allowed)
+{
+    auto& info = ItemInfo::GetInstance();
+    EXPECT_TRUE(info.IsAbleToEquipSubWeapon(1352290, 0, 412, 0, 0));
+}
+
+TEST_F(SubWeaponTest,ViperWristband_Buccaneer_Allowed)
+{
+    auto& info = ItemInfo::GetInstance();
+    EXPECT_TRUE(info.IsAbleToEquipSubWeapon(1352900, 0, 512, 0, 0));
+}
+
+TEST_F(SubWeaponTest,CaptainSight_Corsair_Allowed)
+{
+    auto& info = ItemInfo::GetInstance();
+    EXPECT_TRUE(info.IsAbleToEquipSubWeapon(1352910, 0, 522, 0, 0));
+}
+
+TEST_F(SubWeaponTest,CannonGunpowder_Cannoneer_Allowed)
+{
+    auto& info = ItemInfo::GetInstance();
+    EXPECT_TRUE(info.IsAbleToEquipSubWeapon(1352920, 0, 530, 0, 0));
+}
+
+TEST_F(SubWeaponTest,CannonGunpowder_NonCannoneer_Blocked)
+{
+    auto& info = ItemInfo::GetInstance();
+    EXPECT_FALSE(info.IsAbleToEquipSubWeapon(1352920, 0, 100, 0, 0));
+}
+
+// --- Sub-weapons with beginner fallback ---
+
+TEST_F(SubWeaponTest,AranPendulum_Aran_Allowed)
+{
+    auto& info = ItemInfo::GetInstance();
+    EXPECT_TRUE(info.IsAbleToEquipSubWeapon(1352930, 0, 2100, 0, 0));
+}
+
+TEST_F(SubWeaponTest,AranPendulum_Beginner_Allowed)
+{
+    auto& info = ItemInfo::GetInstance();
+    // Beginner (job 2000) can also equip Aran pendulum
+    EXPECT_TRUE(info.IsAbleToEquipSubWeapon(1352930, 0, 2000, 0, 0));
+}
+
+TEST_F(SubWeaponTest,AranPendulum_NonAran_Blocked)
+{
+    auto& info = ItemInfo::GetInstance();
+    // Non-Aran, non-beginner job
+    EXPECT_FALSE(info.IsAbleToEquipSubWeapon(1352930, 0, 112, 0, 0));
+}
+
+TEST_F(SubWeaponTest,EvanPaper_Evan_Allowed)
+{
+    auto& info = ItemInfo::GetInstance();
+    EXPECT_TRUE(info.IsAbleToEquipSubWeapon(1352940, 0, 2200, 0, 0));
+}
+
+TEST_F(SubWeaponTest,CygnusGem_Cygnus_Allowed)
+{
+    auto& info = ItemInfo::GetInstance();
+    EXPECT_TRUE(info.IsAbleToEquipSubWeapon(1352970, 0, 1100, 0, 0));
+}
+
+TEST_F(SubWeaponTest,CygnusGem_Beginner_Allowed)
+{
+    auto& info = ItemInfo::GetInstance();
+    // Cygnus beginner (1000) can also equip
+    EXPECT_TRUE(info.IsAbleToEquipSubWeapon(1352970, 0, 1000, 0, 0));
+}
+
+// --- Resistance sub-weapons ---
+
+TEST_F(SubWeaponTest,BattlemageOrb_BattleMage_Allowed)
+{
+    auto& info = ItemInfo::GetInstance();
+    EXPECT_TRUE(info.IsAbleToEquipSubWeapon(1352950, 0, 3200, 0, 0));
+}
+
+TEST_F(SubWeaponTest,WildhunterArrowhead_WH_Allowed)
+{
+    auto& info = ItemInfo::GetInstance();
+    EXPECT_TRUE(info.IsAbleToEquipSubWeapon(1352960, 0, 3300, 0, 0));
+}
+
+// --- Sub-weapons with 2H restriction ---
+
+TEST_F(SubWeaponTest,LuminousOrb_Luminous_Allowed)
+{
+    auto& info = ItemInfo::GetInstance();
+    // Luminous (2700) with no weapon, equipping orb (1352400)
+    EXPECT_TRUE(info.IsAbleToEquipSubWeapon(1352400, 0, 2700, 0, 0));
+}
+
+TEST_F(SubWeaponTest,LuminousOrb_2HWeapon_Blocked)
+{
+    auto& info = ItemInfo::GetInstance();
+    EXPECT_FALSE(info.IsAbleToEquipSubWeapon(1352400, 1402000, 2700, 0, 0));
+}
+
+TEST_F(SubWeaponTest,DragonSoul_Kaiser_Allowed)
+{
+    auto& info = ItemInfo::GetInstance();
+    EXPECT_TRUE(info.IsAbleToEquipSubWeapon(1352500, 0, 6100, 0, 0));
+}
+
+TEST_F(SubWeaponTest,DragonSoul_Kaiser_2HSword_Allowed)
+{
+    auto& info = ItemInfo::GetInstance();
+    // 2H sword (weapon type 40) is special exception for Kaiser
+    EXPECT_TRUE(info.IsAbleToEquipSubWeapon(1352500, 1402000, 6100, 0, 0));
+}
+
+TEST_F(SubWeaponTest,SoulRing_AB_Allowed)
+{
+    auto& info = ItemInfo::GetInstance();
+    EXPECT_TRUE(info.IsAbleToEquipSubWeapon(1352600, 0, 6500, 0, 0));
+}
+
+TEST_F(SubWeaponTest,Magnum_Mechanic_Allowed)
+{
+    auto& info = ItemInfo::GetInstance();
+    EXPECT_TRUE(info.IsAbleToEquipSubWeapon(1352700, 0, 3500, 0, 0));
+}
+
+// --- Zero and Kinesis ---
+
+TEST_F(SubWeaponTest,Zero_ZeroJob_Allowed)
+{
+    auto& info = ItemInfo::GetInstance();
+    EXPECT_TRUE(info.IsAbleToEquipSubWeapon(1560000, 0, 10112, 0, 0));
+}
+
+TEST_F(SubWeaponTest,Zero_NonZero_Blocked)
+{
+    auto& info = ItemInfo::GetInstance();
+    EXPECT_FALSE(info.IsAbleToEquipSubWeapon(1560000, 0, 100, 0, 0));
+}
+
+TEST_F(SubWeaponTest,Kinesis_KinesisJob_Allowed)
+{
+    auto& info = ItemInfo::GetInstance();
+    EXPECT_TRUE(info.IsAbleToEquipSubWeapon(1353200, 0, 14200, 0, 0));
+}
+
+TEST_F(SubWeaponTest,Kinesis_NonKinesis_Blocked)
+{
+    auto& info = ItemInfo::GetInstance();
+    EXPECT_FALSE(info.IsAbleToEquipSubWeapon(1353200, 0, 100, 0, 0));
+}
+
+// --- GM always allowed ---
+
+TEST_F(SubWeaponTest,GM_AlwaysAllowed)
+{
+    auto& info = ItemInfo::GetInstance();
+    // GM (900) can equip any sub-weapon
+    EXPECT_TRUE(info.IsAbleToEquipSubWeapon(1352200, 0, 900, 0, 0));  // Hero medal
+    EXPECT_TRUE(info.IsAbleToEquipSubWeapon(1352500, 0, 900, 0, 0));  // Dragon soul
+    EXPECT_TRUE(info.IsAbleToEquipSubWeapon(1560000, 0, 900, 0, 0));  // Zero sub
+    EXPECT_TRUE(info.IsAbleToEquipSubWeapon(1353200, 0, 900, 0, 0));  // Kinesis sub
+}
+
+// --- Unknown sub-weapon → default allow ---
+
+TEST_F(SubWeaponTest,Unknown_DefaultAllow)
+{
+    auto& info = ItemInfo::GetInstance();
+    // An item that doesn't match any known sub-weapon category
+    EXPECT_TRUE(info.IsAbleToEquipSubWeapon(1999999, 0, 100, 0, 0));
+}
+
+// ============================================================
+// Boolean predicate tests (WZ-backed)
+// ============================================================
+
+TEST_F(ItemInfoTest, IsOnlyItem_EquipItem)
+{
+    auto& info = ItemInfo::GetInstance();
+    // Basic sword is not "only" — verify no crash and returns a bool
+    auto bResult = info.IsOnlyItem(1302000);
+    (void)bResult;  // value depends on WZ data
+}
+
+TEST_F(ItemInfoTest, IsOnlyItem_BundleItem)
+{
+    auto& info = ItemInfo::GetInstance();
+    auto bResult = info.IsOnlyItem(2000000);
+    (void)bResult;
+}
+
+TEST_F(ItemInfoTest, IsOnlyItem_InvalidID_ReturnsFalse)
+{
+    auto& info = ItemInfo::GetInstance();
+    EXPECT_FALSE(info.IsOnlyItem(0));
+}
+
+TEST_F(ItemInfoTest, IsSuperiorEquipItem_BasicWeapon)
+{
+    auto& info = ItemInfo::GetInstance();
+    // Basic sword is not superior
+    EXPECT_FALSE(info.IsSuperiorEquipItem(1302000));
+}
+
+TEST_F(ItemInfoTest, IsSuperiorEquipItem_NonEquip_ReturnsFalse)
+{
+    auto& info = ItemInfo::GetInstance();
+    EXPECT_FALSE(info.IsSuperiorEquipItem(2000000));
+}
+
+TEST_F(ItemInfoTest, IsNotSaleItem_BasicWeapon)
+{
+    auto& info = ItemInfo::GetInstance();
+    // Basic sword should be sellable
+    EXPECT_FALSE(info.IsNotSaleItem(1302000));
+}
+
+TEST_F(ItemInfoTest, IsNotSaleItem_InvalidID_ReturnsFalse)
+{
+    auto& info = ItemInfo::GetInstance();
+    EXPECT_FALSE(info.IsNotSaleItem(0));
+}
+
+TEST_F(ItemInfoTest, IsBigSizeItem_BasicWeapon)
+{
+    auto& info = ItemInfo::GetInstance();
+    // Basic sword is not big size
+    EXPECT_FALSE(info.IsBigSizeItem(1302000));
+}
+
+TEST_F(ItemInfoTest, GetAppliableKarmaType_BasicWeapon)
+{
+    auto& info = ItemInfo::GetInstance();
+    // Basic sword likely has karma type 0
+    auto nType = info.GetAppliableKarmaType(1302000);
+    EXPECT_GE(nType, 0);
+}
+
+TEST_F(ItemInfoTest, GetAppliableKarmaType_InvalidID_ReturnsZero)
+{
+    auto& info = ItemInfo::GetInstance();
+    EXPECT_EQ(info.GetAppliableKarmaType(0), 0);
+}
+
+TEST_F(ItemInfoTest, IsPartyQuestItem_RegularItems)
+{
+    auto& info = ItemInfo::GetInstance();
+    // Red Potion is not a party quest item
+    EXPECT_FALSE(info.IsPartyQuestItem(2000000));
+    // Basic sword is not a party quest item
+    EXPECT_FALSE(info.IsPartyQuestItem(1302000));
+}
+
+TEST_F(ItemInfoTest, IsPartyQuestItem_InvalidID_ReturnsFalse)
+{
+    auto& info = ItemInfo::GetInstance();
+    EXPECT_FALSE(info.IsPartyQuestItem(0));
+}
+
+TEST_F(ItemInfoTest, GetSellPrice_Equip)
+{
+    auto& info = ItemInfo::GetInstance();
+    auto nPrice = info.GetSellPrice(1302000);
+    EXPECT_GE(nPrice, 0) << "Equip sell price should be non-negative";
+}
+
+TEST_F(ItemInfoTest, GetSellPrice_Bundle)
+{
+    auto& info = ItemInfo::GetInstance();
+    auto nPrice = info.GetSellPrice(2000000);
+    EXPECT_GT(nPrice, 0) << "Red Potion should have a sell price";
+}
+
+TEST_F(ItemInfoTest, GetSellPrice_InvalidID_ReturnsZero)
+{
+    auto& info = ItemInfo::GetInstance();
+    EXPECT_EQ(info.GetSellPrice(0), 0);
+}
+
+TEST_F(ItemInfoTest, ExpireOnLogout_RegularItems)
+{
+    auto& info = ItemInfo::GetInstance();
+    // Regular items don't expire on logout
+    EXPECT_FALSE(info.ExpireOnLogout(1302000));
+    EXPECT_FALSE(info.ExpireOnLogout(2000000));
+}
+
+TEST_F(ItemInfoTest, IsNoCancelByMouseForItem_RegularItem)
+{
+    auto& info = ItemInfo::GetInstance();
+    EXPECT_FALSE(info.IsNoCancelByMouseForItem(2000000));
+}
+
+TEST_F(ItemInfoTest, IsPickUpBlockItem_RegularItem)
+{
+    auto& info = ItemInfo::GetInstance();
+    EXPECT_FALSE(info.IsPickUpBlockItem(2000000));
+}
+
+TEST_F(ItemInfoTest, IsMorphItem_RegularItems)
+{
+    auto& info = ItemInfo::GetInstance();
+    EXPECT_FALSE(info.IsMorphItem(1302000));
+    EXPECT_FALSE(info.IsMorphItem(2000000));
+}
+
+TEST_F(ItemInfoTest, IsUnchangeable_BasicWeapon)
+{
+    auto& info = ItemInfo::GetInstance();
+    EXPECT_FALSE(info.IsUnchangeable(1302000));
+}
+
+TEST_F(ItemInfoTest, IsUnchangeable_NonEquip_ReturnsFalse)
+{
+    auto& info = ItemInfo::GetInstance();
+    EXPECT_FALSE(info.IsUnchangeable(2000000));
+}
+
+TEST_F(ItemInfoTest, IsUndecomposable_BasicWeapon)
+{
+    auto& info = ItemInfo::GetInstance();
+    // Basic sword should be decomposable
+    EXPECT_FALSE(info.IsUndecomposable(1302000));
+}
+
+TEST_F(ItemInfoTest, IsRoyalSpecialItem_BasicWeapon)
+{
+    auto& info = ItemInfo::GetInstance();
+    EXPECT_FALSE(info.IsRoyalSpecialItem(1302000));
+}
+
+TEST_F(ItemInfoTest, IsRoyalMasterItem_BasicWeapon)
+{
+    auto& info = ItemInfo::GetInstance();
+    EXPECT_FALSE(info.IsRoyalMasterItem(1302000));
+}
+
+TEST_F(ItemInfoTest, IsBossRewardItem_BasicWeapon)
+{
+    auto& info = ItemInfo::GetInstance();
+    EXPECT_FALSE(info.IsBossRewardItem(1302000));
+}
+
+TEST_F(ItemInfoTest, IsExItem_BasicWeapon)
+{
+    auto& info = ItemInfo::GetInstance();
+    EXPECT_FALSE(info.IsExItem(1302000));
+}
+
+TEST_F(ItemInfoTest, IsCantRepairItem_BasicWeapon)
+{
+    auto& info = ItemInfo::GetInstance();
+    EXPECT_FALSE(info.IsCantRepairItem(1302000));
+}
+
+TEST_F(ItemInfoTest, IsDefaultAccountSharableItem_RegularItems)
+{
+    auto& info = ItemInfo::GetInstance();
+    EXPECT_FALSE(info.IsDefaultAccountSharableItem(1302000));
+    EXPECT_FALSE(info.IsDefaultAccountSharableItem(2000000));
+}
+
+TEST_F(ItemInfoTest, IsSharableOnceItem_RegularItems)
+{
+    auto& info = ItemInfo::GetInstance();
+    EXPECT_FALSE(info.IsSharableOnceItem(1302000));
+    EXPECT_FALSE(info.IsSharableOnceItem(2000000));
+}
+
+TEST_F(ItemInfoTest, IsApplicableAccountShareTag_RegularItems)
+{
+    auto& info = ItemInfo::GetInstance();
+    // Basic items typically don't have account share tags
+    auto bEquip = info.IsApplicableAccountShareTag(1302000);
+    auto bBundle = info.IsApplicableAccountShareTag(2000000);
+    (void)bEquip;
+    (void)bBundle;
+}
+
+TEST_F(ItemInfoTest, IsBindedWhenEquiped_BasicWeapon)
+{
+    auto& info = ItemInfo::GetInstance();
+    EXPECT_FALSE(info.IsBindedWhenEquiped(1302000));
+}
+
+TEST_F(ItemInfoTest, IsNotExtendItem_BasicWeapon)
+{
+    auto& info = ItemInfo::GetInstance();
+    EXPECT_FALSE(info.IsNotExtendItem(1302000));
 }

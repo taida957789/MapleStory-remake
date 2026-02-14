@@ -964,6 +964,10 @@ void WzGr2DLayer::SetPosition(std::int32_t left, std::int32_t top) noexcept
 {
     m_nLeft = left;
     m_nTop = top;
+    if (m_positionVec)
+    {
+        m_positionVec->Move(left, top);
+    }
 }
 
 // ============================================================

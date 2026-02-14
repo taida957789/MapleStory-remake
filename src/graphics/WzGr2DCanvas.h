@@ -6,6 +6,8 @@
 #include <SDL3/SDL.h>
 #include <memory>
 
+namespace ms { class WzProperty; }
+
 namespace ms
 {
 
@@ -21,6 +23,12 @@ class WzGr2DCanvas : public ICanvas
 public:
     WzGr2DCanvas() = default;
     explicit WzGr2DCanvas(std::shared_ptr<WzCanvas> canvas);
+
+    /// Construct from canvas + source WzProperty (reads origin automatically,
+    /// matching original IWzCanvas::Getproperty() behavior).
+    WzGr2DCanvas(std::shared_ptr<WzCanvas> canvas,
+                  const std::shared_ptr<WzProperty>& prop);
+
     ~WzGr2DCanvas() override;
 
     // Non-copyable, movable

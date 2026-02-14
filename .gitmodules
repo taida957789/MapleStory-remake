@@ -6,4 +6,4 @@
 	url = https://github.com/freetype/freetype.git
 [submodule "3rdparty/mio"]
 	path = 3rdparty/mio
-	url = https://github.com/mandreyel/mio.git
+	url = https://github.com/vimpunk/mio.git

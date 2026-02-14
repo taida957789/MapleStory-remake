@@ -1,95 +1,157 @@
 #pragma once
 
+#include "util/Point.h"
 #include "util/Singleton.h"
+
 #include <SDL3/SDL.h>
+#include <array>
 #include <cstdint>
-#include <unordered_map>
+#include <memory>
+#include <vector>
 
 namespace ms
 {
 
+class WzGr2DLayer;
+class IWzVector2D;
+
+/// Input system message (mirrors Windows MSG subset)
+struct ISMSG
+{
+    std::uint32_t message{};
+    std::uint32_t wParam{};
+    std::int32_t lParam{};
+};
+
 /**
  * @brief Input handling system
  *
- * Based on CInputSystem from the original MapleStory client.
- * Original uses DirectInput8 for keyboard and mouse input.
- * This implementation uses SDL3 events.
+ * Based on CInputSystem from the original MapleStory client (v1029).
+ * Original uses DirectInput8; this implementation uses SDL3.
+ *
+ * Original: __cppobj CInputSystem : TSingleton<CInputSystem>
  */
 class InputSystem final : public Singleton<InputSystem>
 {
     friend class Singleton<InputSystem>;
 
 public:
-    [[nodiscard]] auto Initialize() -> bool;
-    void Shutdown();
+    /// Device indices for UpdateDevice/TryAcquireDevice
+    enum : std::int32_t
+    {
+        IS_KEYBOARD = 0,
+        IS_MOUSE    = 1,
+        IS_JOYSTICK = 2,
+    };
 
-    /**
-     * @brief Process SDL event
-     * @param event The SDL event to process
-     */
+    /// Mouse state tracking (CInputSystem::MOUSESTATE)
+    struct MOUSESTATE
+    {
+        std::int32_t x{};
+        std::int32_t y{};
+        std::int32_t bLBDown{};
+        std::int32_t bRBDown{};
+        std::int32_t tLBDown{};
+        std::int32_t tRBDown{};
+        Point2D ptLBDown;
+        Point2D ptRBDown;
+        std::int32_t nWheel{};
+    };
+
+    // === Lifecycle ===
+    void Init();
+    void Close();
+
+    // === Device management ===
+    void UpdateDevice(std::int32_t nDeviceIndex);
+    void OnActivate();
+    auto TryAcquireDevice(std::int32_t nDeviceIndex) -> std::int32_t;
+    void SetAcquireKeyboard(std::int32_t bAcquire);
+    [[nodiscard]] auto IsDIKeyboard() const -> std::int32_t;
+    [[nodiscard]] auto IsDIMouse() const -> std::int32_t;
+
+    // === Key state ===
+    auto IsKeyPressed(std::int32_t nVk) -> std::int32_t;
+    auto GetSpecialKeyFlag() -> std::uint32_t;
+    auto GenerateAutoKeyDown(ISMSG* pISMsg) -> std::int32_t;
+
+    // === Mouse state ===
+    auto GetCursorPos(Point2D* lpPoint) -> std::int32_t;
+    auto SetCursorPos(std::int32_t x, std::int32_t y) -> std::int32_t;
+    void SetMouseSpeed(std::int32_t nMouseSpeed);
+
+    // === Cursor management ===
+    void ShowCursor(std::int32_t bShow);
+    [[nodiscard]] auto IsCursorShown() -> std::int32_t;
+    [[nodiscard]] auto GetCursorState() -> std::int32_t;
+    void SetCursorState(std::int32_t nState, bool bForce);
+    void SetCursor(const std::shared_ptr<WzGr2DLayer>& pLayer);
+    void SetCursorVectorPos(std::int32_t x, std::int32_t y);
+    void LoadCursorStateWithIndex(std::int32_t nIndex);
+    void UnLoadCursorStateWithIndex(std::int32_t nIndex);
+    [[nodiscard]] auto GetCursorOrigin() -> std::shared_ptr<IWzVector2D>;
+
+    // === Cursor movement constraints ===
+    void SetCursorMoveableRect(const Rect& rcMoveable);
+    void ResetCursorMoveableRect();
+    void SetMouseCantMoveTime(std::uint32_t tTime);
+    void SetCantMoveCursorOrigin(bool bSet);
+    [[nodiscard]] auto IsCursorOriginMoveByMouse() -> bool;
+    void SetCursorOriginMoveByMouse(bool bSet);
+
+    // === Message queue ===
+    auto GetISMessage(ISMSG* pISMsg) -> std::int32_t;
+
+    // === Static ===
+    static auto GetFPSCursorIndexByFieldType(
+        std::int32_t nIndex, std::int32_t nFieldType) -> std::int32_t;
+
+    // === SDL3 integration ===
     void ProcessEvent(const SDL_Event& event);
-
-    /**
-     * @brief Update input devices
-     *
-     * Based on CInputSystem::UpdateDevice
-     * @param deviceType Type of device to update
-     */
-    void UpdateDevice(int deviceType);
-
-    // Keyboard state queries
-    [[nodiscard]] auto IsKeyDown(SDL_Keycode key) const -> bool;
-    [[nodiscard]] auto IsKeyPressed(SDL_Keycode key) const -> bool;
-    [[nodiscard]] auto IsKeyReleased(SDL_Keycode key) const -> bool;
-
-    // Mouse position
-    [[nodiscard]] auto GetMouseX() const noexcept -> int { return m_nMouseX; }
-    [[nodiscard]] auto GetMouseY() const noexcept -> int { return m_nMouseY; }
-
-    // Mouse button state
-    [[nodiscard]] auto IsMouseButtonDown(int button) const -> bool;
-    [[nodiscard]] auto IsMouseButtonPressed(int button) const -> bool;
-    [[nodiscard]] auto IsMouseButtonReleased(int button) const -> bool;
-
-    /**
-     * @brief Get key state (for compatibility)
-     *
-     * Based on ZAPI.GetKeyState
-     */
-    [[nodiscard]] auto GetKeyState(int vKey) const -> short;
-
-    /**
-     * @brief Get async key state
-     *
-     * Based on ZAPI.GetAsyncKeyState
-     */
-    [[nodiscard]] auto GetAsyncKeyState(int vKey) const -> short;
-
-    /**
-     * @brief End of frame - clear pressed/released states
-     */
-    void EndFrame();
 
 private:
     InputSystem();
     ~InputSystem() override;
 
-    // Key states
-    std::unordered_map<SDL_Keycode, bool> m_keyDown;
-    std::unordered_map<SDL_Keycode, bool> m_keyPressed;
-    std::unordered_map<SDL_Keycode, bool> m_keyReleased;
+    void UpdateKeyboard(std::int32_t bGenerate);
+    void UpdateMouse();
+    void AddISMessage(std::uint32_t message, std::uint32_t wParam, std::int32_t lParam);
 
-    // Mouse state
-    int m_nMouseX = 0;
-    int m_nMouseY = 0;
-    std::uint32_t m_nMouseButtons = 0;
-    std::uint32_t m_nMouseButtonsPressed = 0;
-    std::uint32_t m_nMouseButtonsReleased = 0;
+    // === Members (from IDA struct) ===
+    // DirectInput replaced by SDL — m_apDevice/m_ahEvent/m_pDI omitted
 
-    // Mouse wheel
-    int m_nMouseWheelDelta = 0;
+    std::int32_t m_bAcquireKeyboard{1};
+    std::array<std::uint8_t, 256> m_aKeyState{};
+    std::array<std::uint8_t, 256> m_aKeyStatePrev{};
+    std::int32_t m_tLastKeyDown{};
+    std::int32_t m_nVkLastKeyDown{};
+    std::uint32_t m_dwToggleKey{};
+    std::int32_t m_tKeyboardDelay{500};
+    std::int32_t m_tKeyboardSpeed{30};
 
-    bool m_bInitialized = false;
+    MOUSESTATE m_MouseState{};
+    std::int32_t m_nDoubleClkTime{500};
+    std::int32_t m_nCxDoubleClk{4};
+    std::int32_t m_nCyDoubleClk{4};
+    std::int32_t m_nMouseSpeed{1};
+    std::int32_t m_bSwapButton{};
+
+    /// Cursor layer
+    std::shared_ptr<WzGr2DLayer> m_pLayerCursor;
+    /// Cursor type layers (64 cursor types)
+    std::array<std::shared_ptr<WzGr2DLayer>, 64> m_pCursorType{};
+    std::shared_ptr<IWzVector2D> m_pVectorCursor;
+    std::int32_t m_nCursorState{};
+    std::int32_t m_nLastCursorState{};
+    Rect m_rcCursorMoveable{};
+    std::uint32_t m_tCantMoveTime{};
+    bool m_bCantMoveCursorOrigin{};
+    bool m_bCursorOriginMoveByMouse{};
+
+    /// Input message queue (ZList<ISMSG>)
+    std::vector<ISMSG> m_lISMsg;
+
+    bool m_bInitialized{};
 };
 
 } // namespace ms

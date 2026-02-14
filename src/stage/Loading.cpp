@@ -48,15 +48,9 @@ auto Loading::LoadLogoFrames(const std::shared_ptr<WzProperty>& prop)
         ++i;
 
         auto wzCanvas = child->GetCanvas();
-        auto canvas = wzCanvas ? std::make_shared<WzGr2DCanvas>(wzCanvas) : nullptr;
+        auto canvas = wzCanvas ? std::make_shared<WzGr2DCanvas>(wzCanvas, child) : nullptr;
         if (canvas)
         {
-            auto originProp = child->GetChild("origin");
-            if (originProp)
-            {
-                auto vec = originProp->GetVector();
-                canvas->SetOrigin({vec.x, vec.y});
-            }
             frames.push_back(canvas);
             continue;
         }
@@ -65,15 +59,9 @@ auto Loading::LoadLogoFrames(const std::shared_ptr<WzProperty>& prop)
         for (const auto& [subName, subChild] : child->GetChildren())
         {
             wzCanvas = subChild->GetCanvas();
-            canvas = wzCanvas ? std::make_shared<WzGr2DCanvas>(wzCanvas) : nullptr;
+            canvas = wzCanvas ? std::make_shared<WzGr2DCanvas>(wzCanvas, subChild) : nullptr;
             if (canvas)
             {
-                auto originProp = subChild->GetChild("origin");
-                if (originProp)
-                {
-                    auto vec = originProp->GetVector();
-                    canvas->SetOrigin({vec.x, vec.y});
-                }
                 frames.push_back(canvas);
                 break;
             }
@@ -86,15 +74,9 @@ auto Loading::LoadLogoFrames(const std::shared_ptr<WzProperty>& prop)
         for (const auto& [name, child] : prop->GetChildren())
         {
             auto wzCanvas = child->GetCanvas();
-            auto canvas = wzCanvas ? std::make_shared<WzGr2DCanvas>(wzCanvas) : nullptr;
+            auto canvas = wzCanvas ? std::make_shared<WzGr2DCanvas>(wzCanvas, child) : nullptr;
             if (canvas)
             {
-                auto originProp = child->GetChild("origin");
-                if (originProp)
-                {
-                    auto vec = originProp->GetVector();
-                    canvas->SetOrigin({vec.x, vec.y});
-                }
                 frames.push_back(canvas);
                 continue;
             }
@@ -102,15 +84,9 @@ auto Loading::LoadLogoFrames(const std::shared_ptr<WzProperty>& prop)
             for (const auto& [subName, subChild] : child->GetChildren())
             {
                 auto subWzCanvas = subChild->GetCanvas();
-                canvas = subWzCanvas ? std::make_shared<WzGr2DCanvas>(subWzCanvas) : nullptr;
+                canvas = subWzCanvas ? std::make_shared<WzGr2DCanvas>(subWzCanvas, subChild) : nullptr;
                 if (canvas)
                 {
-                    auto subOriginProp = subChild->GetChild("origin");
-                    if (subOriginProp)
-                    {
-                        auto vec = subOriginProp->GetVector();
-                        canvas->SetOrigin({vec.x, vec.y});
-                    }
                     frames.push_back(canvas);
                     break;
                 }
@@ -170,32 +146,19 @@ void Loading::InitLoading()
                     if (bgProp)
                     {
                         auto wzCanvas = bgProp->GetCanvas();
-                        auto canvas = wzCanvas ? std::make_shared<WzGr2DCanvas>(wzCanvas) : nullptr;
-                        auto originProp = bgProp->GetChild("origin");
-
+                        auto canvas = wzCanvas ? std::make_shared<WzGr2DCanvas>(wzCanvas, bgProp) : nullptr;
                         if (canvas)
                         {
-                            if (originProp)
-                            {
-                                auto vec = originProp->GetVector();
-                                canvas->SetOrigin({vec.x, vec.y});
-                                m_loadingBgCanvases.push_back(canvas);
-                            }
+                            m_loadingBgCanvases.push_back(canvas);
                         }
                     }
 
                     if (bg1Prop)
                     {
                         auto wzCanvas = bg1Prop->GetCanvas();
-                        auto canvas = wzCanvas ? std::make_shared<WzGr2DCanvas>(wzCanvas) : nullptr;
-                        auto originProp = bg1Prop->GetChild("origin");
+                        auto canvas = wzCanvas ? std::make_shared<WzGr2DCanvas>(wzCanvas, bg1Prop) : nullptr;
                         if (canvas)
                         {
-                            if (originProp)
-                            {
-                                auto vec = originProp->GetVector();
-                                canvas->SetOrigin({vec.x, vec.y});
-                            }
                             m_loadingBgCanvases.push_back(canvas);
                         }
                     }
@@ -313,12 +276,6 @@ void Loading::StartLoadingMode()
                     if (delayProp)
                     {
                         delay = delayProp->GetInt(100);
-                    }
-                    auto originProp = frameProp->GetChild("origin");
-                    if (originProp)
-                    {
-                        auto vec = originProp->GetVector();
-                        firstRepeat[i]->SetOrigin({vec.x, vec.y});
                     }
                 }
             }

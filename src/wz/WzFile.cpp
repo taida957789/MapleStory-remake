@@ -4,6 +4,8 @@
 #include "WzDirectory.h"
 #include "WzImage.h"
 #include "WzProperty.h"
+#include "WzRaw.h"
+#include "WzVideo.h"
 
 namespace ms
 {
@@ -535,6 +537,36 @@ void WzFile::ParseExtendedProperty(const std::u16string& name,
             // Failed to load canvas
         }
     }
+    else if (propName == u"Canvas#Video")
+    {
+        m_reader.Skip(sizeof(std::uint8_t));
+        if (m_reader.Read<std::uint8_t>() == 1)
+        {
+            m_reader.Skip(sizeof(std::uint16_t));
+            (void)ParsePropertyChildren(target, baseOffset);
+        }
+        auto videoData = ParseVideoProperty();
+        auto video = LoadVideoData(videoData);
+        if (video)
+        {
+            target->SetVideo(video);
+        }
+    }
+    else if (propName == u"RawData")
+    {
+        auto type = m_reader.Read<std::uint8_t>();
+        if (m_reader.Read<std::uint8_t>() == 1)
+        {
+            m_reader.Skip(sizeof(std::uint16_t));
+            (void)ParsePropertyChildren(target, baseOffset);
+        }
+        auto rawData = ParseRawDataProperty(type);
+        auto raw = LoadRawDataData(rawData);
+        if (raw)
+        {
+            target->SetRaw(raw);
+        }
+    }
     else if (propName == u"Shape2D#Vector2D")
     {
         auto x = m_reader.ReadCompressedInt();
@@ -615,6 +647,26 @@ auto WzFile::ParseCanvasProperty() -> WzCanvasData
     return canvas;
 }
 
+auto WzFile::ParseVideoProperty() -> WzVideoData
+{
+    WzVideoData video;
+    video.type = m_reader.Read<std::uint8_t>();
+    video.size = static_cast<std::size_t>(m_reader.ReadCompressedInt());
+    video.offset = m_reader.GetPosition();
+    m_reader.SetPosition(video.offset + video.size);
+    return video;
+}
+
+auto WzFile::ParseRawDataProperty(int type) -> WzRawData
+{
+    WzRawData rawData;
+    rawData.type = type;
+    rawData.size = static_cast<std::size_t>(m_reader.ReadCompressedInt());
+    rawData.offset = m_reader.GetPosition();
+    m_reader.SetPosition(rawData.offset + rawData.size);
+    return rawData;
+}
+
 auto WzFile::ParseSoundProperty() -> WzSoundData
 {
     WzSoundData sound;
@@ -650,6 +702,38 @@ auto WzFile::LoadSoundData(const WzSoundData& soundData) -> std::vector<std::uin
     m_reader.SetPosition(prevPos);
 
     return data;
+}
+
+auto WzFile::LoadRawDataData(const WzRawData& rawData) -> std::shared_ptr<WzRaw>
+{
+    if (rawData.size == 0 || rawData.offset == 0)
+        return nullptr;
+
+    auto prevPos = m_reader.GetPosition();
+    m_reader.SetPosition(rawData.offset);
+    auto data = m_reader.ReadBytes(rawData.size);
+    m_reader.SetPosition(prevPos);
+
+    auto raw = std::make_shared<WzRaw>();
+    raw->SetType(rawData.type);
+    raw->SetData(data);
+    return raw;
+}
+
+auto WzFile::LoadVideoData(const WzVideoData& videoData) -> std::shared_ptr<WzVideo>
+{
+    if (videoData.size == 0 || videoData.offset == 0)
+        return nullptr;
+
+    auto prevPos = m_reader.GetPosition();
+    m_reader.SetPosition(videoData.offset);
+    auto data = m_reader.ReadBytes(videoData.size);
+    m_reader.SetPosition(prevPos);
+
+    auto video = std::make_shared<WzVideo>();
+    video->SetType(videoData.type);
+    video->SetData(data);
+    return video;
 }
 
 auto WzFile::LoadCanvasData(const WzCanvasData& canvasData) -> std::shared_ptr<WzCanvas>

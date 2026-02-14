@@ -246,6 +246,14 @@ public:
                     std::int32_t nLoop = 0) -> std::uint32_t;
 
     /**
+     * @brief Play field/map sound effect
+     *
+     * Convenience wrapper for PlaySE used by map objects.
+     */
+    auto PlayFieldSound(const std::string& sPath,
+                        std::uint32_t nVolume128 = 128) -> std::uint32_t;
+
+    /**
      * @brief Stop sound effect
      *
      * Based on CSoundMan::StopSE (0xfb9da0).

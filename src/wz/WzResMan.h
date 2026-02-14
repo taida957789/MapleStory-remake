@@ -123,6 +123,18 @@ public:
      */
     [[nodiscard]] auto LoadSoundData(const std::shared_ptr<WzProperty>& prop) -> std::vector<std::uint8_t>;
 
+
+    /**
+     * @brief Load font data from a WzProperty
+     *
+     * The property should be a Font type containing WzFontData.
+     * Returns raw font data.
+     *
+     * @param prop Property containing font data
+     * @return Raw font data, or empty vector on failure
+     */
+    auto LoadFontData(const std::shared_ptr<WzProperty>& prop) -> std::vector<std::uint8_t>;
+
     /**
      * @brief Load a WZ file
      *

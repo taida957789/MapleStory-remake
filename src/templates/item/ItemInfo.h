@@ -157,6 +157,10 @@ class ItemInfo final : public Singleton<ItemInfo>
         std::int32_t nLevelUpValue;
     };
     struct Recovery;  // TODO: define when decompiled
+    struct ItemName {
+        std::int32_t nItemID;
+        std::string sItemName;
+    };
     struct GrowthOption {
         std::list<std::int32_t> anLevelUpTypePool;
         std::list<std::shared_ptr<LevelInfo>> apLevelInfo;
@@ -752,6 +756,7 @@ public:
     [[nodiscard]] auto GetBundleItem(std::int32_t nItemID) -> const BundleItem*; // @ 0xaf9310
 
     // --- Query Helpers (implemented) ---
+    [[nodiscard]] auto GetItemString(std::int32_t nItemID, const std::string& sKey) -> std::string;  // @ 0xacbb70
     [[nodiscard]] auto GetSetItemID(std::int32_t nItemID) -> std::int32_t;       // @ 0xae6700
     [[nodiscard]] auto GetItemName(std::int32_t nItemID) -> std::string;         // @ 0xacfb80
     [[nodiscard]] auto IsCashItem(std::int32_t nItemID) -> bool;                 // @ 0xaafbe0
@@ -769,11 +774,45 @@ public:
     [[nodiscard]] auto IsCashItem(const GW_ItemSlotBase& item) -> bool;                         // @ 0x788d20
     auto GetItemCoolTime(std::int32_t nItemID, std::int32_t& nLimitMin, std::int32_t& nLimitSec) -> bool;  // @ 0xafa8c0
 
+    // --- Sub-weapon equip check ---
+    [[nodiscard]] auto IsAbleToEquipSubWeapon(std::int32_t nItemID, std::int32_t nEquippedWeaponID,
+                                              std::int32_t nJob, std::int16_t nSubJob,
+                                              std::int32_t bCash) const -> bool;  // @ 0xa7aaf0
+
+    // --- Boolean predicates / getters ---
+    [[nodiscard]] auto IsOnlyItem(std::int32_t nItemID) -> bool;                    // @ 0xab04d0
+    [[nodiscard]] auto IsOnlyEquipItem(std::int32_t nItemID) -> bool;               // @ 0xab0610
+    [[nodiscard]] auto IsSuperiorEquipItem(std::int32_t nItemID) -> bool;           // @ 0xab0750
+    [[nodiscard]] auto IsNoCancelByMouseForItem(std::int32_t nItemID) -> bool;      // @ 0xab0890
+    [[nodiscard]] auto IsNotSaleItem(std::int32_t nItemID) -> bool;                 // @ 0xab0ec0
+    [[nodiscard]] auto IsDefaultAccountSharableItem(std::int32_t nItemID) -> bool;  // @ 0xab0b10
+    [[nodiscard]] auto IsSharableOnceItem(std::int32_t nItemID) -> bool;            // @ 0xab0c50
+    [[nodiscard]] auto IsCantRepairItem(std::int32_t nItemID) -> bool;              // @ 0xab0d90
+    [[nodiscard]] auto IsPartyQuestItem(std::int32_t nItemID) -> bool;              // @ 0xab1180
+    [[nodiscard]] auto IsPickUpBlockItem(std::int32_t nItemID) -> bool;             // @ 0xab12c0
+    [[nodiscard]] auto IsBindedWhenEquiped(std::int32_t nItemID) -> bool;           // @ 0xab1830
+    [[nodiscard]] auto IsNotExtendItem(std::int32_t nItemID) -> bool;               // @ 0xab1a90
+    [[nodiscard]] auto ExpireOnLogout(std::int32_t nItemID) -> bool;                // @ 0xab1bd0
+    [[nodiscard]] auto IsUnchangeable(std::int32_t nItemID) -> bool;                // @ 0xab0110
+    [[nodiscard]] auto IsUndecomposable(std::int32_t nItemID) -> bool;              // @ 0xab0250
+    [[nodiscard]] auto IsRoyalSpecialItem(std::int32_t nItemID) -> bool;            // @ 0xaafd20
+    [[nodiscard]] auto IsRoyalMasterItem(std::int32_t nItemID) -> bool;             // @ 0xaafe70
+    [[nodiscard]] auto IsApplicableAccountShareTag(std::int32_t nItemID) -> bool;   // @ 0xafa090
+    [[nodiscard]] auto IsPickUpBlockByPetItem(std::int32_t nItemID) -> bool;        // @ 0xafa0e0
+    [[nodiscard]] auto GetAppliableKarmaType(std::int32_t nItemID) -> std::int32_t; // @ 0xafa040
+    [[nodiscard]] auto IsBigSizeItem(std::int32_t nItemID) -> bool;
+    [[nodiscard]] auto IsBossRewardItem(std::int32_t nItemID) -> bool;
+    [[nodiscard]] auto IsExItem(std::int32_t nItemID) -> bool;
+    [[nodiscard]] auto IsMorphItem(std::int32_t nItemID) -> bool;
+    [[nodiscard]] auto GetSellPrice(std::int32_t nItemID) -> std::int32_t;
+
+    // --- Initialization ---
+    auto IterateItemInfo() -> bool;  // @ 0xafb5d0
+
     // --- Not yet implemented (address table) ---
     // GetItemSlot(long, int)                    @ 0xae6c00
     // IsAbleToEquip(...)                        @ 0xaea9e0
     // CalcEquipItemQuality(ZRef<GW_ItemSlotBase>) @ 0xaed3a0
-    // IterateItemInfo(void)                     @ 0xafb5d0
 
 private:
     ItemInfo() = default;
@@ -786,6 +825,37 @@ private:
 
     // --- WZ Registration (private) ---
     auto RegisterEquipItemInfo(std::int32_t nItemID, const std::string& sUOL) -> std::shared_ptr<EquipItem>;   // @ 0xad9ca0
+
+    // --- IterateItemInfo sub-loaders (private) ---
+    void LoadItemSellPriceByLv();                                          // @ 0xaf50d0
+    void IterateMapString();                                               // @ 0xae4a50
+    void IterateMapString(const std::shared_ptr<WzProperty>& pProp);       // @ 0xad62c0
+    void IterateItemString();                                              // @ 0xae3ee0
+    void IterateItemString(const std::shared_ptr<WzProperty>& pProp);      // @ 0xad4890
+    void IterateSkillCastItem();                                           // @ 0xaa9b60
+    void IterateItemNameForScanner();                                      // @ 0xad0cf0
+    void IterateItemNameForScanner(const std::shared_ptr<WzProperty>& pProp);  // @ 0xaccc40
+    void LoadNoScanItem(const std::shared_ptr<WzProperty>& pProp);
+    void RegisterSetItemEffect();                                          // @ 0xac4a00
+    void RegisterSetItemInfo();                                            // @ 0xaf1540
+    void RegisterGroupEffectInfo();                                        // @ 0xac33b0
+    void RegisterSetItemAction();                                          // @ 0xacff40
+    void RegisterPieceItemInfo();                                          // @ 0xaf9470
+    void RegisterGachaponItemInfo();                                       // @ 0xae0a80
+    void IterateCashBundleItem();                                          // @ 0xacd240
+    void IterateBridleItem();                                              // @ 0xacdc50
+    void IterateExtendExpireDateItem();                                    // @ 0xab37c0
+    void IterateBagItem();                                                 // @ 0xab3de0
+    void IterateCashItemTag();                                             // @ 0xad1a90
+    void RegisterPremiumMapTransferBasicMap();                              // @ 0xab4c30
+    void RegisterExclusiveEquipInfo();                                     // @ 0xae5690
+    void IterateEquipSlotLevelMinusItem();                                 // @ 0xac5750
+    void IterateCoreItem();                                                // @ 0xaec0a0
+    void IterateBitsCaseItem();                                            // @ 0xabe750
+    void RegisterSetTowerChairInfo();                                      // @ 0xac2a10
+    void RegisterEventNameTagString();                                     // @ 0xab8cb0
+    void LoadRequirePoint();                                               // @ 0xad3080
+    void LoadItemIDSet();                                                  // @ 0xacbc90
 
     // ============================================================
     // Member variables — from constructor @ 0xafad70
@@ -857,8 +927,15 @@ private:
     std::map<std::string, std::vector<std::int32_t>> m_CashItemTag;
 
     // --- Scanner ---
-    // std::list<std::shared_ptr<ITEMNAME>> m_lItemNameForScanner;
+    std::list<ItemName> m_lItemNameForScanner;
     bool m_bItemScannerInfoLoaded{};
+
+    // --- Event name tags ---
+    std::vector<std::vector<std::string>> m_aaEventNameTagString;
+
+    // --- Inner ability require points ---
+    std::vector<std::int32_t> m_vRequireRatePoint;
+    std::vector<std::int32_t> m_vRequireAbilityPoint;
 
     // --- Map string state ---
     bool m_bReleaseMapString{};

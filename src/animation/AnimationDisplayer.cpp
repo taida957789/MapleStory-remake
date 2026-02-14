@@ -5,6 +5,7 @@
 #include "graphics/WzGr2D.h"
 #include "graphics/WzGr2DCanvas.h"
 #include "graphics/WzGr2DLayer.h"
+#include "util/Rand32.h"
 #include "wz/WzProperty.h"
 #include "wz/WzResMan.h"
 
@@ -15,34 +16,218 @@ namespace ms
 
 // ========== AnimationDisplayer::PrepareInfo ==========
 
-auto AnimationDisplayer::PrepareInfo::Update(
-    [[maybe_unused]] std::int32_t tCur) -> bool
+auto AnimationDisplayer::PrepareInfo::Update(std::int32_t tCur) -> bool
 {
-    // TODO: implement prepare animation update
-    return false;
+    // TODO: look up avatar from CUserPool by dwCharacterIDForFlip
+    // const CAvatar* pOwner = nullptr;
+    // if (dwCharacterIDForFlip)
+    // {
+    //     auto* pUser = CUserPool::GetInstance().GetUser(dwCharacterIDForFlip);
+    //     if (pUser)
+    //         pOwner = &pUser->GetAvatar();
+    // }
+
+    bool bResult = true;
+
+    for (auto& pLayer : apLayer)
+    {
+        if (!pLayer)
+            continue;
+
+        const auto nAnimState = pLayer->get_animationState();
+
+        if (nAnimState != 0)
+        {
+            // Animation still running — sync flip direction
+            if (pFlipLayer)
+                pLayer->put_flip(pFlipLayer->get_flip());
+
+            // TODO: override flip from avatar move action when CUserPool available
+            // if (pOwner)
+            //     pLayer->put_flip((pOwner->m_nMoveAction & 1) == 0 ? 1 : 0);
+
+            bResult = false;
+        }
+        else
+        {
+            // Animation finished — release the layer
+            pLayer.reset();
+        }
+    }
+
+    // Force removal if reserved time has elapsed
+    if (tReservedRemoveTime != 0 && tCur - tReservedRemoveTime > 0)
+        AnimationDisplayer::GetInstance().RemovePrepareAnimation(dwCharacterID);
+
+    return bResult;
+}
+
+// ========== AnimationDisplayer::OneTimeInfo ==========
+
+auto AnimationDisplayer::OneTimeInfo::Scale(
+    [[maybe_unused]] std::int32_t nScale) -> std::int32_t
+{
+    // TODO: implement — pLayer->raw_VertexShaderConstSet(8, nScale)
+    return 0;
+}
+
+// ========== AnimationDisplayer::RegisterOneTimeAnimation ==========
+
+auto AnimationDisplayer::RegisterOneTimeAnimation(
+    const std::shared_ptr<WzGr2DLayer>& pLayer,
+    std::int32_t tDelayBeforeStart,
+    const std::shared_ptr<WzGr2DLayer>& pFlipOrigin,
+    std::int32_t nDelayRate,
+    std::int32_t nMovingType,
+    const std::shared_ptr<RelOffsetParam>& pRelOffsetParam,
+    const ZXString<wchar_t>& sSoundUOL,
+    std::int32_t nComboKillCount,
+    std::uint32_t dwOwner
+) -> OneTimeInfo&
+{
+    m_lOneTime.emplace_back();
+    auto& info = m_lOneTime.back();
+
+    info.pLayer = pLayer;
+    info.bWaiting = 0;
+    info.tDelayBeforeStart = tDelayBeforeStart;
+    info.pFlipOrigin = pFlipOrigin;
+    info.dwOwner = dwOwner;
+    info.nDelayRate = nDelayRate;
+    info.nMovingType = nMovingType;
+    info.nCurrentTick = 0;
+    info.nPrevScale = -1;
+    info.nBaseScale = (nMovingType >= 3 && nMovingType <= 5) ? 75 : 100;
+    info.nComboKillCount = nComboKillCount;
+    info.pRelOffsetParam = pRelOffsetParam;
+    info.sSoundUOL = sSoundUOL;
+    info.nAnimationType = 0;
+
+    // If there's a start delay, make layer transparent and mark waiting
+    if (tDelayBeforeStart != 0)
+    {
+        if (pLayer)
+            pLayer->put_color(0x00FFFFFF);
+        info.bWaiting = 1;
+    }
+
+    // Set render mode for moving effects (vtable offset 0x130 = put_renderMode)
+    if (nMovingType != 0)
+    {
+        // TODO: info.pLayer->put_renderMode(2)
+        // WzGr2DLayer does not yet expose put_renderMode
+    }
+
+    if (nMovingType == 3)
+    {
+        // Scale to base (75%) immediately
+        info.Scale(info.nBaseScale);
+    }
+    else if (nMovingType == 2 || nMovingType == 5)
+    {
+        // Blade moving effect: hide previous effect for this owner, store new one
+        auto it = m_mBladeMovingEffect.find(dwOwner);
+        if (it != m_mBladeMovingEffect.end() && it->second)
+            it->second->put_visible(false);
+
+        m_mBladeMovingEffect[dwOwner] = pLayer;
+    }
+
+    return info;
 }
 
 // ========== AnimationDisplayer::TrembleCtx ==========
 
-void AnimationDisplayer::TrembleCtx::Update(
-    [[maybe_unused]] std::int32_t tCur)
+void AnimationDisplayer::TrembleCtx::Update(std::int32_t tCur)
 {
-    // TODO: implement tremble effect update
+    if (m_dTrembleForce <= 0.0)
+        return;
+
+    if (tCur - m_tTrembleStart <= 0)
+        return;
+
+    // Throttle updates by m_tTrembleTerm interval
+    if (m_tTrembleTerm != 0)
+    {
+        // Util::IsOverTime(m_tTrembleLastUpdate, m_tTrembleTerm, tCur)
+        if (tCur - m_tTrembleLastUpdate <= m_tTrembleTerm)
+            return;
+    }
+
+    m_tTrembleLastUpdate = tCur;
+
+    auto* pCenter = get_gr().GetCenterVec();
+
+    if (tCur - m_tTrembleEnd < 0)
+    {
+        const auto nRange = static_cast<std::int32_t>(m_dTrembleForce + m_dTrembleForce);
+        if (nRange > 0)
+        {
+            const auto uRange = static_cast<std::uint32_t>(nRange);
+            auto& rand = detail::get_rand();
+            const auto nForce = static_cast<std::int32_t>(m_dTrembleForce);
+
+            const auto shakeX = static_cast<std::int32_t>(
+                static_cast<std::uint32_t>(rand.Random()) % uRange) - nForce;
+            const auto shakeY = static_cast<std::int32_t>(
+                static_cast<std::uint32_t>(rand.Random()) % uRange) - nForce;
+
+            // Instant RelMove: sets local position to (shake + savedRel),
+            // creating an EasingNode that absorbs into base on next evaluation.
+            pCenter->RelMove(shakeX + m_ptCenterRel.x,
+                             shakeY + m_ptCenterRel.y);
+        }
+
+        m_dTrembleForce *= m_dTrembleReduction;
+    }
+
+    // End tremble if past end time or force too weak
+    if (tCur - m_tTrembleEnd >= 0 || m_dTrembleForce < 1.0)
+    {
+        // Restore center to pre-tremble relative offset
+        pCenter->RelMove(m_ptCenterRel.x, m_ptCenterRel.y);
+        m_dTrembleForce = 0.0;
+    }
+
+    // TODO: if stage is CField and m_dTrembleForce == 0.0:
+    //   CField::SetAbleFloat(pField, 1)
+    //   pCenter->WrapClip(nullptr, rcViewRange.left, rcViewRange.top,
+    //                      rcViewRange.Width(), rcViewRange.Height(), true)
 }
 
 // ========== Effect Methods ==========
 
 void AnimationDisplayer::Effect_General(
-    [[maybe_unused]] const std::string& sUOL,
-    [[maybe_unused]] bool bNotFlip,
-    [[maybe_unused]] const std::shared_ptr<Gr2DVector>& pOrigin,
-    [[maybe_unused]] std::int32_t rx,
-    [[maybe_unused]] std::int32_t ry,
-    [[maybe_unused]] const std::shared_ptr<WzGr2DLayer>& pOverlay,
-    [[maybe_unused]] std::int32_t z,
-    [[maybe_unused]] std::int32_t nAlpha)
+    const std::string& sUOL,
+    std::int32_t nFlip,
+    const std::shared_ptr<Gr2DVector>& pOrigin,
+    std::int32_t rx,
+    std::int32_t ry,
+    const std::shared_ptr<WzGr2DLayer>& pOverlay,
+    std::int32_t z,
+    std::int32_t nMagLevel)
 {
-    // TODO: load animation from sUOL and display under pOverlay
+    // Extract position from origin vector
+    Point2D origin{};
+    if (pOrigin)
+        origin = {pOrigin->GetX(), pOrigin->GetY()};
+
+    // Load effect layer (alpha hardcoded to 255)
+    auto pLayer = LoadLayer(
+        sUOL, nFlip, origin, rx, ry,
+        pOverlay, z, 255, nMagLevel,
+        nullptr, 0, 0, false);
+
+    if (!pLayer)
+        return;
+
+    // Start animation (GA_STOP = play once through and stop)
+    pLayer->Animate(Gr2DAnimationType::Stop);
+
+    // Register as a one-time animation so Update() drives playback
+    RegisterOneTimeAnimation(
+        pLayer, 0, nullptr, 0, 0,
+        nullptr, {}, 0, 0);
 }
 
 // ========== AnimationDisplayer ==========

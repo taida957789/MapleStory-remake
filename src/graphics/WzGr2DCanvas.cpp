@@ -1,4 +1,5 @@
 #include "WzGr2DCanvas.h"
+#include "wz/WzProperty.h"
 #include <utility>
 
 namespace ms
@@ -7,6 +8,22 @@ namespace ms
 WzGr2DCanvas::WzGr2DCanvas(std::shared_ptr<WzCanvas> canvas)
     : m_canvas(std::move(canvas))
 {
+}
+
+WzGr2DCanvas::WzGr2DCanvas(std::shared_ptr<WzCanvas> canvas,
+                             const std::shared_ptr<WzProperty>& prop)
+    : m_canvas(std::move(canvas))
+{
+    // Read origin from source property (matches IWzCanvas::Getproperty() behavior)
+    if (prop)
+    {
+        auto originProp = prop->GetChild("origin");
+        if (originProp)
+        {
+            auto vec = originProp->GetVector();
+            m_origin = {vec.x, vec.y};
+        }
+    }
 }
 
 WzGr2DCanvas::~WzGr2DCanvas()

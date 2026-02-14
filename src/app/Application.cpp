@@ -1,5 +1,6 @@
 #include "Application.h"
 #include "Configuration.h"
+#include "UpdateManager.h"
 #include "WvsContext.h"
 #include "animation/ActionFrame.h"
 #include "animation/ActionMan.h"
@@ -114,8 +115,8 @@ auto Application::Initialize(int argc, char* argv[]) -> bool
     ActionFrame::LoadMappers();
     (void)ActionMan::GetInstance().Initialize();
 
-    // Initialize WndMan (global window manager)
-    WndMan::GetInstance().Initialize();
+    // Create WndMan singleton (constructor handles initialization)
+    (void)WndMan::GetInstance();
 
     // Create initial stage (CLogo)
     auto logo = std::make_shared<Logo>();
@@ -129,12 +130,27 @@ auto Application::Initialize(int argc, char* argv[]) -> bool
 
 void Application::Run()
 {
-    // Main game loop (mirrors CWvsApp::Run)
+    // Main game loop (mirrors CWvsApp::Run at 0x1a93e60)
+    //
+    // Original flow:
+    //   1. MsgWaitForMultipleObjects (waits for input/Windows messages)
+    //   2. UpdateDevice → drain GetISMessage → ISMsgProc
+    //   3. GenerateAutoKeyDown → ISMsgProc
+    //   4. PreUpdate / CallUpdate / PostUpdate / RenderFrame
+    //
+    // SDL3 adaptation:
+    //   1. SDL_PollEvent → InputSystem::ProcessEvent (generates ISMSGs)
+    //   2. Drain ISMSG queue → ISMsgProc (→ WndMan::ProcessKey/ProcessMouse)
+    //   3. GenerateAutoKeyDown → ISMsgProc
+    //   4. PreUpdate / CallUpdate / PostUpdate / Render
+
     SDL_Event event;
 
     while (m_bIsRunning && !m_bIsTerminating)
     {
-        // Process SDL events
+        auto& input = InputSystem::GetInstance();
+
+        // 1. Process SDL events → InputSystem generates ISMSGs
         while (SDL_PollEvent(&event))
         {
             if (event.type == SDL_EVENT_QUIT)
@@ -142,95 +158,39 @@ void Application::Run()
                 m_bIsTerminating = true;
                 break;
             }
-
-            // Process input
-            InputSystem::GetInstance().ProcessEvent(event);
-
-            // Forward events through WndMan (mirrors CWvsApp -> CWndMan event flow)
-            auto& wndMan = WndMan::GetInstance();
-
-            switch (event.type)
-            {
-            case SDL_EVENT_MOUSE_MOTION:
-                wndMan.OnMouseMove(static_cast<std::int32_t>(event.motion.x),
-                                   static_cast<std::int32_t>(event.motion.y));
-                break;
-
-            case SDL_EVENT_MOUSE_BUTTON_DOWN:
-#ifdef MS_DEBUG_CANVAS
-                if (DebugOverlay::GetInstance().OnMouseClick(
-                        static_cast<int>(event.button.x),
-                        static_cast<int>(event.button.y)))
-                {
-                    wndMan.OnMouseDown(static_cast<std::int32_t>(event.button.x),
-                                   static_cast<std::int32_t>(event.button.y),
-                                   static_cast<std::int32_t>(event.button.button));
-                    break;
-                }
-#endif
-                wndMan.OnMouseDown(static_cast<std::int32_t>(event.button.x),
-                                   static_cast<std::int32_t>(event.button.y),
-                                   static_cast<std::int32_t>(event.button.button));
-                break;
-
-            case SDL_EVENT_MOUSE_BUTTON_UP:
-                wndMan.OnMouseUp(static_cast<std::int32_t>(event.button.x),
-                                 static_cast<std::int32_t>(event.button.y),
-                                 static_cast<std::int32_t>(event.button.button));
-                break;
-
-            case SDL_EVENT_KEY_DOWN:
-                if (!event.key.repeat)
-                {
-#ifdef MS_DEBUG_CANVAS
-                    if (DebugOverlay::GetInstance().OnKeyDown(event.key.key))
-                    {
-                        break;
-                    }
-#endif
-                    wndMan.OnKeyDown(static_cast<std::int32_t>(event.key.key));
-                }
-                break;
-
-            case SDL_EVENT_KEY_UP:
-                wndMan.OnKeyUp(static_cast<std::int32_t>(event.key.key));
-                break;
-
-            case SDL_EVENT_TEXT_INPUT:
-                wndMan.OnTextInput(event.text.text);
-                break;
-
-            case SDL_EVENT_WINDOW_MOUSE_ENTER:
-                wndMan.OnMouseEnter(true);
-                break;
-
-            case SDL_EVENT_WINDOW_MOUSE_LEAVE:
-                wndMan.OnMouseEnter(false);
-                break;
-
-            case SDL_EVENT_WINDOW_FOCUS_GAINED:
-                wndMan.OnSetFocus(true);
-                break;
-
-            case SDL_EVENT_WINDOW_FOCUS_LOST:
-                wndMan.OnSetFocus(false);
-                break;
-
-            default:
-                break;
-            }
+            // Process SDL events → InputSystem generates ISMSGs
+            input.ProcessEvent(event);
         }
 
-        // Get current time
-        const auto tCurTime = GetTick();
+        // 2. Drain ISMSG queue → dispatch via ISMsgProc
+        ISMSG msg{};
+        while (input.GetISMessage(&msg))
+        {
+            ISMsgProc(msg.message, msg.wParam, msg.lParam);
+        }
 
-        // Update game state
-        Update(tCurTime);
+        // 3. Generate auto-repeat key events
+        if (input.GenerateAutoKeyDown(&msg))
+        {
+            ISMsgProc(msg.message, msg.wParam, msg.lParam);
+        }
 
-        // Render frame
+        // --- Per-frame update/render (mirrors CWvsApp::Run idle branch) ---
+        auto& gr = get_gr();
+
+        // 4a. Pre-update phase
+        UpdateManager::s_PreUpdate();
+
+        // 4b. Fixed-timestep update (uses nextRenderTime as in original)
+        const auto tCurTime = static_cast<std::uint64_t>(gr.GetNextRenderTime());
+        CallUpdate(tCurTime);
+
+        // 4c. Post-update phase
+        UpdateManager::s_PostUpdate();
+
+        // 4d. Render: let stage/UI prepare layers, then WzGr2D renders all
         Render();
 
-        // Frame rate limiting (approximately 60 FPS)
         SDL_Delay(1);
     }
 }
@@ -244,10 +204,8 @@ void Application::Shutdown()
     {
         m_pStage->Close();
         m_pStage.reset();
+        g_pStage = nullptr;
     }
-
-    // Shutdown WndMan
-    WndMan::GetInstance().Shutdown();
 
     // Shutdown graphics engine
     get_gr().Shutdown();
@@ -265,9 +223,7 @@ void Application::SetStage(std::shared_ptr<Stage> stage, void* param)
 
     // Set new stage
     m_pStage = std::move(stage);
-
-    // Update WndMan's stage pointer (mirrors g_pStage in original)
-    WndMan::GetInstance().SetStage(m_pStage.get());
+    g_pStage = m_pStage.get();
 
     // Initialize new stage
     if (m_pStage)
@@ -313,7 +269,8 @@ auto Application::GetRenderer() const noexcept -> SDL_Renderer*
 
 auto Application::InitializeInput() -> bool
 {
-    return InputSystem::GetInstance().Initialize();
+    InputSystem::GetInstance().Init();
+    return true;
 }
 
 auto Application::InitializeSound() -> bool
@@ -341,34 +298,62 @@ auto Application::InitializeResMan() -> bool
     return true;
 }
 
-void Application::ProcessInput()
+void Application::ISMsgProc(std::uint32_t message, std::uint32_t wParam,
+                            std::int32_t lParam)
 {
-    // Process input from InputSystem
-    [[maybe_unused]] auto& input = InputSystem::GetInstance();
+    // CWvsApp::ISMsgProc at 0x1a8bc30
+    // Routes ISMSG to CWndMan::ProcessKey or CWndMan::ProcessMouse
 
-    // Forward input to current stage
-    if (m_pStage)
+    constexpr std::uint32_t kWM_KEYDOWN = 0x0100;
+
+    if (message == kWM_KEYDOWN)
     {
-        // TODO: Implement input forwarding
+        WndMan::GetInstance().ProcessKey(kWM_KEYDOWN, wParam, lParam);
+    }
+    else if (message > 0x01FF && message <= 0x020A)
+    {
+        // WM_MOUSEMOVE (0x200) through WM_MOUSEWHEEL (0x20A)
+        WndMan::GetInstance().ProcessMouse(message, wParam, lParam);
     }
 }
 
-void Application::Update(std::uint64_t tCurTime)
+void Application::ProcessInput()
 {
-    m_tUpdateTime = tCurTime;
+    // Legacy path — no longer used.
+    // Input is now routed through ISMsgProc in Run().
+}
 
-    // Calculate delta time
-    [[maybe_unused]] const auto deltaTime = tCurTime - m_tLastUpdate;
-    m_tLastUpdate = tCurTime;
+void Application::CallUpdate(std::uint64_t tCurTime)
+{
+    // Based on CWvsApp::CallUpdate
+    // Fixed 30ms timestep loop: accumulate time and run discrete update ticks.
 
-    // Update current stage
-    if (m_pStage)
+    if (m_bFirstUpdate)
     {
-        m_pStage->Update();
+        m_tUpdateTime = tCurTime;
+        m_bFirstUpdate = false;
     }
 
-    // Update global UI (WndMan)
-    WndMan::GetInstance().Update();
+    auto& gr = get_gr();
+
+    while (static_cast<std::int64_t>(tCurTime - m_tUpdateTime) > 0)
+    {
+        auto stage = m_pStage;
+
+        UpdateManager::s_Update();
+
+        if (stage)
+            stage->Update();
+
+        WndMan::s_Update();
+
+        m_tUpdateTime += kUpdateInterval;
+
+        if (static_cast<std::int64_t>(tCurTime - m_tUpdateTime) > 0)
+            gr.UpdateCurrentTime(static_cast<std::int32_t>(m_tUpdateTime));
+    }
+
+    gr.UpdateCurrentTime(static_cast<std::int32_t>(tCurTime));
 }
 
 void Application::Render()
@@ -381,13 +366,10 @@ void Application::Render()
     gr.UpdateCurrentTime(tCur);
 
     // Render current stage (allows stage to update layers)
-    if (m_pStage)
+    if (g_pStage)
     {
-        m_pStage->Draw();
+        g_pStage->Draw();
     }
-
-    // Draw global UI (WndMan) - renders on top of stage
-    WndMan::GetInstance().Draw();
 
     // Render all layers and present
     (void)gr.RenderFrame(tCur);

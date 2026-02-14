@@ -23,6 +23,7 @@ set(TEST_SOURCES
     test_layer_interpolation.cpp
     test_secure_tear.cpp
     test_item_info.cpp
+    test_font_rawdata.cpp
 )
 
 # Find zlib for WZ decompression
@@ -44,6 +45,8 @@ add_executable(maplestory_tests
     ../src/wz/WzImage.cpp
     ../src/wz/WzNode.cpp
     ../src/wz/WzPackage.cpp
+    ../src/wz/WzRaw.cpp
+    ../src/wz/WzVideo.cpp
     ../src/wz/WzSourceFactory.cpp
     ../src/util/Rand32.cpp
     ../src/util/ZXString.cpp
@@ -52,8 +55,16 @@ add_executable(maplestory_tests
     ../src/graphics/Gr2DVector.cpp
     ../src/graphics/WzGr2DLayer.cpp
     ../src/graphics/WzGr2DCanvas.cpp
+    ../src/models/GW_CashItemOption.cpp
+    ../src/models/GW_ItemSlotBase.cpp
+    ../src/models/GW_ItemSlotBundle.cpp
+    ../src/models/GW_ItemSlotEquip.cpp
+    ../src/models/GW_ItemSlotEquipBase.cpp
+    ../src/models/GW_ItemSlotPet.cpp
+    ../src/templates/item/ItemHelper.cpp
     ../src/templates/item/ItemInfo.cpp
     ../src/constants/EquipDataPath.cpp
+    ../src/constants/JobConstants.cpp
     ../src/constants/WeaponConstants.cpp
 )
 

@@ -26,15 +26,6 @@ public:
     }
 
     /**
-     * @brief Get pointer to the singleton instance
-     * @return Pointer to the singleton instance
-     */
-    [[nodiscard]] static auto GetInstancePtr() noexcept -> T*
-    {
-        return &GetInstance();
-    }
-
-    /**
      * @brief Check if instance is created (always true with static storage)
      * @return Always returns true
      */

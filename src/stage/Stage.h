@@ -113,4 +113,7 @@ protected:
     bool m_bOverlapTransfer{false};
 };
 
+/// Global stage pointer (ZRef<CStage> g_pStage in original)
+extern Stage* g_pStage;
+
 } // namespace ms

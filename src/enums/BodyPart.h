@@ -43,4 +43,8 @@ enum class BodyPart : std::int32_t
     BP_COUNT = 31,
 };
 
+/// Ring/pendant body part indices used by LoadCharacterAction's equipment zeroing.
+/// Indices [1]=13(RING2), [2]=15(RING3), [3]=16(RING4) are used for clearing.
+inline constexpr std::int32_t g_anRingBodyPart[] = {12, 13, 15, 16, 17, 31, 0, 30};
+
 } // namespace ms

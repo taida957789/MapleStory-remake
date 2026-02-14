@@ -118,7 +118,7 @@ class TSecType
             m_pSecData = pNew;
         }
 
-        auto& rand = detail::GetSecureRand();
+        auto& rand = detail::get_rand();
         m_pSecData->bKey = static_cast<T>(rand.Random());
 
         auto bKey = m_pSecData->bKey;
@@ -136,7 +136,7 @@ public:
     {
         m_pSecData = new TSecData<T>();
 
-        auto& rand = detail::GetSecureRand();
+        auto& rand = detail::get_rand();
         const auto addr = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(this));
         m_nFakePtr1 = addr + static_cast<uint32_t>(rand.Random());
         m_nFakePtr2 = addr + static_cast<uint32_t>(rand.Random());
@@ -151,7 +151,7 @@ public:
     {
         m_pSecData = new TSecData<T>();
 
-        auto& rand = detail::GetSecureRand();
+        auto& rand = detail::get_rand();
         const auto addr = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(this));
         m_nFakePtr1 = addr + static_cast<uint32_t>(rand.Random());
         m_nFakePtr2 = addr + static_cast<uint32_t>(rand.Random());

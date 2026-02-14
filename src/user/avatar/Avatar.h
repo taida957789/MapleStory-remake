@@ -63,10 +63,12 @@ public:
 
         // --- Current frame playback state ---
         std::vector<std::int32_t> aFrameDelay;
+        std::vector<std::int32_t> aTMFrameDelay;
         std::int32_t tTotFrameDelay{0};
         std::int32_t nCurFrameIndex{0};
         std::int32_t nCurTMFrameIndex{0};
         std::int32_t tCurFrameRemain{0};
+        std::int32_t tCurTMFrameRemain{0};
         std::int32_t nRepeatFrame{0};
 
         /// Check if action frame data is already loaded for a given action
@@ -89,6 +91,18 @@ public:
             // TODO: implement based on equipped item extendFrame flag
             return false;
         }
+
+        /// Get the frame multiplication factor for extended frames.
+        [[nodiscard]] std::int32_t GetFrameMultipleCountOf(std::int32_t nOrigCount) const
+        {
+            if (nOrigCount <= 0) return 1;
+            auto nFrameCount = static_cast<std::int32_t>(aFrameDelay.size());
+            if (nFrameCount <= 0 || nFrameCount % nOrigCount != 0) return 1;
+            return nFrameCount / nOrigCount;
+        }
+
+        /// Whether the current frame is held (paused).
+        bool bCurFrameStop{false};
     };
 
     /**
@@ -102,6 +116,7 @@ public:
         std::int32_t nState{0};
         std::int32_t nAlbatrossID{0};
         bool bApplied{false};
+        bool bToRemove{false};
         std::int32_t nFaceColor{-1};
     };
 
@@ -207,6 +222,78 @@ public:
     /// Register next eye blink timer.
     void RegisterNextBlink();
 
+    /// Per-frame update: advance animation, update origins, handle timers.
+    void Update();
+
+    /// Get the active ActionInfo slot (slot 1 if one-time action active, else slot 0).
+    [[nodiscard]] auto GetActionInfo() -> ActionInfo*;
+
+    /// Frame advance logic for normal character path. Returns true if frame advanced.
+    [[nodiscard]] bool CharacterFrameUpdate();
+
+    /// Frame advance logic for taming mob (riding) path.
+    void TamingMobFrameUpdate();
+
+    /// Post-action processing (e.g. combo transitions, special dying).
+    void ActionProcess(CharacterAction nAction);
+
+    /// Set/clear morph state.
+    void SetMorphed(std::uint32_t dwMorphTemplateID);
+
+    /// Set color on all avatar layers.
+    void SetLayerColor(std::uint32_t dwColor);
+
+    /// Set emotion for sit action.
+    void SetSitEmotion(std::int32_t nEmotion);
+
+    /// Check if currently performing an equipped emotion.
+    [[nodiscard]] bool IsDoingEquipedEmotion() const;
+
+    /// Set equipped emotion.
+    void SetEquipedEmotion(std::int32_t nEmotion);
+
+    /// Perform levitation oscillation animation.
+    void DoLevitationAction();
+
+    /// Stop levitation oscillation.
+    void StopLevitationAction();
+
+    /// Update albatross companion (Wind Archer).
+    void UpdateAlbatross();
+
+    /// Update BattlePvP visual state.
+    void UpdateBattlePvP(std::int32_t nAction);
+
+    /// Common finalization logic for Update (timers, emotion, levitation, etc.).
+    void UpdateFinalization(CharacterAction nAction, std::int32_t tCur);
+
+    /// Reset action animation info.
+    void ResetActionAniInfo();
+
+    /// Reset character one-time action (clear slot 1).
+    void ResetCharacterOneTimeAction();
+
+    /// Reset taming mob one-time action.
+    void ResetTamingMobOneTimeAction();
+
+    /// Check if riding Demon Slayer wing mount.
+    [[nodiscard]] bool IsRidingDslayerWing() const;
+
+    /// Clear character action layer for a slot.
+    void ClearCharacterActionLayer(std::int32_t nSlot);
+
+    /// Clear taming mob action layer for a slot.
+    void ClearTamingMobActionLayer(std::int32_t nSlot);
+
+    /// Remove all canvas from layers at z order.
+    void AvatarLayerRemoveCanvas(std::int32_t nZ);
+
+    /// Load dark tornado effect layer.
+    void LoadDarkTornado();
+
+    /// Get the origin vector (raw or adjusted).
+    [[nodiscard]] auto GetOrigin() -> std::shared_ptr<Gr2DVector>&;
+
 protected:
     /// Protected Init: creates origin/layer hierarchy.
     void Init(
@@ -291,7 +378,7 @@ public:
     std::string m_sWeaponAfterimage;
 
     // --- Change/move action ---
-    std::int32_t m_nChangeMoveAction{-1};
+    mutable std::int32_t m_nChangeMoveAction{-1};
 
     // --- Blinking ---
     bool m_bBlinking{false};

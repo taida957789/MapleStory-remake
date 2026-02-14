@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Gr2DVector.h"
 #include "WzGr2DTypes.h"
 #include "util/Point.h"
 #include "util/Singleton.h"
@@ -109,6 +110,17 @@ public:
      */
     [[nodiscard]] auto GetLayerCount() const noexcept -> std::size_t;
 
+    [[nodiscard]] auto GetLayerList() const noexcept
+        -> const std::vector<std::shared_ptr<WzGr2DLayer>>&
+    {
+        return m_layers;
+    }
+    [[nodiscard]] auto GetLayerList() noexcept
+        -> std::vector<std::shared_ptr<WzGr2DLayer>>&
+    {
+        return m_layers;
+    }
+
     // Rendering
     /**
      * @brief Render a single frame
@@ -131,17 +143,44 @@ public:
     [[nodiscard]] auto GetWindow() const noexcept -> SDL_Window* { return m_pWindow; }
     [[nodiscard]] auto GetRenderer() const noexcept -> SDL_Renderer* { return m_pRenderer; }
 
-    // Camera control (for scrolling maps)
-    [[nodiscard]] auto GetCameraPosition() const noexcept -> Point2D { return m_cameraPos; }
-    void SetCameraPosition(const Point2D& pos) noexcept { m_cameraPos = pos; }
-    void SetCameraPosition(std::int32_t x, std::int32_t y) noexcept { m_cameraPos = {x, y}; }
+    /// Center vector (matches original IWzGr2D::get_center property).
+    [[nodiscard]] auto GetCenterVec() noexcept -> Gr2DVector* { return &m_vecCenter; }
+
+    /// Red tone vector (matches original IWzGr2D::get_redTone).
+    /// X = red channel intensity (0-255). Y = white-fade flag.
+    [[nodiscard]] auto GetRedTone() noexcept -> Gr2DVector* { return &m_vecRedTone; }
+
+    /// Green/blue tone vector (matches original IWzGr2D::get_greenBlueTone).
+    /// X = green channel intensity (0-255). Y = blue channel intensity (0-255).
+    [[nodiscard]] auto GetGreenBlueTone() noexcept -> Gr2DVector* { return &m_vecGreenBlueTone; }
+
+    // Convenience wrappers over center vector
+    [[nodiscard]] auto GetCameraPosition() -> Point2D
+    {
+        return {m_vecCenter.GetX(), m_vecCenter.GetY()};
+    }
+    void SetCameraPosition(const Point2D& pos)
+    {
+        m_vecCenter.PutX(pos.x);
+        m_vecCenter.PutY(pos.y);
+    }
+    void SetCameraPosition(std::int32_t x, std::int32_t y)
+    {
+        m_vecCenter.PutX(x);
+        m_vecCenter.PutY(y);
+    }
+    void ResetCameraPosition(std::int32_t x, std::int32_t y)
+    {
+        m_vecCenter.Move(x, y);
+    }
 
     [[nodiscard]] auto GetCameraRotate() const noexcept -> float { return m_fCameraRotate; }
     void SetCameraRotate(float angle) noexcept { m_fCameraRotate = angle; }
 
     // Coordinate transformation (screen <-> world)
-    [[nodiscard]] auto ScreenToWorld(const Point2D& screenPos) const -> Point2D;
-    [[nodiscard]] auto WorldToScreen(const Point2D& worldPos) const -> Point2D;
+    // Non-const: evaluates center vector chain.
+    [[nodiscard]] auto ScreenToWorld(const Point2D& screenPos) -> Point2D;
+    [[nodiscard]] auto WorldToScreen(const Point2D& worldPos) -> Point2D;
 
 protected:
     WzGr2D();
@@ -177,9 +216,14 @@ private:
     std::vector<std::shared_ptr<WzGr2DLayer>> m_layers;
     bool m_bLayersDirty{false};
 
-    // Camera
-    Point2D m_cameraPos{0, 0};
+    // Camera center vector (matches original IWzGr2D::m_center / get_center property)
+    Gr2DVector m_vecCenter;
     float m_fCameraRotate{0.0F};
+
+    // Screen tone vectors (color channel multipliers, animated via RelMove)
+    // Original: IWzGr2D::get_redTone, IWzGr2D::get_greenBlueTone
+    Gr2DVector m_vecRedTone;       // X=red(0-255), Y=white-fade flag
+    Gr2DVector m_vecGreenBlueTone; // X=green(0-255), Y=blue(0-255)
 };
 
 /**

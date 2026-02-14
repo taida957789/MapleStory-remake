@@ -91,13 +91,7 @@ void Logo::InitWZLogo()
             auto wzCanvas = child->GetCanvas();
             if (wzCanvas)
             {
-                auto canvas = std::make_shared<WzGr2DCanvas>(wzCanvas);
-                auto originProp = child->GetChild("origin");
-                if (originProp)
-                {
-                    auto vec = originProp->GetVector();
-                    canvas->SetOrigin({vec.x, vec.y});
-                }
+                auto canvas = std::make_shared<WzGr2DCanvas>(wzCanvas, child);
 
                 // Insert same canvas twice with alpha interpolation
                 // Frame 0: fade in (alpha 0 → 255 over kMessageFadeInMs)
@@ -138,15 +132,7 @@ void Logo::InitWZLogo()
             auto wzCanvas = child->GetCanvas();
             if (!wzCanvas) continue;
 
-            auto canvas = std::make_shared<WzGr2DCanvas>(wzCanvas);
-
-            // Read origin
-            auto originProp = child->GetChild("origin");
-            if (originProp)
-            {
-                auto vec = originProp->GetVector();
-                canvas->SetOrigin({vec.x, vec.y});
-            }
+            auto canvas = std::make_shared<WzGr2DCanvas>(wzCanvas, child);
 
             // Read delay from WZ property
             auto delayProp = child->GetChild("delay");

@@ -341,6 +341,12 @@ auto SoundMan::PlaySafeSE(const std::string& sPath,
     return cookie;
 }
 
+auto SoundMan::PlayFieldSound(const std::string& sPath,
+                              std::uint32_t nVolume128) -> std::uint32_t
+{
+    return PlaySE(sPath, nVolume128);
+}
+
 void SoundMan::StopSE(std::uint32_t nCookie, std::uint32_t nFadeOutTime)
 {
     // Based on CSoundMan::StopSE (0xfb9da0)

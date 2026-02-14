@@ -29,6 +29,8 @@
 namespace ms
 {
 
+class ActionFrame;
+struct CharacterActionFrameEntry;
 class WzProperty;
 
 /// Matches CActionMan from the client (__cppobj : TSingleton<CActionMan>).
@@ -55,6 +57,33 @@ public:
     /// Check if a CharacterImgEntry is loadable for the given item ID.
     [[nodiscard]] auto IsGettableImgEntry(std::int32_t nItemID) -> bool;
 
+    /// Pick a random alternative action for the given action ID (weighted).
+    /// Returns -1 if no random alternative is available.
+    [[nodiscard]] auto GetRandomMoveActionChange(std::int32_t nActionID) -> std::int32_t;
+
+    /// Outer LoadCharacterAction (0x4f1350) — public wrapper.
+    /// Preprocesses equipment, detects special cases, calls load_character_action,
+    /// then MergeCharacterSprite to produce final CharacterActionFrameEntry output.
+    void LoadCharacterAction(
+        std::int32_t nAction,
+        std::int32_t nGender,
+        std::int32_t nSkin,
+        std::int32_t nJob,
+        std::int32_t* aAvatarHairEquip,
+        std::vector<std::shared_ptr<CharacterActionFrameEntry>>& apFE,
+        std::int32_t nWeaponStickerID = 0,
+        std::int32_t nVehicleID = 0,
+        bool bTamingMobTired = false,
+        std::int32_t nGhostIndex = 0,
+        std::int32_t nGatherToolID = 0,
+        bool bDrawElfEar = false,
+        std::int32_t nChangeWeaponLook = 0,
+        std::int32_t nLarknessState = 0,
+        std::int32_t nPortableChair = 0,
+        std::int32_t nMixedHairColor = 0,
+        std::int32_t nMixPercent = 0,
+        std::int32_t nBattlePvPAvatar = 0);
+
     /// Load face look canvases for the given face/emotion/accessory combination.
     void LoadFaceLook(
         std::int32_t nSkin,
@@ -74,6 +103,32 @@ private:
     [[nodiscard]] static auto IsInvisibleFace(
         const std::shared_ptr<CharacterImgEntry>& pAccEntry,
         std::int32_t nJob) -> bool;
+
+    /// Inner load_character_action (0x4eefe0) — loads body, face, and equipment
+    /// sprites into ActionFrame array.
+    auto load_character_action(
+        std::int32_t nAction,
+        std::int32_t nSkin,
+        std::int32_t nJob,
+        const std::int32_t* aAvatarHairEquip,
+        std::vector<ActionFrame>& aFrame,
+        std::int32_t nWeaponStickerID = 0,
+        std::int32_t nVehicleID = 0,
+        std::int32_t nGhostIndex = 0,
+        std::int32_t nGatherToolID = 0,
+        bool bDrawElfEar = false,
+        std::int32_t nLarknessState = 0,
+        bool bInvisibleCashCape = false,
+        std::int32_t nMixedHairId = 0,
+        std::int32_t nMixPercent = 100,
+        bool bZigZag = false,
+        bool bRemoveBody = false) -> bool;
+
+    /// Convert ActionFrame array to CharacterActionFrameEntry array.
+    /// Extracts anchor points and timing data from ActionFrame groups.
+    void MergeCharacterSprite(
+        const std::vector<ActionFrame>& aFrame,
+        std::vector<std::shared_ptr<CharacterActionFrameEntry>>& apFE);
 
     void LoadRandomMoveActionChange();
     void LoadRandomMoveActionChangeInfo(std::int32_t nAction,

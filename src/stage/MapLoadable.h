@@ -241,6 +241,189 @@ public:
 
     void SetSysTrembleOpt(bool enable) noexcept { m_bSysOptTremble = enable; }
 
+    // --- Properties / Getters (IDA stubs) ---
+
+    /// @brief 0xbd39b0 - Check if BGM volume only mode
+    [[nodiscard]] auto IsBGMVolumeOnly() const noexcept -> bool { return m_bBGMVolumeOnly; }
+
+    /// @brief 0x1a9a7c0 - Check if jukebox is currently playing
+    [[nodiscard]] auto IsJukeBoxPlaying() const noexcept -> bool { return m_bJukeBoxPlaying != 0; }
+
+    /// @brief 0xbdf9f0 - Check if object is a fade object
+    [[nodiscard]] auto IsFadeObject(const std::string& sGroupName, std::int32_t nShowType) const -> bool;
+
+    /// @brief 0xbd9ab0 - Get collide obstacle rectangle
+    [[nodiscard]] auto GetCollideObstacleRect(const Point2D& pt, Point2D* pvecForce) const -> const ObstacleInfo*;
+
+    /// @brief 0xbdceb0 - Get NPC rect event type
+    [[nodiscard]] auto GetNpcRectEventType(const std::string& sName) const -> std::int32_t;
+
+    /// @brief 0xbf5d00 - Get current object layer by name
+    [[nodiscard]] auto GetCurrentObject(const std::string& sName) const -> std::shared_ptr<WzGr2DLayer>;
+
+    /// @brief 0xbf6460 - Get object serial number
+    [[nodiscard]] auto GetObjectSN(const std::string& sName) const -> std::uint32_t;
+
+    /// @brief 0xbf6490 - Get object state index
+    [[nodiscard]] auto GetObjectState(const std::string& sName) const -> std::int32_t;
+
+    /// @brief 0xbf64c0 - Get object bounding rectangle
+    [[nodiscard]] auto GetObjectRect(const std::string& sName) const -> Rect;
+
+    /// @brief 0x1aa2fe0 - Check if any transient layer exists
+    [[nodiscard]] auto TransientLayer_Exist() const -> bool;
+
+    // --- Layer / Visual (IDA stubs) ---
+
+    /// @brief 0xbdd070 - Set gray background filter
+    void SetGrayBackGround(bool bGray);
+
+    /// @brief 0xbdd3c0 - Set background color (RGB channels + delay)
+    void SetBackGroundColor(std::int32_t nR, std::int32_t nG, std::int32_t nB, std::int32_t tDelay);
+
+    /// @brief 0xbdfab0 - Set background color by tag
+    void SetBackGroundColorByTag(const std::string& sTag, std::int32_t nR, std::int32_t nG, std::int32_t nB, std::int32_t tDelay);
+
+    /// @brief 0xbdfc50 - Set object visibility
+    void SetObjectVisible(const std::string& sName, bool bVisible);
+
+    /// @brief 0xbdfd20 - Set object movement
+    void SetObjectMove(const std::string& sName, std::int32_t nX, std::int32_t nY, std::int32_t tDuration);
+
+    /// @brief 0xbe8570 - Create object layer at position from property path
+    void SetObjectCreateLayer(const std::string& sKeyName, const std::string& sPath,
+                              std::uint32_t nX, std::uint32_t nY);
+
+    /// @brief 0xbf5840 - Set object state
+    void SetObjectState(const std::string& sName, std::int32_t nState);
+
+    /// @brief 0xbf8700 - Enqueue delayed layer visibility change
+    void SetLayerInvisible(const std::string& sTag, std::int32_t tDelay,
+                           std::int32_t bVisible, std::int32_t nManual, std::int32_t bSmooth);
+
+    /// @brief 0xbf8e00 - Set visibility for a list of layers
+    void SetLayerListVisible(const std::shared_ptr<std::list<std::shared_ptr<WzGr2DLayer>>>& plLayer,
+                             std::int32_t bVisible, bool bSmooth, std::int32_t nManual,
+                             const std::string& sTag);
+
+    /// @brief 0xbfb180 - Set layer list visible by tag (quest-aware)
+    void SetLayerListVisibleByTag(const std::string& sTag,
+                                  const std::shared_ptr<std::list<std::shared_ptr<WzGr2DLayer>>>& plObjs);
+
+    /// @brief 0xbfb440 - Set map tagged object visible
+    void SetMapTagedObjectVisible(const std::string& sTag, std::int32_t bVisible,
+                                  std::int32_t bSmooth, std::int32_t tDuration);
+
+    /// @brief 0xbffcc0 - Set field magnification level (reads from config)
+    void SetFieldMagLevel();
+
+    /// @brief 0xbd9850 - Clear all transient layers
+    void TransientLayer_Clear();
+
+    /// @brief 0xbe3da0 - Create transient weather layer
+    void TransientLayer_Weather(std::int32_t nItemID, const std::string& sMsg);
+
+    // --- BGM / Sound (IDA stubs) ---
+
+    /// @brief 0xbee210 - Play next music track
+    void PlayNextMusic();
+
+    /// @brief 0xbee8d0 - Play sound with muted BGM
+    void PlaySoundWithMuteBgm(const std::string& sName, bool bExcl, bool bDown,
+                              std::uint32_t uVolume128);
+
+    /// @brief 0xbe8430 - Set camera move info (string overload)
+    void SetCameraMoveInfo(const std::string& sInfo);
+
+    // --- Foothold (IDA stubs) ---
+
+    /// @brief 0xbf54a0 - Move foothold
+    void FootHoldMove(std::int32_t nSN, std::int32_t nX, std::int32_t nY);
+
+    /// @brief 0xbf56d0 - Change foothold state
+    void FootHoldStateChange(std::int32_t nSN, std::int32_t nState);
+
+    // --- Rendering (IDA stubs) ---
+
+    /// @brief 0xbde930 - Render avatar reflection
+    void RenderAvatar();
+
+    /// @brief 0xbdf2b0 - Process reflection effect
+    void ProcessReflection();
+
+    // --- Fade (IDA stubs) ---
+
+    /// @brief 0xbef2e0 - Set fade data (layer overload)
+    void SetFadeData(const std::shared_ptr<WzGr2DLayer>& pLayer, std::int32_t nAlpha, std::int32_t tDuration);
+
+    /// @brief 0xbef560 - Set fade data (index overload)
+    void SetFadeData(std::int32_t nIndex, std::int32_t nAlpha, std::int32_t tDuration);
+
+    // --- Event Handlers (IDA stubs) ---
+
+    /// @brief 0xbd5140 - Leave direction mode
+    void OnLeaveDirectionMode();
+
+    /// @brief 0xbe14e0 - Set back effect
+    void OnSetBackEffect(const std::string& sName, std::int32_t nEffect);
+
+    /// @brief 0xbeb210 - Set spine back effect
+    void OnSetSpineBackEffect(const std::string& sName);
+
+    /// @brief 0xbeb430 - Set spine object effect
+    void OnSetSpineObjectEffect(const std::string& sName);
+
+    /// @brief 0xbeb5f0 - Remove spine rect event
+    void OnRemoveSpineRectEvent(const std::string& sName);
+
+    /// @brief 0xbeb730 - Remove camera control zone
+    void OnRemoveCameraCtrlZone(const std::string& sName);
+
+    /// @brief 0xbec280 - Set map object animation (packet handler)
+    void OnSetMapObjectAnimation(const std::string& sName, std::int32_t nAniType);
+
+    /// @brief 0xbec320 - Set map tagged object animation (packet handler)
+    void OnSetMapTaggedObjectAnimation(const std::string& sTag, std::int32_t nAniType);
+
+    /// @brief 0xbec3e0 - Set map object visible (packet handler)
+    void OnSetMapObjectVisible(const std::string& sName, bool bVisible);
+
+    /// @brief 0xbec4a0 - Set map object move (packet handler)
+    void OnSetMapObjectMove(const std::string& sName, std::int32_t nX, std::int32_t nY, std::int32_t tDuration);
+
+    /// @brief 0xbec570 - Set map object create layer (packet handler)
+    void OnSetMapObjectCreateLayer(const std::string& sKeyName, const std::string& sPath,
+                                   std::uint32_t nX, std::uint32_t nY);
+
+    /// @brief 0xbfc160 - Clear back effect
+    void OnClearBackEffect();
+
+    /// @brief 0xbfc170 - Set map tagged object visible (packet handler, decodes loop)
+    void OnSetMapTagedObjectVisible(const std::string& sTag, std::int32_t bVisible,
+                                    std::int32_t tDuration, std::int32_t tDelay);
+
+    /// @brief 0xbfc270 - Set map tagged object smooth visible (packet handler, decodes loop)
+    void OnSetMapTaggedObjectSmoothVisible(const std::string& sTag, std::int32_t bVisible,
+                                           std::int32_t tDuration, std::int32_t tDelay);
+
+    /// @brief 0xbfc370 - Event: screen resolution changed (virtual)
+    virtual void OnEventChangeScreenResolution();
+
+    /// @brief 0xbfc460 - Handle incoming packet (virtual)
+    virtual void OnPacket(std::int32_t nType, const void* pData);
+
+    /// @brief 0xbf8a60 - Create spine rect event
+    void OnCreateSpineRectEvent(const std::string& sName);
+
+    /// @brief 0xbf8bf0 - Create camera control zone
+    void OnCreateCameraCtrlZone(const std::string& sName);
+
+    /// @brief 0xbee530 - Spine rect event: add back event
+    void OnSpineRE_AddBackEvent(const std::string& sName);
+
+    /// @brief 0xbee700 - Spine rect event: add object event
+    void OnSpineRE_AddObjectEvent(const std::string& sName);
+
 protected:
     /**
      * @brief Load objects from WZ property
@@ -446,6 +629,71 @@ protected:
      */
     void AddLetterBox(std::int32_t w, std::int32_t h, std::int32_t l, std::int32_t t);
 
+    // --- Make / Create (IDA stubs) ---
+
+    /// @brief 0xbe07c0 - Create object skeleton layer
+    void MakeObjSkeleton(std::int32_t nPageIdx,
+                         const std::shared_ptr<WzProperty>& pPiece,
+                         bool bLoad);
+
+    /// @brief 0xbed9b0 - Create object layer from property
+    void MakeObjLayer(std::int32_t nPageIdx,
+                      const std::shared_ptr<WzProperty>& pPiece,
+                      std::shared_ptr<WzGr2DLayer>& pOutLayer);
+
+    /// @brief 0xbe2990 - Create vector animate for layer
+    void MakeVectorAnimate(const std::shared_ptr<WzGr2DLayer>& pLayer,
+                           const std::shared_ptr<WzProperty>& pProp);
+
+    /// @brief 0xbea8c0 - Create obstacles from WZ property
+    void MakeObstacles();
+
+    /// @brief 0xbeff40 - Create grid layout
+    void MakeGrid(std::int32_t nPageIdx,
+                  const std::shared_ptr<WzProperty>& pPiece,
+                  bool bLoad);
+
+    /// @brief 0xbf1640 - Create grid skeleton layout
+    void MakeGridSkeleton(std::int32_t nPageIdx,
+                          const std::shared_ptr<WzProperty>& pPiece,
+                          bool bLoad);
+
+    // --- Restore / Load / Reload (IDA stubs) ---
+
+    /// @brief 0xbdcb60 - Restore back effect layers
+    void RestoreBackEffect();
+
+    /// @brief 0xbeb070 - Restore BGM from map info
+    void RestoreBGM(bool bForceRestart = false);
+
+    /// @brief 0xbfc000 - Reload background layers
+    void ReloadBack();
+
+    /// @brief 0xbf83d0 - Load BGM sub info from property
+    void LoadBgmSubInfo(const std::shared_ptr<WzProperty>& pProp);
+
+    /// @brief 0xbfadc0 - Load BGM sub-track
+    void LoadBgmSub();
+
+    /// @brief 0xbef690 - Insert back layer by tag (iterates tag list, adds to m_mTagedBack)
+    void InsertbackLayerByTag(const std::vector<std::string>& tags,
+                              const std::shared_ptr<WzGr2DLayer>& pLayer);
+
+    /// @brief 0xbef8b0 - Insert back skeleton by tag
+    void InsertbackSkeletonByTag(const std::vector<std::string>& tags,
+                                 const std::shared_ptr<WzGr2DLayer>& pLayer);
+
+    // --- Update (IDA stubs) ---
+
+    /// @brief 0xbe7410 - Update obstacle info from current state
+    void UpdateObstacleInfo();
+
+    /// @brief 0xbfc3f0 - Update tag layer references
+    void UpdateTagLayer();
+
+    /// @brief 0xbfba10 - Update layer invisibility (delay invisible layers)
+    void UpdateLayerInvisible();
+
 protected:
     // --- BGM ---
     std::int32_t m_nJukeBoxItemID{};
@@ -480,7 +728,7 @@ protected:
     std::map<std::string, std::shared_ptr<std::list<std::shared_ptr<WzGr2DLayer>>>> m_mTagedObj;
     std::map<std::string, std::shared_ptr<std::list<std::shared_ptr<WzGr2DLayer>>>> m_mTagedBack;
 
-    // --- Background layers ---
+    // --- Background layers --- (original: ZMap<long, ZRef<ZList<IWzGr2DLayer>>, long>)
     std::map<std::int32_t, std::shared_ptr<std::list<std::shared_ptr<WzGr2DLayer>>>> m_mlLayerBack;
     std::list<std::int32_t> m_lBackEffect;
 

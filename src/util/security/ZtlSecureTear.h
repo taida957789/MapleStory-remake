@@ -65,7 +65,7 @@ public:
         uint32_t raw[kWordCount]{};
         std::memcpy(raw, &value, sizeof(T));
 
-        auto& rand = detail::GetSecureRand();
+        auto& rand = detail::get_rand();
 
         for (std::size_t i = 0; i < kWordCount; ++i)
         {

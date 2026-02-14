@@ -8,6 +8,7 @@
 
 #include <cstdint>
 #include <list>
+#include <map>
 #include <memory>
 #include <string>
 #include <vector>
@@ -35,6 +36,7 @@ public:
         std::uint32_t dwCharacterIDForFlip{};
         std::shared_ptr<WzGr2DLayer> pFlipLayer;
         std::vector<std::shared_ptr<WzGr2DLayer>> apLayer;
+        std::int32_t tReservedRemoveTime{};
 
         auto Update(std::int32_t tCur) -> bool;
     };
@@ -44,6 +46,14 @@ public:
     {
     public:
         void Update(std::int32_t tCur);
+
+        double m_dTrembleForce{};
+        double m_dTrembleReduction{};
+        std::int32_t m_tTrembleStart{};
+        std::int32_t m_tTrembleEnd{};
+        std::int32_t m_tTrembleTerm{};
+        std::int32_t m_tTrembleLastUpdate{};
+        Point2D m_ptCenterRel;  ///< Center vector's (rx, ry) saved at tremble start
     };
 
     /// CAnimationDisplayer::ABSORBITEM
@@ -123,6 +133,46 @@ public:
         std::int32_t nDelayRate{};
         Gr2DAnimationType eAniType{Gr2DAnimationType::Stop};
         ZXString<char> strKey;
+    };
+
+    /// RelOffsetParam (ZRefCounted with offset/time fields)
+    struct RelOffsetParam
+    {
+        std::int32_t nRelOffsetX{};
+        std::int32_t nRelOffsetY{};
+        std::int32_t tRelOffsetTime{};
+    };
+
+    /// CAnimationDisplayer::ONETIMEINFO
+    class OneTimeInfo
+    {
+    public:
+        /// CAnimationDisplayer::ONETIMEINFO::MOVINGINFO
+        struct MovingInfo
+        {
+            bool bLeftDirection{};
+            std::int32_t nDiv{};
+            std::int32_t nForX{};
+            std::int32_t nForY{};
+        };
+
+        std::shared_ptr<WzGr2DLayer> pLayer;
+        std::shared_ptr<WzGr2DLayer> pFlipOrigin;
+        std::uint32_t dwOwner{};
+        std::int32_t bWaiting{};
+        std::int32_t tDelayBeforeStart{};
+        std::int32_t nDelayRate{};
+        std::int32_t nPrevScale{-1};
+        std::int32_t nComboKillCount{};
+        std::int32_t nMovingType{};
+        std::int32_t nAnimationType{};
+        std::int32_t nCurrentTick{};
+        std::int32_t nBaseScale{100};
+        std::shared_ptr<RelOffsetParam> pRelOffsetParam;
+        ZXString<wchar_t> sSoundUOL;  // original: ZXString<unsigned short>
+        MovingInfo movingInfo;
+
+        auto Scale(std::int32_t nScale) -> std::int32_t;
     };
 
     /// CAnimationDisplayer::BONUSABSORBITEM
@@ -352,12 +402,12 @@ public:
     /// Play a general effect animation (from CAnimationDisplayer::Effect_General).
     void Effect_General(
         const std::string& sUOL,
-        bool bNotFlip,
+        std::int32_t nFlip,
         const std::shared_ptr<Gr2DVector>& pOrigin,
         std::int32_t rx, std::int32_t ry,
         const std::shared_ptr<WzGr2DLayer>& pOverlay,
         std::int32_t z,
-        std::int32_t nAlpha);
+        std::int32_t nMagLevel);
 
     // ========== IGObj ==========
 
@@ -438,6 +488,19 @@ public:
         std::int32_t magLevel
     ) -> std::shared_ptr<WzGr2DLayer>;
 
+    /// Register a one-time (play-once) animation layer.
+    auto RegisterOneTimeAnimation(
+        const std::shared_ptr<WzGr2DLayer>& pLayer,
+        std::int32_t tDelayBeforeStart,
+        const std::shared_ptr<WzGr2DLayer>& pFlipOrigin,
+        std::int32_t nDelayRate,
+        std::int32_t nMovingType,
+        const std::shared_ptr<RelOffsetParam>& pRelOffsetParam,
+        const ZXString<wchar_t>& sSoundUOL,
+        std::int32_t nComboKillCount,
+        std::uint32_t dwOwner
+    ) -> OneTimeInfo&;
+
 private:
     void UpdateWeaponHeadEffect(std::int32_t tCur);
     void NonFieldUpdate(std::int32_t tCur);
@@ -459,6 +522,8 @@ private:
 
     TrembleCtx m_tremble;
     std::list<std::shared_ptr<PrepareInfo>> m_lPrepare;
+    std::list<OneTimeInfo> m_lOneTime;
+    std::map<std::uint32_t, std::shared_ptr<WzGr2DLayer>> m_mBladeMovingEffect;
 };
 
 } // namespace ms

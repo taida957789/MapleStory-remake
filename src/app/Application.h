@@ -131,8 +131,15 @@ private:
 
     // Main loop components
     void ProcessInput();
-    void Update(std::uint64_t tCurTime);
+    void CallUpdate(std::uint64_t tCurTime);
     void Render();
+
+    /// CWvsApp::ISMsgProc — routes ISMSG to CWndMan::ProcessKey/ProcessMouse
+    void ISMsgProc(std::uint32_t message, std::uint32_t wParam,
+                   std::int32_t lParam);
+
+    /// Fixed update interval in ms (original: m_tUpdateTime += 30)
+    static constexpr std::uint64_t kUpdateInterval = 30;
 
 private:
     // Screen dimensions (used to initialize WzGr2D)

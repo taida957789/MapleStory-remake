@@ -3,6 +3,8 @@
 #include "WzDirectory.h"
 #include "WzFile.h"
 #include "WzImage.h"
+#include "WzRaw.h"
+#include "WzVideo.h"
 #include "IWzSource.h"
 #include "util/Logger.h"
 
@@ -284,6 +286,32 @@ void WzProperty::SetSound(const WzSoundData& sound)
 {
     m_value = sound;
     m_nodeType = WzNodeType::Sound;
+}
+
+void WzProperty::SetRaw(std::shared_ptr<WzRaw> raw)
+{
+    m_value = std::move(raw);
+    m_nodeType = WzNodeType::RawData;
+}
+
+auto WzProperty::GetRaw() const -> std::shared_ptr<WzRaw>
+{
+    if (const auto* val = std::get_if<std::shared_ptr<WzRaw>>(&m_value))
+        return *val;
+    return nullptr;
+}
+
+void WzProperty::SetVideo(std::shared_ptr<WzVideo> video)
+{
+    m_value = std::move(video);
+    m_nodeType = WzNodeType::Video;
+}
+
+auto WzProperty::GetVideo() const -> std::shared_ptr<WzVideo>
+{
+    if (const auto* val = std::get_if<std::shared_ptr<WzVideo>>(&m_value))
+        return *val;
+    return nullptr;
 }
 
 auto WzProperty::GetChild(const std::string& name) -> std::shared_ptr<WzProperty>
