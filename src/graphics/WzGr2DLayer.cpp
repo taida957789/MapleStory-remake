@@ -1,9 +1,6 @@
 #include "WzGr2DLayer.h"
 #include "WzGr2DCanvas.h"
-
-#ifdef MS_DEBUG_CANVAS
 #include "util/Logger.h"
-#endif
 
 #include <SDL3/SDL.h>
 #include <algorithm>
@@ -1220,7 +1217,7 @@ void WzGr2DLayer::ensureVectors()
     }
     if (!m_positionVec)
     {
-        m_positionVec = std::make_unique<Gr2DVector>(0, 0);
+        m_positionVec = std::make_unique<Gr2DVector>(m_nLeft, m_nTop);
     }
     if (!m_rbVec)
     {
@@ -1308,29 +1305,13 @@ void WzGr2DLayer::Render(SDL_Renderer* renderer, std::int32_t offsetX, std::int3
     auto canvasWidth = static_cast<float>(canvas->GetWidth());
     auto canvasHeight = static_cast<float>(canvas->GetHeight());
 
-    // Calculate base render position with parallax
-    float baseX, baseY;
+    // Calculate base render position
+    // Parallax is handled by RatioNode in the position vector's animation chain,
+    // so m_nLeft/m_nTop already contain the correct parallax-adjusted position.
+    auto baseX = static_cast<float>(m_nLeft + offsetX);
+    auto baseY = static_cast<float>(m_nTop + offsetY);
 
-    if (m_nParallaxRx <= 0)
-    {
-        baseX = static_cast<float>(m_nLeft + offsetX);
-    }
-    else
-    {
-        auto parallaxOffsetX = (offsetX * m_nParallaxRx) / ParallaxScaleFactor;
-        baseX = static_cast<float>(m_nLeft + parallaxOffsetX);
-    }
-
-    if (m_nParallaxRy <= 0)
-    {
-        baseY = static_cast<float>(m_nTop + offsetY);
-    }
-    else
-    {
-        auto parallaxOffsetY = (offsetY * m_nParallaxRy) / ParallaxScaleFactor;
-        baseY = static_cast<float>(m_nTop + parallaxOffsetY);
-    }
-
+    // Debug: trace parallax for background layers (z < -1073800000) once per second
     // Render position: basePos + canvasPos - canvasOrigin
     float renderX = baseX + static_cast<float>(canvasPos.x) - static_cast<float>(canvasOrigin.x);
     float renderY = baseY + static_cast<float>(canvasPos.y) - static_cast<float>(canvasOrigin.y);

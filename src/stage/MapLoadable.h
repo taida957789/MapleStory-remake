@@ -425,10 +425,6 @@ public:
     void OnSpineRE_AddObjectEvent(const std::string& sName);
 
 protected:
-    /**
-     * @brief Load objects from WZ property
-     */
-    void LoadObjects(const std::shared_ptr<WzProperty>& prop, std::int32_t baseZ);
 
     /**
      * @brief Load animated frames from WZ property into a layer
@@ -648,10 +644,20 @@ protected:
     /// @brief 0xbea8c0 - Create obstacles from WZ property
     void MakeObstacles();
 
-    /// @brief 0xbeff40 - Create grid layout
-    void MakeGrid(std::int32_t nPageIdx,
-                  const std::shared_ptr<WzProperty>& pPiece,
-                  bool bLoad);
+    /// @brief 0xbeff40 - Create grid-tiled copies of a layer
+    /// Original creates N*M cloned layers in a grid pattern.
+    /// Our engine uses render-time tiling via SetTiling for equivalent visuals.
+    void MakeGrid(const std::shared_ptr<WzGr2DLayer>& pLayer,
+                  std::int32_t type,
+                  std::int32_t cx,
+                  std::int32_t cy,
+                  std::int32_t alpha,
+                  std::int32_t nAnimate,
+                  bool bObj,
+                  std::shared_ptr<std::list<std::shared_ptr<WzGr2DLayer>>>& pList,
+                  const std::vector<std::string>& aTagList,
+                  const std::string& sGroupName,
+                  std::int32_t nSideType);
 
     /// @brief 0xbf1640 - Create grid skeleton layout
     void MakeGridSkeleton(std::int32_t nPageIdx,

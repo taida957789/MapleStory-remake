@@ -109,7 +109,6 @@ set(LIB_SOURCES
     src/network/OutPacket.cpp
     src/util/Singleton.cpp
     src/util/Rand32.cpp
-    src/util/ZXString.cpp
     src/util/Logger.cpp
     src/debug/DebugOverlay.cpp
     src/text/TextRenderer.cpp
@@ -140,6 +139,7 @@ set(LIB_SOURCES
     src/models/GW_ItemSlotEquipBase.cpp
     src/models/GW_CashItemOption.cpp
     src/models/GW_ItemSlotPet.cpp
+    src/physics/WvsPhysicalSpace2D.cpp
 )
 
 # Header files
@@ -186,7 +186,6 @@ set(HEADERS
     src/network/OutPacket.h
     src/util/Rand32.h
     src/util/Singleton.h
-    src/util/ZXString.h
     src/util/Point.h
     src/util/Logger.h
     src/util/security/TSecType.h

@@ -183,13 +183,10 @@ public:
     void SetRotation(float degrees) noexcept { m_fRotation = degrees; }
     void SetRotation(std::int32_t degrees) noexcept { m_fRotation = static_cast<float>(degrees); }
 
-    // === Tiling/Parallax (local feature) ===
+    // === Tiling (local feature) ===
     void SetTiling(std::int32_t cx, std::int32_t cy) noexcept { m_nTileCx = cx; m_nTileCy = cy; }
-    void SetParallax(std::int32_t rx, std::int32_t ry) noexcept { m_nParallaxRx = rx; m_nParallaxRy = ry; }
     [[nodiscard]] auto GetTileCx() const noexcept -> std::int32_t { return m_nTileCx; }
     [[nodiscard]] auto GetTileCy() const noexcept -> std::int32_t { return m_nTileCy; }
-    [[nodiscard]] auto GetParallaxRx() const noexcept -> std::int32_t { return m_nParallaxRx; }
-    [[nodiscard]] auto GetParallaxRy() const noexcept -> std::int32_t { return m_nParallaxRy; }
 
     // === Position animation (backward-compatible) ===
     void StartPositionAnimation(std::int32_t offsetX, std::int32_t offsetY,
@@ -317,11 +314,9 @@ private:
     // === SDL-specific (local) ===
     float m_fRotation = 0.0F;
 
-    // === Tiling/parallax (local) ===
+    // === Tiling (local) ===
     std::int32_t m_nTileCx = 0;
     std::int32_t m_nTileCy = 0;
-    std::int32_t m_nParallaxRx = 0;
-    std::int32_t m_nParallaxRy = 0;
 
     // === Backward-compatible position state ===
     std::int32_t m_nLeft = 0;

@@ -251,7 +251,6 @@ src/
 └── util/          # Utilities
     ├── Singleton.h
     ├── Point.h
-    └── ZXString.h/cpp
 ```
 
 ## TODO

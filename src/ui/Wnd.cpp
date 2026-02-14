@@ -84,7 +84,7 @@ auto Wnd::IsUsingDragEnd() -> std::int32_t
 
 auto Wnd::CanPutItemIntoSlot(
     std::int32_t /*nSlot*/,
-    const ZRef<GW_ItemSlotBase>& /*pItem*/) -> std::int32_t
+    const std::shared_ptr<GW_ItemSlotBase>& /*pItem*/) -> std::int32_t
 {
     return 0;
 }
@@ -141,10 +141,10 @@ void Wnd::OnIMEResult(const char* /*szResult*/)
 
 void Wnd::OnIMEComp(
     const char* /*szComp*/,
-    ZArray<std::uint32_t>* /*aAttr*/,
+    std::vector<std::uint32_t>* /*aAttr*/,
     std::uint32_t /*nCursor*/,
     std::int32_t /*bInsert*/,
-    ZList<ZXString<char>>* /*lCandList*/,
+    std::vector<std::string>* /*lCandList*/,
     std::int32_t /*nCandIdx*/,
     std::int32_t /*nCandPageStart*/,
     std::int32_t /*nCandPageSize*/)

@@ -1,6 +1,9 @@
 #pragma once
 
 #include <cstdint>
+#include <memory>
+#include <string>
+#include <vector>
 
 namespace ms
 {
@@ -10,11 +13,6 @@ class IDraggable;
 class CDraggableSkill;
 class CDraggableItem;
 class GW_ItemSlotBase;
-
-template <typename T> class ZRef;
-template <typename T> class ZArray;
-template <typename T> class ZList;
-template <typename T> class ZXString;
 
 /**
  * @brief Interface for UI message handling
@@ -87,7 +85,7 @@ public:
         std::int32_t x, std::int32_t y) -> std::int32_t = 0;
     virtual auto IsUsingDragEnd() -> std::int32_t = 0;
     virtual auto CanPutItemIntoSlot(
-        std::int32_t nSlot, const ZRef<GW_ItemSlotBase>& pItem) -> std::int32_t = 0;
+        std::int32_t nSlot, const std::shared_ptr<GW_ItemSlotBase>& pItem) -> std::int32_t = 0;
 
     // ========== State ==========
 
@@ -111,10 +109,10 @@ public:
     virtual void OnIMEResult(const char* szResult) = 0;
     virtual void OnIMEComp(
         const char* szComp,
-        ZArray<std::uint32_t>* aAttr,
+        std::vector<std::uint32_t>* aAttr,
         std::uint32_t nCursor,
         std::int32_t bInsert,
-        ZList<ZXString<char>>* lCandList,
+        std::vector<std::string>* lCandList,
         std::int32_t nCandIdx,
         std::int32_t nCandPageStart,
         std::int32_t nCandPageSize) = 0;

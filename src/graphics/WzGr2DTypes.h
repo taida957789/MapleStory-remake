@@ -130,11 +130,6 @@ namespace Gr2DConstants
     constexpr std::int32_t DelayRateScaleFactor = 1000;
     constexpr std::int32_t DelayRateNormal = 1000;
 
-    // Parallax scale factor (100 = 100% camera follow)
-    constexpr std::int32_t ParallaxScaleFactor = 100;
-    constexpr std::int32_t ParallaxFullFollow = 100;
-    constexpr std::int32_t ParallaxNoFollow = 0;
-
     // Alpha range
     constexpr std::uint8_t AlphaTransparent = 0;
     constexpr std::uint8_t AlphaOpaque = 255;

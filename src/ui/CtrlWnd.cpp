@@ -1,4 +1,5 @@
 #include "CtrlWnd.h"
+#include <vector>
 
 namespace ms
 {
@@ -73,7 +74,7 @@ auto CtrlWnd::IsUsingDragEnd() -> std::int32_t
 
 auto CtrlWnd::CanPutItemIntoSlot(
     std::int32_t /*nSlot*/,
-    const ZRef<GW_ItemSlotBase>& /*pItem*/) -> std::int32_t
+    const std::shared_ptr<GW_ItemSlotBase>& /*pItem*/) -> std::int32_t
 {
     return 0;
 }
@@ -122,10 +123,10 @@ void CtrlWnd::OnIMEResult(const char* /*szResult*/)
 
 void CtrlWnd::OnIMEComp(
     const char* /*szComp*/,
-    ZArray<std::uint32_t>* /*aAttr*/,
+    std::vector<std::uint32_t>* /*aAttr*/,
     std::uint32_t /*nCursor*/,
     std::int32_t /*bInsert*/,
-    ZList<ZXString<char>>* /*lCandList*/,
+    std::vector<std::string>* /*lCandList*/,
     std::int32_t /*nCandIdx*/,
     std::int32_t /*nCandPageStart*/,
     std::int32_t /*nCandPageSize*/)

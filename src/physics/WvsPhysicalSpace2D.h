@@ -14,6 +14,8 @@
 #include <memory>
 #include <vector>
 
+namespace ms { class WzProperty; }
+
 namespace ms
 {
 
@@ -37,6 +39,13 @@ public:
         FIRST_UNDERNEATH = 1,
         FIRST_ABOVE = 2,
     };
+
+    // ========== Loading ==========
+
+    void Load(
+        std::shared_ptr<WzProperty> pPropFoothold,
+        std::shared_ptr<WzProperty> pLadderRope,
+        std::shared_ptr<WzProperty> pInfo);
 
     // ========== IWvsPhysicalSpace2D ==========
 
@@ -106,6 +115,8 @@ public:
 
 private:
     WvsPhysicalSpace2D() = default;
+
+    [[nodiscard]] static auto GetConstantCRC() -> std::uint32_t;
 
     std::shared_ptr<Geometry::InclusionChecker> m_pIC_SwimArea;
     Rect m_rcMBR;

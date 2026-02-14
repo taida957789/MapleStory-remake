@@ -49,7 +49,6 @@ add_executable(maplestory_tests
     ../src/wz/WzVideo.cpp
     ../src/wz/WzSourceFactory.cpp
     ../src/util/Rand32.cpp
-    ../src/util/ZXString.cpp
     ../src/util/Singleton.cpp
     ../src/util/Logger.cpp
     ../src/graphics/Gr2DVector.cpp

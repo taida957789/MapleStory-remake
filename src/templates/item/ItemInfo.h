@@ -473,6 +473,7 @@ class ItemInfo final : public Singleton<ItemInfo>
 
         // --- Text equip ---
         std::int32_t bText{};
+        std::shared_ptr<TextEquipParam> pTextEquipParam;
 
         // --- Set item ---
         std::int32_t nSetItemID{};

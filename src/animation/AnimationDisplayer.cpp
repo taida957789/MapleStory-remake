@@ -80,7 +80,7 @@ auto AnimationDisplayer::RegisterOneTimeAnimation(
     std::int32_t nDelayRate,
     std::int32_t nMovingType,
     const std::shared_ptr<RelOffsetParam>& pRelOffsetParam,
-    const ZXString<wchar_t>& sSoundUOL,
+    const std::string& sSoundUOL,
     std::int32_t nComboKillCount,
     std::uint32_t dwOwner
 ) -> OneTimeInfo&

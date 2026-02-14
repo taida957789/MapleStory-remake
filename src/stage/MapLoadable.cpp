@@ -1,5 +1,6 @@
 #include "MapLoadable.h"
 #include "audio/SoundMan.h"
+#include "physics/WvsPhysicalSpace2D.h"
 #include "util/Rand32.h"
 #include "graphics/WzGr2D.h"
 #include "graphics/WzGr2DLayer.h"
@@ -492,18 +493,6 @@ auto MapLoadable::GetViewRangeRect() const -> const Rect*
     return &m_rcViewRange;
 }
 
-void MapLoadable::LoadObjects(const std::shared_ptr<WzProperty>& prop, std::int32_t baseZ)
-{
-    if (!prop)
-    {
-        return;
-    }
-
-    // TODO: Implement object loading from WZ property
-    // This would iterate through the property's children and create
-    // layers for each object with appropriate canvases
-}
-
 auto MapLoadable::LoadAnimatedLayer(const std::shared_ptr<WzGr2DLayer>& layer,
                                      const std::shared_ptr<WzProperty>& prop) -> std::size_t
 {
@@ -887,19 +876,16 @@ void MapLoadable::MakeBack(std::int32_t nPageIdx, const std::shared_ptr<WzProper
     auto flip = fProp ? (fProp->GetInt(0) != 0) : false;
 
     // type (StringPool 0x2B55) - Background type, controls positioning/tiling behavior:
-    // 0: Normal - position relative to map coordinates
-    // 1: Horizontal tiling only
-    // 2: Vertical tiling only
+    // 0: Normal - no tiling, position with rx/ry parallax
+    // 1: Horizontal tiling
+    // 2: Vertical tiling
     // 3: Both H+V tiling
-    // 4: Horizontal stretch to screen width
-    // 5: Vertical stretch to screen height
-    // 6: Stretch to fill entire screen
+    // 4: Animated H movement, converts to type 1 (H-tile)
+    // 5: Animated V movement, converts to type 2 (V-tile)
+    // 6: Animated H movement, converts to type 3 (both tile)
+    // 7: Animated V movement, converts to type 3 (both tile)
     auto typeProp = pPiece->GetChild("type");
     auto type = typeProp ? typeProp->GetInt(0) : 0;
-
-    // Movement type (2566)
-    auto moveTypeProp = pPiece->GetChild("moveType");
-    // auto moveType = moveTypeProp ? moveTypeProp->GetInt(0) : 0;
 
     // View culling: Only load layers within a reasonable Y range from the initial view
     // The login screen has 5+ steps at 600 pixel intervals (up to ~3000 pixels)
@@ -1002,12 +988,20 @@ void MapLoadable::MakeBack(std::int32_t nPageIdx, const std::shared_ptr<WzProper
         return;
     }
 
-    // Set position
-    layer->SetPosition(x, y);
+    // MakeVectorAnimate — called before alpha/flip (0xbf3c42 for static, 0xbf4380 for ani)
+    MakeVectorAnimate(layer, spriteProp);
 
-    // Set alpha
-    std::uint32_t color = (static_cast<std::uint32_t>(alpha) << 24) | 0x00FFFFFF;
-    layer->SetColor(color);
+    // Alpha: original sets color to white then animates alpha from 'a' to 255 (fade-in)
+    // put_color(-1) = 0xFFFFFFFF, then Getalpha().RelMove(alpha, 255)
+    layer->SetColor(0xFFFFFFFF);
+    if (alpha != 255)
+    {
+        auto* alphaVec = layer->get_alpha();
+        if (alphaVec)
+        {
+            alphaVec->RelMove(alpha, 255);
+        }
+    }
 
     // Set flip if needed
     if (flip)
@@ -1015,146 +1009,104 @@ void MapLoadable::MakeBack(std::int32_t nPageIdx, const std::shared_ptr<WzProper
         layer->SetFlip(true);
     }
 
-    // Handle background type-specific tiling and movement (based on IDA decompilation)
-    // See BackgroundType enum for type meanings
-
-    // Check if this is an animated movement type
-    bool isAnimatedType = (type >= static_cast<std::int32_t>(BackgroundType::HMoveA) &&
-                           type <= static_cast<std::int32_t>(BackgroundType::VMoveB));
-    std::int32_t moveRel = 0;      // Movement parameter (rx or ry)
-    std::int32_t moveOffsetX = 0;  // Animated X offset
-    std::int32_t moveOffsetY = 0;  // Animated Y offset
-
-    // Determine tiling and movement based on type
-    auto effectiveType = type;
-    bool hTile = false;
-    bool vTile = false;
-
-    switch (static_cast<BackgroundType>(type))
+    // Blend mode: read from first canvas's property (StringPool 2533 = "blend")
+    // If blend == 1, enable additive blending
     {
-    case BackgroundType::Normal:
-        // No tiling
-        break;
-
-    case BackgroundType::HTiled:
-        hTile = true;
-        break;
-
-    case BackgroundType::VTiled:
-        vTile = true;
-        break;
-
-    case BackgroundType::Tiled:
-        hTile = true;
-        vTile = true;
-        break;
-
-    case BackgroundType::HMoveA:
-        // Animated H movement, then H-tiling
-        moveRel = rx;
-        moveOffsetX = rx > 0 ? -rx : -rx;  // Movement direction based on sign
-        effectiveType = static_cast<std::int32_t>(BackgroundType::HTiled);
-        hTile = true;
-        break;
-
-    case BackgroundType::VMoveA:
-        // Animated V movement, then V-tiling
-        moveRel = ry;
-        moveOffsetY = ry > 0 ? -ry : -ry;  // Movement direction based on sign
-        effectiveType = static_cast<std::int32_t>(BackgroundType::VTiled);
-        vTile = true;
-        break;
-
-    case BackgroundType::HMoveB:
-        // Animated H movement, then both tiling
-        moveRel = rx;
-        moveOffsetX = rx > 0 ? -rx : -rx;
-        effectiveType = static_cast<std::int32_t>(BackgroundType::Tiled);
-        hTile = true;
-        vTile = true;
-        break;
-
-    case BackgroundType::VMoveB:
-        // Animated V movement, then both tiling
-        moveRel = ry;
-        moveOffsetY = ry > 0 ? -ry : -ry;
-        effectiveType = static_cast<std::int32_t>(BackgroundType::Tiled);
-        hTile = true;
-        vTile = true;
-        break;
-
-    default:
-        LOG_WARN("MakeBack[{}]: Unknown type {}", nPageIdx, type);
-        break;
+        auto blendProp = spriteProp->GetChild("blend");
+        if (!blendProp && spriteProp->HasChildren())
+        {
+            // For animated sprites, check first frame (frame "0")
+            auto frame0 = spriteProp->GetChild("0");
+            if (frame0)
+                blendProp = frame0->GetChild("blend");
+        }
+        if (blendProp && blendProp->GetInt(0) == 1)
+        {
+            layer->put_blend(1);
+        }
     }
 
-    // Apply tiling
-    if (hTile || vTile)
+    // Handle background type positioning and tiling (following original at 0xbf2af0)
+    // Types 4-7 are animated variants that convert to 1-3 after setting up Ratio
+    if (type >= 4)
     {
-        // Get canvas dimensions for default tiling size
-        // When cx/cy is 0, use the canvas width/height as the tile size
-        auto canvas = layer->GetCurrentCanvas();
-        auto canvasWidth = canvas ? static_cast<std::int32_t>(canvas->GetWidth()) : 0;
-        auto canvasHeight = canvas ? static_cast<std::int32_t>(canvas->GetHeight()) : 0;
-
-        auto tileCx = hTile ? (cx > 0 ? cx : canvasWidth) : 0;
-        auto tileCy = vTile ? (cy > 0 ? cy : canvasHeight) : 0;
-        layer->SetTiling(tileCx, tileCy);
-        LOG_DEBUG("MakeBack[{}]: Type {} (effective {}) tiling cx={}, cy={} (canvas {}x{})",
-                  nPageIdx, type, effectiveType, tileCx, tileCy, canvasWidth, canvasHeight);
-    }
-
-    // For animated types (4-7), set up position animation
-    if (isAnimatedType && moveRel != 0)
-    {
-        // Calculate animation duration based on movement speed
-        // Original: tOffset += 20000 / abs(nRel)
-        auto absRel = moveRel > 0 ? moveRel : -moveRel;
-        if (absRel == 0) absRel = 1;
-        auto duration = 20000 / absRel;
-
-        layer->StartPositionAnimation(moveOffsetX, moveOffsetY, duration, true);
-        LOG_DEBUG("MakeBack[{}]: Type {} animated movement offset=({}, {}), duration={}ms",
-                  nPageIdx, type, moveOffsetX, moveOffsetY, duration);
-
-        // For types 4-7, also set parallax on the animated axis
-        // Original: Ratio(center, 100, 100, rx+100, 0) for type 4,6
-        //           Ratio(center, 100, 100, 0, ry+100) for type 5,7
-        std::int32_t parallaxRx = 0;
-        std::int32_t parallaxRy = 0;
+        // Animated types: the moving axis has no parallax (0),
+        // the OTHER axis gets parallax (r_ + 100).
+        // Type 4/6 = horizontal movement → Y-axis parallax: Ratio(0, ry+100)
+        // Type 5/7 = vertical movement   → X-axis parallax: Ratio(rx+100, 0)
+        std::int32_t ratioRx = 0;
+        std::int32_t ratioRy = 0;
 
         if (type == 4 || type == 6)
         {
-            // Horizontal movement types - set horizontal parallax
-            parallaxRx = rx + 100;
+            ratioRy = ry + 100;
         }
-        else if (type == 5 || type == 7)
+        else // type == 5 || type == 7
         {
-            // Vertical movement types - set vertical parallax
-            parallaxRy = ry + 100;
+            ratioRx = rx + 100;
         }
 
-        layer->SetParallax(parallaxRx, parallaxRy);
-        LOG_DEBUG("MakeBack[{}]: Type {} animated parallax rx={}, ry={}", nPageIdx, type, parallaxRx, parallaxRy);
+        layer->Ratio(gr.GetCenterVec(), 100, 100, ratioRx, ratioRy);
+        LOG_DEBUG("MakeBack[{}]: Animated type {} Ratio rx={}, ry={}", nPageIdx, type, ratioRx, ratioRy);
+
+        // Convert animated type to base tiling type: 4→1, 5→2, 6→3, 7→3
+        if (type == 4)
+            type = 1;
+        else if (type == 5)
+            type = 2;
+        else
+            type = 3; // 6 or 7
     }
-    else if (rx != 0 || ry != 0)
+    else
     {
-        // Apply parallax for types 0-3
-        // Original: Ratio(center, 100, 100, rx, ry)
-        layer->SetParallax(rx, ry);
-        LOG_DEBUG("MakeBack[{}]: Type {} parallax rx={}, ry={}", nPageIdx, type, rx, ry);
+        // Types 0-3: RelMove for position, then Ratio for parallax
+        layer->RelMove(x, y);
+        layer->Ratio(gr.GetCenterVec(), 100, 100, rx, ry);
+        LOG_DEBUG("MakeBack[{}]: Type {} RelMove({}, {}), Ratio rx={}, ry={}", nPageIdx, type, x, y, rx, ry);
     }
 
-    // Add to background layer map (keyed by page index)
+    // Read additional properties for MakeGrid / InsertbackLayerByTag
+    auto backTagsProp = pPiece->GetChild("backTags");
+    std::vector<std::string> backTags;
+    if (backTagsProp)
+    {
+        auto tagStr = backTagsProp->GetString("");
+        if (!tagStr.empty())
+            backTags.push_back(tagStr);
+    }
+
+    auto groupNameProp = pPiece->GetChild("groupName");
+    std::string sGroupName = groupNameProp ? groupNameProp->GetString("") : "";
+
+    auto sideTypeProp = pPiece->GetChild("sideType");
+    auto nSideType = sideTypeProp ? sideTypeProp->GetInt(0) : 0;
+
+    // Ensure layer list exists for this page
     auto& layerList = m_mlLayerBack[nPageIdx];
     if (!layerList)
         layerList = std::make_shared<std::list<std::shared_ptr<WzGr2DLayer>>>();
-    layerList->push_back(layer);
+
+    // Type != 0: delegate to MakeGrid for tiling setup (0xbeff40)
+    // Type == 0: insert directly, no tiling
+    if (type != 0)
+    {
+        MakeGrid(layer, type, cx, cy, alpha, ani ? 1 : 0, false,
+                 layerList, backTags, sGroupName, nSideType);
+    }
+    else
+    {
+        if (!backTags.empty())
+        {
+            InsertbackLayerByTag(backTags, layer);
+        }
+        layerList->push_back(layer);
+    }
+
 #ifdef MS_DEBUG_CANVAS
     DebugOverlay::GetInstance().RegisterLayer(layer, "back_" + std::to_string(nPageIdx));
 #endif
 
-    LOG_INFO("MakeBack[{}]: Created layer with {} frames at z={}", nPageIdx, frameCount, z);
+    LOG_INFO("MakeBack[{}]: Created layer with {} frames at z={}, type={}", nPageIdx, frameCount, z, type);
 }
 
 void MapLoadable::UpdateBackTagLayer()
@@ -1257,8 +1209,12 @@ void MapLoadable::LoadMap()
     // Get "ladderRope" property (StringPool 0x9D1)
     auto pLadderRope = m_pPropField->GetChild("ladderRope");
 
-    // TODO: Load physical space with foothold and ladder info
-    // m_pSpace2D->Load(pPropFoothold, pLadderRope, m_pPropFieldInfo);
+    // Load physical space with foothold and ladder info
+    auto& space2D = WvsPhysicalSpace2D::GetInstance();
+    space2D.Load(pPropFoothold, pLadderRope, m_pPropFieldInfo);
+    // Store non-owning pointer for later queries
+    m_pSpace2D = std::shared_ptr<WvsPhysicalSpace2D>(
+        &space2D, [](WvsPhysicalSpace2D*) {});
 
     // Read map info properties
     if (m_pPropFieldInfo)
@@ -2040,10 +1996,10 @@ void MapLoadable::MakeObj(std::int32_t nPageIdx,
         layer->SetFlip(true);
     }
 
-    // Set parallax
+    // Set parallax via Ratio (same as MakeBack)
     if (rx != 0 || ry != 0)
     {
-        layer->SetParallax(rx, ry);
+        layer->Ratio(gr.GetCenterVec(), 100, 100, rx, ry);
     }
 
     // Set color to white (full opacity)
@@ -2892,15 +2848,135 @@ void MapLoadable::MakeObstacles()
     // TODO: stub — create obstacle objects from m_pPropField
 }
 
-void MapLoadable::MakeGrid(std::int32_t nPageIdx,
-                            const std::shared_ptr<WzProperty>& pPiece,
-                            bool bLoad)
+void MapLoadable::MakeGrid(const std::shared_ptr<WzGr2DLayer>& pLayer,
+                            std::int32_t type,
+                            std::int32_t cx,
+                            std::int32_t cy,
+                            std::int32_t alpha,
+                            std::int32_t nAnimate,
+                            bool bObj,
+                            std::shared_ptr<std::list<std::shared_ptr<WzGr2DLayer>>>& pList,
+                            const std::vector<std::string>& aTagList,
+                            const std::string& sGroupName,
+                            std::int32_t nSideType)
 {
     // 0xbeff40 — CMapLoadable::MakeGrid
-    // TODO: stub — create grid-tiled object
-    (void)nPageIdx;
-    (void)pPiece;
-    (void)bLoad;
+    // Original creates N*M cloned layers in a grid, each with copied frames, positioned at
+    // grid offsets, with per-clone Ratio for parallax wrapping.
+    // Our engine uses render-time tiling via SetTiling which achieves the same visual result.
+    (void)nSideType;
+
+    if (!pLayer)
+        return;
+
+    // --- Step 1: Get canvas dimensions from layer (0xbeffbf-0xbf004e) ---
+    auto canvas = pLayer->GetCurrentCanvas();
+    auto canvasW = canvas ? static_cast<std::int32_t>(canvas->GetWidth()) : 0;
+    auto canvasH = canvas ? static_cast<std::int32_t>(canvas->GetHeight()) : 0;
+
+    // --- Step 2: Compute tile dimensions (0xbf0063-0xbf01a4) ---
+    // tileW: cx if provided, else MBR width (bObj) or canvas width
+    std::int32_t tileW = cx;
+    if (tileW == 0)
+    {
+        if (bObj && m_pSpace2D)
+        {
+            auto& mbr = m_pSpace2D->GetMBR();
+            tileW = mbr.right - mbr.left;
+        }
+        else
+        {
+            tileW = canvasW;
+        }
+    }
+
+    // tileH: cy if provided, else MBR height (bObj) or canvas height
+    std::int32_t tileH = cy;
+    if (tileH == 0)
+    {
+        if (bObj && m_pSpace2D)
+        {
+            auto& mbr = m_pSpace2D->GetMBR();
+            tileH = mbr.bottom - mbr.top;
+        }
+        else
+        {
+            tileH = canvasH;
+        }
+    }
+
+    // --- Step 3: Get screen dimensions and apply zoom (0xbf01b0-0xbf0227) ---
+    auto& gr = get_gr();
+    auto screenW = static_cast<std::int32_t>(gr.GetWidth());
+    auto screenH = static_cast<std::int32_t>(gr.GetHeight());
+
+    // Original reads mag level and scales screen dims: scale = 1000.0 / magLevel
+    // magLevel=1000 means 100% zoom (no scaling), <1000 = zoomed out (more area visible)
+    auto nMagLevel = bObj ? m_nMagLevel_Obj : m_nMagLevel_Back;
+    if (nMagLevel != 0 && nMagLevel != 1000)
+    {
+        auto scale = 1000.0f / static_cast<float>(nMagLevel);
+        screenW = static_cast<std::int32_t>(static_cast<float>(screenW) * scale);
+        screenH = static_cast<std::int32_t>(static_cast<float>(screenH) * scale);
+    }
+
+    // --- Step 4: Compute grid coverage (0xbf0229-0xbf028d) ---
+    // totalW = tileW * ceil((screenW + 2*tileW) / tileW) if horizontal tiling
+    std::int32_t totalW = 0;
+    if (type & 1)
+    {
+        auto tw = tileW > 0 ? tileW : 1;
+        totalW = tileW * ((screenW + 2 * tileW - 2) / tw);
+    }
+
+    std::int32_t totalH = 0;
+    if (type & 2)
+    {
+        auto th = tileH > 0 ? tileH : 1;
+        totalH = tileH * ((screenH + 2 * tileH - 2) / th);
+    }
+
+    // --- Step 5: Apply tiling via engine (replaces original's clone loop 0xbf02b9-0xbf1525) ---
+    // Original creates tileW*totalW × tileH*totalH grid of cloned layers.
+    // Each clone copies frames, sets RelMove offset, Ratio for parallax, alpha, flip, blend.
+    // Our engine achieves the same visual result with render-time tiling.
+    auto effectiveTileW = (type & 1) ? tileW : 0;
+    auto effectiveTileH = (type & 2) ? tileH : 0;
+    pLayer->SetTiling(effectiveTileW, effectiveTileH);
+
+    // --- Step 6: Alpha (original applies per-clone at 0xbf10a9-0xbf1247) ---
+    // Original: Getalpha().RelMove(alpha, 255) on each clone
+    // In our engine, alpha is already set in MakeBack via SetColor before calling MakeGrid.
+    (void)alpha;
+
+    // --- Step 7: Animation (0xbf1308-0xbf13ca or 0xbf12b9-0xbf12c3) ---
+    // Original: if sGroupName: AnimateObjLayer(clone, nAnimate)
+    //           else if nAnimate: clone.Animate(Repeat)
+    if (!sGroupName.empty())
+    {
+        AnimateObjLayer(pLayer, nAnimate);
+    }
+    else if (nAnimate)
+    {
+        pLayer->Animate(Gr2DAnimationType::Repeat);
+    }
+
+    // --- Step 8: Tag insertion (0xbf1482-0xbf14a4) ---
+    // Original: InsertbackLayerByTag(pTagList, clone) for each clone
+    if (!aTagList.empty())
+    {
+        InsertbackLayerByTag(aTagList, pLayer);
+    }
+
+    // --- Step 9: Add to output list ---
+    if (pList)
+    {
+        pList->push_back(pLayer);
+    }
+
+    LOG_DEBUG("MakeGrid: type={}, tile={}x{} (canvas={}x{}, cx={}, cy={}, grid={}x{}, bObj={})",
+              type, effectiveTileW, effectiveTileH, canvasW, canvasH, cx, cy,
+              totalW, totalH, bObj);
 }
 
 void MapLoadable::MakeGridSkeleton(std::int32_t nPageIdx,

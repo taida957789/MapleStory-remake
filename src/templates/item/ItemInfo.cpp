@@ -320,13 +320,6 @@ auto ItemInfo::RegisterEquipItemInfo(std::int32_t nItemID, const std::string& sU
     pEquip->nAttackCountInc = get_child_int(pInfo, "attackCountInc");
     pEquip->nLookChangeType = get_child_int(pInfo, "lookChangeType");
 
-    // --- Equip drop ---
-    pEquip->nEquipDropRate          = get_child_int(pInfo, "equipDropRate");
-    pEquip->nEquipDropFieldStart    = get_child_int(pInfo, "equipDropFieldStart");
-    pEquip->nEquipDropFieldEnd      = get_child_int(pInfo, "equipDropFieldEnd");
-    pEquip->nEquipDropExceptMobStart = get_child_int(pInfo, "equipDropExceptMobStart");
-    pEquip->nEquipDropExceptMobEnd  = get_child_int(pInfo, "equipDropExceptMobEnd");
-
     // --- Time-limited stats (only load when bAbilityTimeLimited is set) ---
     if (pEquip->bAbilityTimeLimited) {
         pEquip->niTLSTR   = get_child_int(pInfo, "incTLSTR");
@@ -352,6 +345,173 @@ auto ItemInfo::RegisterEquipItemInfo(std::int32_t nItemID, const std::string& sU
 
     // --- Description ---
     pEquip->sDesc = get_child_string(pInfo, "desc");
+
+    // ============================================================
+    // Complex sub-property loaders (require child iteration)
+    // ============================================================
+
+    // --- aFixedOption (option sub-property, max 6) ---
+    if (auto pOption = pInfo->GetChild("option")) {
+        std::int32_t nIdx = 0;
+        for (const auto& [sKey, pOpt] : pOption->GetChildren()) {
+            if (nIdx >= 6) break;
+            if (!pOpt) continue;
+            pEquip->aFixedOption[nIdx].nOption = get_child_int(pOpt, "option");
+            pEquip->aFixedOption[nIdx].nLevel  = get_child_int(pOpt, "level");
+            ++nIdx;
+        }
+        pEquip->nFixedOptionCnt = nIdx;
+    }
+
+    // --- lpItemSkill (skill list from epic sub-tree) ---
+    if (auto pEpic = pInfo->GetChild("epic")) {
+        if (auto pSkill = pEpic->GetChild("skill")) {
+            for (const auto& [sKey, pEntry] : pSkill->GetChildren()) {
+                if (!pEntry) continue;
+                auto pIS = std::make_shared<ItemSkill>();
+                pIS->nSkillID         = get_child_int(pEntry, "id");
+                pIS->nSkillLevel      = get_child_int(pEntry, "level");
+                pIS->bAutoRunOnlyTown = get_child_int(pEntry, "autoRunOnlyTown");
+                pEquip->lpItemSkill.push_back(std::move(pIS));
+            }
+        }
+
+        // --- mSkillLevelBonus ---
+        if (auto pBonus = pEpic->GetChild("skillLevelBonus")) {
+            for (const auto& [sKey, pEntry] : pBonus->GetChildren()) {
+                if (!pEntry) continue;
+                auto nSkillID = get_child_int(pEntry, "id");
+                auto nLevel   = get_child_int(pEntry, "level");
+                pEquip->mSkillLevelBonus[nSkillID] = nLevel;
+            }
+        }
+    }
+
+    // --- lnOnlyUpgradeID ---
+    if (auto pOnly = pInfo->GetChild("onlyUpgrade")) {
+        for (const auto& [sKey, pEntry] : pOnly->GetChildren()) {
+            if (!pEntry) continue;
+            pEquip->lnOnlyUpgradeID.push_back(pEntry->GetInt());
+        }
+    }
+
+    // --- aBonusExpRate ---
+    if (auto pBonusExp = pInfo->GetChild("bonusExp")) {
+        for (const auto& [sKey, pEntry] : pBonusExp->GetChildren()) {
+            if (!pEntry) continue;
+            auto nTermStart = get_child_int(pEntry, "termStart");
+            auto nIncExpR   = get_child_int(pEntry, "incExpR");
+            pEquip->aBonusExpRate.emplace_back(nTermStart, nIncExpR);
+            auto nTermEnd = get_child_int(pEntry, "termEnd");
+            if (nTermEnd)
+                pEquip->aBonusExpRate.emplace_back(nTermEnd, 0);
+        }
+        // Sort by second (rate) then by first (term) — matches original PairSecondLess then PairFirstLess
+        std::stable_sort(pEquip->aBonusExpRate.begin(), pEquip->aBonusExpRate.end(),
+            [](const auto& a, const auto& b) { return a.second < b.second; });
+        std::stable_sort(pEquip->aBonusExpRate.begin(), pEquip->aBonusExpRate.end(),
+            [](const auto& a, const auto& b) { return a.first < b.first; });
+    }
+
+    // --- aTamingMobItem (for items where nItemID/10000 == 191) ---
+    if (nItemID / 10000 == 191) {
+        for (const auto& [sKey, pEntry] : pProp->GetChildren()) {
+            if (sKey == "info") continue;
+            auto nTamingID = std::stoi(sKey);
+            if (nTamingID / 10000 == 190)
+                pEquip->aTamingMobItem.push_back(nTamingID);
+        }
+    }
+
+    // --- uPetTemplateFlag (CFlag<512> for pet equips) ---
+    if (nItemID / 10000 == 180) {
+        auto nSub = nItemID % 1000;
+        if (nSub < 100 || (nItemID - 1800000 >= 2300 && nItemID - 1800000 < 3000)) {
+            for (const auto& [sKey, pEntry] : pProp->GetChildren()) {
+                if (sKey == "info") continue;
+                auto nPetID = std::stoi(sKey);
+                auto nBit = nPetID % 1000;
+                if (nBit >= 0 && nBit < 512)
+                    pEquip->uPetTemplateFlag[nBit / 32] |= (1u << (31 - (nBit & 0x1F)));
+            }
+        }
+    }
+
+    // --- DayOfWeekItemStat ---
+    if (auto pDOW = pInfo->GetChild("dayOfWeek")) {
+        pEquip->bDayOfWeekItemStat = 1;
+        for (const auto& [sKey, pDay] : pDOW->GetChildren()) {
+            if (!pDay) continue;
+            auto nDay = std::stoi(sKey);
+            if (nDay >= 0 && nDay < 7)
+                pEquip->aDayOfWeekItemStat[nDay].nDOWIMDR = get_child_int(pDay, "imdR");
+        }
+    }
+
+    // --- VariableStat ---
+    if (auto pVar = pInfo->GetChild("variableStat")) {
+        auto pVS = std::make_shared<VariableStat>();
+        pVS->nPAD = static_cast<float>(get_child_double(pVar, "incPAD"));
+        pVS->nMAD = static_cast<float>(get_child_double(pVar, "incMAD"));
+        pVS->nPDD = static_cast<float>(get_child_double(pVar, "incPDD"));
+        pVS->nMDD = static_cast<float>(get_child_double(pVar, "incMDD"));
+        pVS->nACC = static_cast<float>(get_child_double(pVar, "incACC"));
+        pVS->nEVA = static_cast<float>(get_child_double(pVar, "incEVA"));
+        pVS->nSTR = static_cast<float>(get_child_double(pVar, "incSTR"));
+        pVS->nDEX = static_cast<float>(get_child_double(pVar, "incDEX"));
+        pVS->nLUK = static_cast<float>(get_child_double(pVar, "incLUK"));
+        pVS->nINT = static_cast<float>(get_child_double(pVar, "incINT"));
+        pVS->nMHP = static_cast<float>(get_child_double(pVar, "incMHP"));
+        pVS->nMMP = static_cast<float>(get_child_double(pVar, "incMMP"));
+        pEquip->pVariableStat = std::move(pVS);
+    }
+
+    // --- TextEquipParam ---
+    if (pEquip->bText) {
+        if (auto pText = pInfo->GetChild("text")) {
+            auto pTP = std::make_shared<TextEquipParam>();
+            pTP->nTextEquipColor    = get_child_int(pText, "textColor", -1);
+            pTP->nTextEquipOffsetX  = get_child_int(pText, "textOffsetX", 7);
+            pTP->nTextEquipOffsetY  = get_child_int(pText, "textOffsetY", 7);
+            pTP->nTextEquipFontSize = get_child_int(pText, "textFontSize", 11);
+            pTP->nTextEquipAreaX    = get_child_int(pText, "textAreaX", 68);
+            pTP->nTextEquipAreaY    = get_child_int(pText, "textAreaY", 25);
+            pEquip->pTextEquipParam = std::move(pTP);
+        }
+    }
+
+    // --- GrowthOption ---
+    if (auto pGrowth = pInfo->GetChild("growth")) {
+        auto pGO = std::make_shared<GrowthOption>();
+        pGO->nType           = get_child_int(pGrowth, "type");
+        pGO->bLevelUpByPoint = get_child_int(pGrowth, "levelUpByPoint");
+        pGO->bFixLevel       = get_child_int(pGrowth, "fixLevel");
+        if (auto pPool = pGrowth->GetChild("levelUpTypePool")) {
+            for (const auto& [k, v] : pPool->GetChildren()) {
+                if (v) pGO->anLevelUpTypePool.push_back(v->GetInt());
+            }
+        }
+        if (auto pLevels = pGrowth->GetChild("level")) {
+            for (const auto& [k, pLI] : pLevels->GetChildren()) {
+                if (!pLI) continue;
+                auto p = std::make_shared<LevelInfo>();
+                p->nLevel        = get_child_int(pLI, "level");
+                p->nLevelUpType  = get_child_int(pLI, "levelUpType");
+                p->nLevelUpValue = get_child_int(pLI, "levelUpValue");
+                pGO->apLevelInfo.push_back(std::move(p));
+            }
+        }
+        pEquip->pGrowth = std::move(pGO);
+    }
+
+    // --- EquipDrop (from pInfo sub-tree) ---
+    if (auto pDrop = pInfo->GetChild("equipDrop")) {
+        pEquip->nEquipDropRate           = get_child_int(pDrop, "rate");
+        pEquip->nEquipDropFieldStart     = get_child_int(pDrop, "fieldStart");
+        pEquip->nEquipDropFieldEnd       = get_child_int(pDrop, "fieldEnd");
+        pEquip->nEquipDropExceptMobStart = get_child_int(pDrop, "exceptMobStart");
+        pEquip->nEquipDropExceptMobEnd   = get_child_int(pDrop, "exceptMobEnd");
+    }
 
     return pEquip;
 }
@@ -507,6 +667,41 @@ auto ItemInfo::GetBundleItem(std::int32_t nItemID) -> const BundleItem*
 
     // --- Type ---
     pBundle->nBagType = get_child_int(pInfo, "bagType");
+
+    // ============================================================
+    // Complex sub-property loaders (require child iteration)
+    // ============================================================
+
+    // --- lReqField (list of required field/map IDs) ---
+    if (auto pReqField = pInfo->GetChild("reqField")) {
+        for (const auto& [sKey, pEntry] : pReqField->GetChildren()) {
+            if (!pEntry) continue;
+            pBundle->lReqField.push_back(static_cast<std::uint32_t>(pEntry->GetInt()));
+        }
+    }
+    pBundle->nReqFieldS = get_child_int(pInfo, "reqFieldStart");
+    pBundle->nReqFieldE = get_child_int(pInfo, "reqFieldEnd");
+
+    // --- Job restriction maps ---
+    auto load_job_map = [](const std::shared_ptr<WzProperty>& pNode,
+                           std::map<std::int32_t, std::int32_t>& mOut) {
+        if (!pNode) return;
+        for (const auto& [sKey, pEntry] : pNode->GetChildren()) {
+            if (!pEntry) continue;
+            mOut[std::stoi(sKey)] = pEntry->GetInt();
+        }
+    };
+    load_job_map(pInfo->GetChild("cantAccountSharableJob"), pBundle->mCantAccountSharableJob);
+    load_job_map(pInfo->GetChild("canAccountSharableJob"),  pBundle->mCanAccountSharableJob);
+    load_job_map(pInfo->GetChild("canUseJob"),              pBundle->mCanUseJob);
+
+    // --- mLvUpWarning ---
+    if (auto pWarn = pInfo->GetChild("lvUpWarning")) {
+        for (const auto& [sKey, pEntry] : pWarn->GetChildren()) {
+            if (!pEntry) continue;
+            pBundle->mLvUpWarning[std::stoi(sKey)] = pEntry->GetString();
+        }
+    }
 
     // --- Level / Time limits ---
     // Original @ 0xAF57A0: only read for Use items (type 2), category 414,

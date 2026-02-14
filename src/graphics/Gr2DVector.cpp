@@ -437,8 +437,10 @@ auto RatioNode::evaluatePos(std::int32_t& x, std::int32_t& y,
     if (!target) return 0;
     std::int32_t cur_x = target->GetX();
     std::int32_t cur_y = target->GetY();
-    x += scaleX * (cur_x - base_x) / denomX;
-    y += scaleY * (cur_y - base_y) / denomY;
+    auto dx = scaleX * (cur_x - base_x) / denomX;
+    auto dy = scaleY * (cur_y - base_y) / denomY;
+    x += dx;
+    y += dy;
     return 0;  // never completes
 }
 

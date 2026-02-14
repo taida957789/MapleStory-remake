@@ -4,7 +4,6 @@
 #include "graphics/WzGr2DTypes.h"
 #include "util/Point.h"
 #include "util/Singleton.h"
-#include "util/ZXString.h"
 
 #include <cstdint>
 #include <list>
@@ -108,7 +107,7 @@ public:
     public:
         std::int32_t nState{};
         std::uint32_t dwID{};
-        ZXString<wchar_t> sAimUOL;  // original: ZXString<unsigned short>
+        std::string sAimUOL;
         std::int32_t tStartTime{};
         std::int32_t tAimStartTime{};
         std::int32_t tAimEndTime{};
@@ -132,7 +131,7 @@ public:
         std::int32_t bRun{};
         std::int32_t nDelayRate{};
         Gr2DAnimationType eAniType{Gr2DAnimationType::Stop};
-        ZXString<char> strKey;
+        std::string strKey;
     };
 
     /// RelOffsetParam (ZRefCounted with offset/time fields)
@@ -169,7 +168,7 @@ public:
         std::int32_t nCurrentTick{};
         std::int32_t nBaseScale{100};
         std::shared_ptr<RelOffsetParam> pRelOffsetParam;
-        ZXString<wchar_t> sSoundUOL;  // original: ZXString<unsigned short>
+        std::string sSoundUOL;
         MovingInfo movingInfo;
 
         auto Scale(std::int32_t nScale) -> std::int32_t;
@@ -496,7 +495,7 @@ public:
         std::int32_t nDelayRate,
         std::int32_t nMovingType,
         const std::shared_ptr<RelOffsetParam>& pRelOffsetParam,
-        const ZXString<wchar_t>& sSoundUOL,
+        const std::string& sSoundUOL,
         std::int32_t nComboKillCount,
         std::uint32_t dwOwner
     ) -> OneTimeInfo&;

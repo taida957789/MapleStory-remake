@@ -98,7 +98,7 @@ public:
     auto IsUsingDragEnd() -> std::int32_t override;
     auto CanPutItemIntoSlot(
         std::int32_t nSlot,
-        const ZRef<GW_ItemSlotBase>& pItem) -> std::int32_t override;
+        const std::shared_ptr<GW_ItemSlotBase>& pItem) -> std::int32_t override;
 
     void SetEnable(std::int32_t bEnable) override;
     [[nodiscard]] auto IsEnabled() -> std::int32_t override;
@@ -114,10 +114,10 @@ public:
     void OnIMEResult(const char* szResult) override;
     void OnIMEComp(
         const char* szComp,
-        ZArray<std::uint32_t>* aAttr,
+        std::vector<std::uint32_t>* aAttr,
         std::uint32_t nCursor,
         std::int32_t bInsert,
-        ZList<ZXString<char>>* lCandList,
+        std::vector<std::string>* lCandList,
         std::int32_t nCandIdx,
         std::int32_t nCandPageStart,
         std::int32_t nCandPageSize) override;
