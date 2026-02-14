@@ -3,6 +3,7 @@
 #include "app/IGObj.h"
 #include "graphics/WzGr2DTypes.h"
 #include "util/Point.h"
+#include "util/Singleton.h"
 #include "util/ZXString.h"
 
 #include <cstdint>
@@ -19,8 +20,10 @@ class WzCanvas;
 class WzGr2DLayer;
 class WzProperty;
 
-class AnimationDisplayer : public IGObj
+class AnimationDisplayer : public IGObj, public Singleton<AnimationDisplayer>
 {
+    friend class Singleton<AnimationDisplayer>;
+
 public:
     // ========== Nested Types ==========
 
@@ -343,6 +346,18 @@ public:
         std::shared_ptr<WzCanvas> pCanvasHook;
         std::shared_ptr<WzGr2DLayer> pLayer;
     };
+
+    // ========== Effect Methods ==========
+
+    /// Play a general effect animation (from CAnimationDisplayer::Effect_General).
+    void Effect_General(
+        const std::string& sUOL,
+        bool bNotFlip,
+        const std::shared_ptr<Gr2DVector>& pOrigin,
+        std::int32_t rx, std::int32_t ry,
+        const std::shared_ptr<WzGr2DLayer>& pOverlay,
+        std::int32_t z,
+        std::int32_t nAlpha);
 
     // ========== IGObj ==========
 

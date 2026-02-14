@@ -30,6 +30,21 @@ void AnimationDisplayer::TrembleCtx::Update(
     // TODO: implement tremble effect update
 }
 
+// ========== Effect Methods ==========
+
+void AnimationDisplayer::Effect_General(
+    [[maybe_unused]] const std::string& sUOL,
+    [[maybe_unused]] bool bNotFlip,
+    [[maybe_unused]] const std::shared_ptr<Gr2DVector>& pOrigin,
+    [[maybe_unused]] std::int32_t rx,
+    [[maybe_unused]] std::int32_t ry,
+    [[maybe_unused]] const std::shared_ptr<WzGr2DLayer>& pOverlay,
+    [[maybe_unused]] std::int32_t z,
+    [[maybe_unused]] std::int32_t nAlpha)
+{
+    // TODO: load animation from sUOL and display under pOverlay
+}
+
 // ========== AnimationDisplayer ==========
 
 void AnimationDisplayer::Update()

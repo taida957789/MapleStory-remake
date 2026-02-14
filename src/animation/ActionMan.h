@@ -46,6 +46,9 @@ public:
 
     [[nodiscard]] auto GetActionName(std::int32_t nAction) const -> const std::string&;
 
+    /// Get the emotion name string for the given emotion index (0–38).
+    [[nodiscard]] static auto GetEmotionName(std::int32_t nEmotion) -> const std::string&;
+
     [[nodiscard]] auto GetWeaponAfterImage(const std::string& sUOL)
         -> std::shared_ptr<MeleeAttackAfterimage>;
 
@@ -148,6 +151,7 @@ private:
     std::unordered_map<std::string, std::int32_t> m_nameToCode;
 
     static const std::string s_sEmpty;
+    static const std::string s_sEmptyEmotion;
 };
 
 } // namespace ms

@@ -2,8 +2,11 @@
 
 #include "animation/ActionData.h"
 #include "animation/ActionMan.h"
+#include "animation/AnimationDisplayer.h"
 #include "animation/CharacterActionFrameEntry.h"
 #include "animation/TamingMobActionFrameEntry.h"
+#include "app/Application.h"
+#include "app/WvsContext.h"
 #include "constants/ActionConstants.h"
 #include "constants/ActionHelpers.h"
 #include "constants/FieldConstants.h"
@@ -13,9 +16,9 @@
 #include "graphics/WzGr2D.h"
 #include "graphics/WzGr2DCanvas.h"
 #include "graphics/WzGr2DLayer.h"
-#include "app/Application.h"
 #include "graphics/WzGr2DTypes.h"
 #include "templates/morph/MorphTemplate.h"
+#include "user/UserLocal.h"
 #include "util/Logger.h"
 
 #include <algorithm>
@@ -1266,11 +1269,59 @@ void Avatar::PrepareFaceLayer(std::int32_t tDuration)
     }
 }
 
-void Avatar::SetEmotion(
-    [[maybe_unused]] std::int32_t nEmotion,
-    [[maybe_unused]] std::int32_t nDuration)
+void Avatar::SetEmotion(std::int32_t nEmotion, std::int32_t nDuration)
 {
-    // TODO: implement emotion setting
+    if (m_dwMorphTemplateID)
+        return;
+    if (m_bHideAction)
+        return;
+
+    // If this is the local user's avatar, check for Attract buff
+    if (auto* pLocal = UserLocal::GetInstancePtr())
+    {
+        if (this == static_cast<Avatar*>(pLocal))
+        {
+            auto& stat = WvsContext::GetInstance().GetSecondaryStat();
+            if (stat._ZtlSecureGet_nAttract_()
+                && stat._ZtlSecureGet_rAttract_() == 188)
+            {
+                return;
+            }
+        }
+    }
+
+    // Block vomit emotion (8) during prone/pronestab actions
+    auto nCurrentAction = GetCurrentAction(nullptr, false);
+    if (nCurrentAction == CharacterAction::Prone
+        || is_pronestab_action(static_cast<std::int32_t>(nCurrentAction)))
+    {
+        if (nEmotion == 8)
+            return;
+    }
+
+    // Valid emotion range: 0–38
+    if (static_cast<std::uint32_t>(nEmotion) > 0x26)
+        return;
+
+    m_nEmotion = nEmotion;
+
+    if (m_bDelayedLoad)
+        return;
+
+    PrepareFaceLayer(nDuration);
+
+    // Format path: "Etc/EmotionEffect/<emotion_name>"
+    const auto& sName = ActionMan::GetEmotionName(nEmotion);
+    auto sPath = "Etc/EmotionEffect/" + sName;
+
+    // Play the emotion effect animation
+    AnimationDisplayer::GetInstance().Effect_General(
+        sPath,
+        (m_nMoveAction & 1) == 0,
+        m_pOrigin,
+        0, 0,
+        m_pLayerUnderFace,
+        3, 0);
 }
 
 void Avatar::ClearActionLayer([[maybe_unused]] std::int32_t nSlot)

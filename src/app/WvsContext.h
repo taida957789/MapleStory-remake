@@ -1,5 +1,6 @@
 #pragma once
 
+#include "user/stats/SecondaryStat.h"
 #include "util/Singleton.h"
 #include <cstdint>
 #include <string>
@@ -92,6 +93,10 @@ public:
     [[nodiscard]] auto GetWhiteFadeInOut() const noexcept -> bool { return m_bWhiteFadeInOut; }
     void SetWhiteFadeInOut(bool white) noexcept { m_bWhiteFadeInOut = white; }
 
+    // Secondary stats (buffs/debuffs)
+    [[nodiscard]] auto GetSecondaryStat() noexcept -> SecondaryStat& { return m_secondaryStat; }
+    [[nodiscard]] auto GetSecondaryStat() const noexcept -> const SecondaryStat& { return m_secondaryStat; }
+
 private:
     WvsContext();
     ~WvsContext() override;
@@ -123,6 +128,9 @@ private:
 
     // White fade in/out mode
     bool m_bWhiteFadeInOut{false};
+
+    // Secondary stats (buffs/debuffs)
+    SecondaryStat m_secondaryStat;
 };
 
 } // namespace ms

@@ -73,6 +73,15 @@ static const std::string s_asEmotionName[39] = {
     "qBlue",      // 38  (StringPool 1718)
 };
 
+const std::string ActionMan::s_sEmptyEmotion;
+
+auto ActionMan::GetEmotionName(std::int32_t nEmotion) -> const std::string&
+{
+    if (nEmotion < 0 || nEmotion >= 39)
+        return s_sEmptyEmotion;
+    return s_asEmotionName[nEmotion];
+}
+
 // ---------------------------------------------------------------------------
 // blit_canvas — copies source RGBA pixels onto destination at (dstX, dstY)
 // with source-over alpha compositing. If alpha == 0, the blit is skipped
